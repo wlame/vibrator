@@ -1,0 +1,81 @@
+# Docker image operations: build, pull, push, check.
+
+image::exists() {
+    docker image inspect "$IMAGE_NAME" &>/dev/null
+}
+
+image::build() {
+    log::info "Building Docker image ${IMAGE_NAME}..."
+
+    local host_uid host_gid
+    host_uid=$(id -u)
+    host_gid=$(id -g)
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    # shellcheck disable=SC2064
+    trap "rm -rf '$tmpdir'" RETURN
+
+    dockerfile::generate > "$tmpdir/Dockerfile"
+
+    local -a build_args=(
+        docker build
+        --progress=tty
+        --build-arg "USERNAME=$CFG_USERNAME"
+        --build-arg "HOST_UID=$host_uid"
+        --build-arg "HOST_GID=$host_gid"
+    )
+    [[ "$FLAG_REBUILD" == true ]] && build_args+=(--no-cache)
+    build_args+=(-t "$IMAGE_NAME" "$tmpdir")
+
+    log::verbose "Building with UID=${host_uid} GID=${host_gid}"
+    log::info "This may take several minutes on first build..."
+
+    if "${build_args[@]}"; then
+        log::success "Successfully built ${IMAGE_NAME}"
+    else
+        log::die "Failed to build Docker image"
+    fi
+}
+
+image::pull() {
+    local remote="${VIBRATOR_IMAGE:-icanhasjonas/claude-code}:latest"
+    log::info "Pulling remote image ${remote}..."
+
+    if docker pull "$remote"; then
+        log::success "Pulled ${remote}"
+        log::info "Tagging as ${IMAGE_NAME}..."
+        docker tag "$remote" "$IMAGE_NAME" || {
+            log::warn "Failed to tag. Falling back to local build..."
+            image::build
+        }
+    else
+        log::warn "Failed to pull. Building from source..."
+        image::build
+    fi
+}
+
+image::push() {
+    local repo="$1"
+    log::info "Pushing image to ${repo}..."
+
+    image::exists || {
+        log::warn "Local image not found. Getting it first..."
+        image::pull
+    }
+
+    docker tag "$IMAGE_NAME" "$repo" || log::die "Failed to tag image"
+
+    if docker push "$repo"; then
+        log::success "Pushed ${repo}"
+    else
+        log::die "Failed to push. Make sure you are logged in: docker login"
+    fi
+}
+
+image::ensure() {
+    if ! image::exists; then
+        log::info "Image ${IMAGE_NAME} not found. Building..."
+        image::build
+    fi
+}

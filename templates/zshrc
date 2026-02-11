@@ -1,0 +1,54 @@
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="example"
+plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+source $ZSH/oh-my-zsh.sh
+
+# Prompt prefix
+export PS1="%F{yellow}[%F{red}cc%F{yellow}]%f $PS1"
+
+# History
+HISTFILE=~/.zsh_history
+HISTSIZE=50000
+SAVEHIST=50000
+
+# Claude aliases - conditional on dangerous mode
+if [ "$VIBRATOR_DANGEROUS" = "1" ]; then
+  alias claude="claude --dangerously-skip-permissions"
+fi
+alias claude-safe="command claude"
+
+# General aliases
+alias ll="ls -la"
+alias vim="nvim"
+alias vi="nvim"
+
+# Git SSH configuration
+export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+
+# Welcome message (interactive shells only)
+if [[ -o interactive ]]; then
+  echo -e "\033[1;36m+--------------------------------------------------------------+\033[0m"
+  echo -e "\033[1;36m|\033[0m  \033[1;33mClaude Code Docker Environment\033[0m                              \033[1;36m|\033[0m"
+  echo -e "\033[1;36m+--------------------------------------------------------------+\033[0m"
+  echo ""
+  echo -e "\033[1;32mAvailable Tools:\033[0m"
+  echo -e "   Claude CLI: $(claude --version 2>/dev/null | head -1 || echo 'N/A')"
+  echo -e "   Go: $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
+  echo -e "   Python: $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
+  echo -e "   Vim, Git, GitHub CLI, SuperClaude commands"
+  echo ""
+  echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena, Agent Browser"
+  if pgrep -x agent-browser >/dev/null 2>&1; then
+    echo -e "\033[1;36m   Agent Browser Web UI:\033[0m http://localhost:8080/ui/"
+  fi
+  echo ""
+  echo -e "\033[1;32mWorkspace:\033[0m $WORKSPACE_PATH"
+  if [ -n "$ANTHROPIC_API_KEY" ]; then
+    echo -e "\033[1;32mAPI Key:\033[0m Configured"
+  else
+    echo -e "\033[1;33mAPI Key:\033[0m Not set"
+  fi
+  echo ""
+  echo -e "\033[1;90mType 'claude --help' to get started\033[0m"
+  echo ""
+fi

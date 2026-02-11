@@ -1,0 +1,8 @@
+.claude/
+.serena/
+
+# Build artifacts
+build/
+
+# Claude authentication token (NEVER commit this!)
+.claude-docker-token

@@ -28,6 +28,26 @@ else
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "No host Claude config file mounted"
 fi
 
+# --- Merge Claude rules: host (read-only) + container-specific ---
+mkdir -p "$HOME/.claude/rules"
+
+# Copy host rules if mounted (read-only at rules-host)
+if [ -d "$HOME/.claude/rules-host" ]; then
+  cp -r "$HOME/.claude/rules-host/"*.md "$HOME/.claude/rules/" 2>/dev/null || true
+  RULES_COUNT=$(ls -1 "$HOME/.claude/rules-host/"*.md 2>/dev/null | wc -l)
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: copied $RULES_COUNT host rules"
+fi
+
+# Add container-specific rules
+if [ -d /opt/container-rules ]; then
+  cp /opt/container-rules/*.md "$HOME/.claude/rules/" 2>/dev/null || true
+  CONTAINER_RULES_COUNT=$(ls -1 /opt/container-rules/*.md 2>/dev/null | wc -l)
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: added $CONTAINER_RULES_COUNT container rules"
+fi
+
+TOTAL_RULES=$(ls -1 "$HOME/.claude/rules/"*.md 2>/dev/null | wc -l)
+[ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: $TOTAL_RULES total rules loaded"
+
 # --- Link GPG agent socket if forwarded ---
 if [ -S "/gpg-agent-extra" ]; then
   EXPECTED_SOCKET=$(gpgconf --list-dirs agent-socket 2>/dev/null)

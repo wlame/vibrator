@@ -37,8 +37,11 @@ MODULES := \
 # Template scripts to base64-encode and embed
 EMBED_SCRIPTS := entrypoint.sh claude-exec.sh zshrc setup-plugins.sh
 
+# Container rules files
+CONTAINER_RULES := $(TPL_DIR)/container-rules/docker-container-context.md $(TPL_DIR)/container-rules/safety-restrictions.md
+
 # All template files (for dependency tracking)
-TPL_FILES := $(TPL_DIR)/Dockerfile.template $(addprefix $(TPL_DIR)/,$(EMBED_SCRIPTS))
+TPL_FILES := $(TPL_DIR)/Dockerfile.template $(addprefix $(TPL_DIR)/,$(EMBED_SCRIPTS)) $(CONTAINER_RULES)
 
 .PHONY: build clean lint validate help
 
@@ -63,6 +66,19 @@ $(OUTPUT): $(MODULES) $(TPL_FILES) Makefile
 		echo "WARNING: Dockerfile.template not found" >&2; \
 		echo -n "" | $(B64_ENC) > "$(INTER_DIR)/Dockerfile.b64"; \
 	fi
+	@# Step 2b: Base64-encode container rules
+	@if [ -f "$(TPL_DIR)/container-rules/docker-container-context.md" ]; then \
+		$(B64_ENC) < "$(TPL_DIR)/container-rules/docker-container-context.md" > "$(INTER_DIR)/container-rules-context.b64"; \
+	else \
+		echo "WARNING: container-rules/docker-container-context.md not found" >&2; \
+		echo -n "" | $(B64_ENC) > "$(INTER_DIR)/container-rules-context.b64"; \
+	fi
+	@if [ -f "$(TPL_DIR)/container-rules/safety-restrictions.md" ]; then \
+		$(B64_ENC) < "$(TPL_DIR)/container-rules/safety-restrictions.md" > "$(INTER_DIR)/container-rules-safety.b64"; \
+	else \
+		echo "WARNING: container-rules/safety-restrictions.md not found" >&2; \
+		echo -n "" | $(B64_ENC) > "$(INTER_DIR)/container-rules-safety.b64"; \
+	fi
 	@# Step 3: Concatenate source modules
 	@# Keep shebang from header.sh, strip shebangs from all others
 	@head -1 $(SRC_DIR)/header.sh > $(OUTPUT)
@@ -79,6 +95,8 @@ $(OUTPUT): $(MODULES) $(TPL_FILES) Makefile
 	@$(call sed_inplace,"s|%%ZSHRC_B64%%|$$(cat $(INTER_DIR)/zshrc.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%SETUP_PLUGINS_B64%%|$$(cat $(INTER_DIR)/setup-plugins.sh.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%DOCKERFILE_TPL_B64%%|$$(cat $(INTER_DIR)/Dockerfile.b64)|g",$(OUTPUT))
+	@$(call sed_inplace,"s|%%CONTAINER_RULES_CONTEXT_B64%%|$$(cat $(INTER_DIR)/container-rules-context.b64)|g",$(OUTPUT))
+	@$(call sed_inplace,"s|%%CONTAINER_RULES_SAFETY_B64%%|$$(cat $(INTER_DIR)/container-rules-safety.b64)|g",$(OUTPUT))
 	@# Step 6: Make executable and clean up
 	@chmod +x $(OUTPUT)
 	@rm -rf $(INTER_DIR)

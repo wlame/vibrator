@@ -115,11 +115,19 @@ docker_cmd::_add_volumes() {
         log::verbose "Using selective config mount (macOS mode)"
         [[ -f "$CLAUDE_CONFIG/settings.json" ]] && \
             cmd+=(-v "$CLAUDE_CONFIG/settings.json:/home/$CFG_USERNAME/.claude/settings.json:ro")
+        # Mount host rules to separate location for merging with container rules
         [[ -d "$CLAUDE_CONFIG/rules" ]] && \
-            cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules:ro")
+            cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
     else
         log::verbose "Using full config mount (Linux mode)"
-        cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude")
+        # In full mount mode, mount rules separately for merging
+        if [[ -d "$CLAUDE_CONFIG/rules" ]]; then
+            cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
+            # Mount config without rules subdirectory
+            cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude-full")
+        else
+            cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude")
+        fi
     fi
 
     # SSH keys (read-only)

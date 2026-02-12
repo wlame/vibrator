@@ -7,6 +7,8 @@ ENTRYPOINT_B64="%%ENTRYPOINT_B64%%"
 CLAUDE_EXEC_B64="%%CLAUDE_EXEC_B64%%"
 ZSHRC_B64="%%ZSHRC_B64%%"
 SETUP_PLUGINS_B64="%%SETUP_PLUGINS_B64%%"
+CONTAINER_RULES_CONTEXT_B64="%%CONTAINER_RULES_CONTEXT_B64%%"
+CONTAINER_RULES_SAFETY_B64="%%CONTAINER_RULES_SAFETY_B64%%"
 
 dockerfile::generate() {
     local content
@@ -17,6 +19,8 @@ dockerfile::generate() {
     content="${content//@@ENTRYPOINT_B64@@/$ENTRYPOINT_B64}"
     content="${content//@@CLAUDE_EXEC_B64@@/$CLAUDE_EXEC_B64}"
     content="${content//@@ZSHRC_B64@@/$ZSHRC_B64}"
+    content="${content//@@CONTAINER_RULES_CONTEXT_B64@@/$CONTAINER_RULES_CONTEXT_B64}"
+    content="${content//@@CONTAINER_RULES_SAFETY_B64@@/$CONTAINER_RULES_SAFETY_B64}"
 
     # Plugin section: line-based replacement to avoid bash/awk special char issues
     # (bash ${//} treats & and \ as special in replacements; awk gsub does too)

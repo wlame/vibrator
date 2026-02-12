@@ -94,6 +94,13 @@ FROM claude-mcp AS runtime
 
 USER root
 
+# Create container-specific Claude rules directory
+RUN mkdir -p /opt/container-rules
+
+# Decode and install container rules
+RUN echo '@@CONTAINER_RULES_CONTEXT_B64@@' | base64 -d > /opt/container-rules/docker-container-context.md
+RUN echo '@@CONTAINER_RULES_SAFETY_B64@@' | base64 -d > /opt/container-rules/safety-restrictions.md
+
 RUN echo '@@ENTRYPOINT_B64@@' | base64 -d > /entrypoint.sh && chmod +x /entrypoint.sh
 RUN echo '@@CLAUDE_EXEC_B64@@' | base64 -d > /usr/local/bin/claude-exec && chmod +x /usr/local/bin/claude-exec
 

@@ -13,12 +13,21 @@ docker_cmd::build() {
     # Security model
     if [[ "$PRIVILEGED" == true ]]; then
         cmd+=(--privileged)
-    else
+    elif [[ "$DOCKER_IN_DOCKER" == true ]]; then
+        # Docker-in-Docker mode: elevated privileges for container operations
         cmd+=(
             --cap-add=SYS_ADMIN
             --security-opt seccomp=unconfined
             --shm-size=2g
         )
+        log::verbose "Docker-in-Docker mode enabled (elevated privileges)"
+    else
+        # Default: minimal privileges (secure by default)
+        cmd+=(
+            --security-opt no-new-privileges
+            --shm-size=2g
+        )
+        log::verbose "Running in secure mode (minimal privileges)"
     fi
 
     cmd+=(--init)
@@ -47,8 +56,9 @@ docker_cmd::build() {
         -e "CONTAINER_USER=$CFG_USERNAME"
     )
 
-    [[ "$DANGEROUS" == true ]]  && cmd+=(-e "VIBRATOR_DANGEROUS=1")
-    [[ "$VERBOSE" == true ]]    && cmd+=(-e "VIBRATOR_VERBOSE=1")
+    [[ "$DANGEROUS" == true ]]       && cmd+=(-e "VIBRATOR_DANGEROUS=1")
+    [[ "$VERBOSE" == true ]]         && cmd+=(-e "VIBRATOR_VERBOSE=1")
+    [[ "$DOCKER_IN_DOCKER" == true ]] && cmd+=(-e "VIBRATOR_DOCKER_IN_DOCKER=1")
 
     # Forwarded environment variables
     docker_cmd::_add_forwarded_env
@@ -119,6 +129,16 @@ docker_cmd::_add_volumes() {
     # Git config (read-only)
     [[ -f "$HOME/.gitconfig" ]] && \
         cmd+=(-v "$HOME/.gitconfig:/home/$CFG_USERNAME/.gitconfig:ro")
+
+    # Docker socket (only when --dind/--docker enabled)
+    if [[ "$DOCKER_IN_DOCKER" == true ]]; then
+        if [[ -S "/var/run/docker.sock" ]]; then
+            cmd+=(-v "/var/run/docker.sock:/var/run/docker.sock")
+            log::verbose "Docker socket mounted for Docker-in-Docker"
+        else
+            log::warn "Docker-in-Docker requested but /var/run/docker.sock not found"
+        fi
+    fi
 
     # SSH agent socket (auto-detect and forward unless --no-agents)
     if [[ "$NO_AGENTS" != true ]]; then

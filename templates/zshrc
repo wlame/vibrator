@@ -49,6 +49,27 @@ if [[ -o interactive ]]; then
     echo -e "\033[1;33mAPI Key:\033[0m Not set"
   fi
   echo ""
+
+  # Docker-in-Docker security warning
+  if [ "$VIBRATOR_DOCKER_IN_DOCKER" = "1" ]; then
+    echo -e "\033[1;33m+--------------------------------------------------------------+\033[0m"
+    echo -e "\033[1;33m|  ⚠️  DOCKER-IN-DOCKER MODE ENABLED\033[0m                          \033[1;33m|\033[0m"
+    echo -e "\033[1;33m+--------------------------------------------------------------+\033[0m"
+    echo -e "\033[1;33m   This container runs with ELEVATED PRIVILEGES:\033[0m"
+    echo -e "   • Docker socket mounted (/var/run/docker.sock)"
+    echo -e "   • CAP_SYS_ADMIN capability granted"
+    echo -e "   • Seccomp filtering disabled"
+    echo ""
+    echo -e "\033[1;33m   Security Impact:\033[0m"
+    echo -e "   • Container escape is possible if compromised"
+    echo -e "   • Full access to host Docker daemon"
+    echo -e "   • Use only when Docker commands are needed"
+    echo ""
+    echo -e "\033[1;90m   Run without --dind/--docker for secure mode\033[0m"
+    echo -e "\033[1;33m+--------------------------------------------------------------+\033[0m"
+    echo ""
+  fi
+
   echo -e "\033[1;90mType 'claude --help' to get started\033[0m"
   echo ""
 fi

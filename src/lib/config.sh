@@ -20,6 +20,7 @@ config::init() {
     NO_AGENTS=false
     VERBOSE=false
     INSTALL_PLUGINS=true
+    DOCKER_IN_DOCKER=false
 
     # Build/action flags
     FLAG_BUILD_ONLY=false

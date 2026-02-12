@@ -23,7 +23,7 @@ Options:
   --no-plugins             Skip Claude plugin installation
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
-  --rebuild                Rebuild image from scratch (ignore cache)
+  --rebuild                Rebuild image from scratch (ignore cache)    
   --recreate               Delete and recreate container
   --rm                     Auto-remove container on exit
   --username NAME          Container username (default: current user)
@@ -79,7 +79,7 @@ args::parse() {
             --no-plugins)         INSTALL_PLUGINS=false; shift ;;
             --mount-full-config)  MOUNT_FULL_CONFIG=true; shift ;;
             --memory)             MEMORY_LIMIT="$2"; shift 2 ;;
-            --cpu)                CPU_LIMIT="$2"; shift 2 ;;
+            --cpus)               CPU_LIMIT="$2"; shift 2 ;;
             --version)            echo "$VIBRATOR_VERSION"; exit 0 ;;
             --)                   shift; break ;;
             -*)                   log::die "Unknown option: $1" ;;

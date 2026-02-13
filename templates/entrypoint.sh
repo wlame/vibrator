@@ -87,6 +87,41 @@ else
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Serena: no host server detected, using built-in stdio mode"
 fi
 
+# --- Detect host Langfuse server and configure stop hook ---
+LANGFUSE_PORT="${LANGFUSE_PORT:-3050}"
+LANGFUSE_DETECTED=0
+
+if curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$LANGFUSE_PORT" -o /dev/null 2>/dev/null; then
+  LANGFUSE_DETECTED=1
+
+  # Create hooks directory
+  mkdir -p "$HOME/.claude/hooks"
+
+  # Install the Langfuse hook script
+  if [ -f /opt/langfuse-hook.py ]; then
+    cp /opt/langfuse-hook.py "$HOME/.claude/hooks/langfuse-hook.py"
+    chmod +x "$HOME/.claude/hooks/langfuse-hook.py"
+
+    # Configure stop hook in settings
+    mkdir -p "$HOME/.claude"
+    if [ ! -f "$HOME/.claude/settings.json" ]; then
+      echo '{}' > "$HOME/.claude/settings.json"
+    fi
+
+    jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" \
+      '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = "http://host.docker.internal:'"$LANGFUSE_PORT"'"' \
+      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+      mv "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: connected to host at host.docker.internal:$LANGFUSE_PORT (tracing enabled)"
+  fi
+else
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: no host server detected, tracing disabled"
+fi
+
+# Export for use in welcome message
+export LANGFUSE_DETECTED
+
 # --- Start agent-browser MCP hub in background ---
 if command -v agent-browser >/dev/null 2>&1; then
   if ! pgrep -x agent-browser >/dev/null 2>&1; then

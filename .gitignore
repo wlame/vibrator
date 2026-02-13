@@ -6,3 +6,7 @@ build/
 
 # Claude authentication token (NEVER commit this!)
 .claude-docker-token
+
+# temporary ignored
+README.md
+.github

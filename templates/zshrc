@@ -48,6 +48,13 @@ if [[ -o interactive ]]; then
   if pgrep -x agent-browser >/dev/null 2>&1; then
     echo -e "\033[1;36m   Agent Browser Web UI:\033[0m http://localhost:8080/ui/"
   fi
+
+  # Langfuse observability status
+  if [ "$LANGFUSE_DETECTED" = "1" ]; then
+    LANGFUSE_PORT="${LANGFUSE_PORT:-3050}"
+    echo -e "\033[1;32mObservability:\033[0m Langfuse (http://localhost:$LANGFUSE_PORT)"
+  fi
+
   echo ""
   echo -e "\033[1;32mWorkspace:\033[0m $WORKSPACE_PATH"
   echo ""

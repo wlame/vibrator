@@ -16,7 +16,7 @@ docker_runtime::detect() {
     local runtime="${runtime_info%%:*}"
     local socket="${runtime_info#*:}"
 
-    if [[ "$runtime" == "none" ]]; then
+    if [[ -z "$runtime" ]] || [[ "$runtime" == "none" ]]; then
         log::error "No Docker runtime detected"
         log::info "Please install and start one of:"
         log::info "  - Docker Desktop (https://www.docker.com/products/docker-desktop)"
@@ -47,7 +47,7 @@ docker_runtime::detect() {
 # Returns: "runtime:socket_path" or "none:"
 docker_runtime::_detect_runtime() {
     # 1. Check user override via environment variable
-    if [[ -n "$VIBRATOR_DOCKER_SOCKET" ]]; then
+    if [[ -n "${VIBRATOR_DOCKER_SOCKET:-}" ]]; then
         if [[ -S "$VIBRATOR_DOCKER_SOCKET" ]]; then
             echo "custom:$VIBRATOR_DOCKER_SOCKET"
             return 0
@@ -57,7 +57,7 @@ docker_runtime::_detect_runtime() {
     fi
 
     # 2. Check DOCKER_HOST environment variable
-    if [[ -n "$DOCKER_HOST" ]]; then
+    if [[ -n "${DOCKER_HOST:-}" ]]; then
         local socket_path="${DOCKER_HOST#unix://}"
         if [[ -S "$socket_path" ]]; then
             local runtime

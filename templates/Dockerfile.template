@@ -103,6 +103,7 @@ RUN echo '@@CONTAINER_RULES_SAFETY_B64@@' | base64 -d > /opt/container-rules/saf
 
 RUN echo '@@ENTRYPOINT_B64@@' | base64 -d > /entrypoint.sh && chmod +x /entrypoint.sh
 RUN echo '@@CLAUDE_EXEC_B64@@' | base64 -d > /usr/local/bin/claude-exec && chmod +x /usr/local/bin/claude-exec
+RUN echo '@@LANGFUSE_HOOK_B64@@' | base64 -d > /opt/langfuse-hook.py && chmod +x /opt/langfuse-hook.py
 
 USER $USERNAME
 WORKDIR /home/$USERNAME

@@ -27,6 +27,7 @@ MODULES := \
 	$(SRC_DIR)/lib/checks.sh \
 	$(SRC_DIR)/lib/config.sh \
 	$(SRC_DIR)/lib/args.sh \
+	$(SRC_DIR)/lib/docker_runtime.sh \
 	$(SRC_DIR)/lib/docker_cmd.sh \
 	$(SRC_DIR)/lib/image.sh \
 	$(SRC_DIR)/lib/container.sh \

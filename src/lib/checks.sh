@@ -26,6 +26,19 @@ checks::docker_daemon() {
     fi
 }
 
+checks::docker_runtime() {
+    log::verbose "Checking Docker runtime..."
+
+    if ! docker_runtime::detect; then
+        log::die "Failed to detect Docker runtime. Please ensure Docker is running."
+    fi
+
+    # Show detected runtime in verbose mode
+    if [[ "$VERBOSE" == true ]]; then
+        docker_runtime::show_info
+    fi
+}
+
 checks::disk_space() {
     if ! command -v df &>/dev/null; then
         return 0

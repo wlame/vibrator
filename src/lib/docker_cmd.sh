@@ -4,6 +4,15 @@
 declare -a DOCKER_RUN_CMD=()
 
 docker_cmd::build() {
+    # Detect Docker runtime and socket path
+    if ! docker_runtime::detect; then
+        log::error "Failed to detect Docker runtime"
+        return 1
+    fi
+
+    local docker_socket
+    docker_socket=$(docker_runtime::get_socket)
+
     local -a cmd=(docker run)
 
     # Lifecycle
@@ -140,11 +149,11 @@ docker_cmd::_add_volumes() {
 
     # Docker socket (only when --dind/--docker enabled)
     if [[ "$DOCKER_IN_DOCKER" == true ]]; then
-        if [[ -S "/var/run/docker.sock" ]]; then
-            cmd+=(-v "/var/run/docker.sock:/var/run/docker.sock")
-            log::verbose "Docker socket mounted for Docker-in-Docker"
+        if [[ -S "$docker_socket" ]]; then
+            cmd+=(-v "$docker_socket:/var/run/docker.sock")
+            log::verbose "Docker socket mounted for Docker-in-Docker: $docker_socket"
         else
-            log::warn "Docker-in-Docker requested but /var/run/docker.sock not found"
+            log::warn "Docker-in-Docker requested but Docker socket not found: $docker_socket"
         fi
     fi
 

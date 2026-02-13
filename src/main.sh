@@ -29,6 +29,7 @@ main() {
 
     checks::docker_available
     checks::docker_daemon
+    checks::docker_runtime
     checks::disk_space
     plugins::detect
 

@@ -23,6 +23,9 @@ Options:
   --no-plugins             Skip Claude plugin installation
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
+  --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
+  --docker-socket PATH     Override Docker socket path (auto-detected by default)
+  --colima-profile NAME    Colima profile name (default: default)
   --rebuild                Rebuild image from scratch (ignore cache)    
   --recreate               Delete and recreate container
   --rm                     Auto-remove container on exit
@@ -41,9 +44,23 @@ Examples:
   vibrate --rm --non-interactive claude auth status
 
 Environment variables:
-  VIBRATOR_IMAGE       Override default Docker Hub image
-  VIBRATOR_VERBOSE     Set to 1 for verbose output
-  VIBRATOR_EXTRA_ENV   Space-separated list of extra env vars to forward
+  VIBRATOR_IMAGE           Override default Docker Hub image
+  VIBRATOR_VERBOSE         Set to 1 for verbose output
+  VIBRATOR_EXTRA_ENV       Space-separated list of extra env vars to forward
+  VIBRATOR_DOCKER_SOCKET   Override Docker socket path (same as --docker-socket)
+  COLIMA_PROFILE           Colima profile name (same as --colima-profile)
+
+Docker Runtime:
+  Vibrator auto-detects your Docker runtime (Docker Desktop, OrbStack, Colima,
+  Rancher Desktop, Podman). Use --docker-socket to override auto-detection.
+
+  Supported runtimes:
+    - Docker Desktop: ~/.docker/run/docker.sock
+    - OrbStack:       ~/.orbstack/run/docker.sock
+    - Colima:         ~/.colima/default/docker.sock (or custom profile)
+    - Rancher Desktop: ~/.rd/docker.sock
+    - Podman:         ~/.local/share/containers/podman/machine/podman.sock
+    - Native Linux:   /var/run/docker.sock
 
 Note: SSH and GPG agents are automatically detected and forwarded if available.
       Use --no-agents to disable this behavior.
@@ -69,6 +86,9 @@ args::parse() {
             --rm)                 REMOVE_AFTER=true; shift ;;
             --non-interactive)    INTERACTIVE=false; shift ;;
             --privileged)         PRIVILEGED=true; shift ;;
+            --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
+            --docker-socket)      VIBRATOR_DOCKER_SOCKET="$2"; shift 2 ;;
+            --colima-profile)     COLIMA_PROFILE="$2"; shift 2 ;;
             --no-agents)          NO_AGENTS=true; shift ;;
             --build)              FLAG_BUILD_ONLY=true; shift ;;
             --rebuild)            FLAG_REBUILD=true; shift ;;

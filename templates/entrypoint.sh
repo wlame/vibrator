@@ -16,7 +16,7 @@ if [ -f "$HOME/.claude.host.json" ]; then
 
   if [ -n "$HOST_CONFIG" ] && [ "$HOST_CONFIG" != "null" ] && [ "$HOST_CONFIG" != "{}" ]; then
     if [ -f "$HOME/.claude.json" ]; then
-      jq ". * $HOST_CONFIG" "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
+      jq ". * $HOST_CONFIG" "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
     else
       echo "$HOST_CONFIG" | jq . > "$HOME/.claude.json"
     fi
@@ -75,7 +75,7 @@ if curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$S
   jq --arg url "http://host.docker.internal:$SERENA_PORT/mcp" \
     '.mcpServers.serena = {type: "http", url: $url}' \
     "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
-    mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
+    mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Serena: connected to host server at host.docker.internal:$SERENA_PORT"
 else
   jq '.mcpServers.serena = {
@@ -83,7 +83,7 @@ else
     command: "uvx",
     args: ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--project-from-cwd"]
   }' "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
-    mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
+    mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Serena: no host server detected, using built-in stdio mode"
 fi
 
@@ -111,7 +111,7 @@ if curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$L
     jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" \
       '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = "http://host.docker.internal:'"$LANGFUSE_PORT"'"' \
       "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-      mv "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
 
     [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: connected to host at host.docker.internal:$LANGFUSE_PORT (tracing enabled)"
   fi
@@ -133,7 +133,7 @@ if command -v agent-browser >/dev/null 2>&1; then
         if ! jq -e '.mcpServers["agent-browser"]' "$HOME/.claude.json" >/dev/null 2>&1; then
           jq '.mcpServers["agent-browser"] = {type: "sse", url: "http://localhost:8087/sse"}' \
             "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
-            mv "$HOME/.claude.json.tmp" "$HOME/.claude.json"
+            mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
         fi
         [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Agent Browser: started (Web UI: http://localhost:8080/ui/)"
         break

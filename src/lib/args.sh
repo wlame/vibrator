@@ -28,7 +28,7 @@ Options:
   --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
   --docker-socket PATH     Override Docker socket path (auto-detected by default)
   --colima-profile NAME    Colima profile name (default: default)
-  --rebuild                Rebuild image from scratch (ignore cache)    
+  --rebuild                Rebuild image from scratch (ignore cache)
   --recreate               Delete and recreate container
   --rm                     Auto-remove container on exit
   --username NAME          Container username (default: current user)
@@ -101,8 +101,8 @@ args::parse() {
             --no-plugins)         INSTALL_PLUGINS=false; shift ;;
             --mount-full-config)  MOUNT_FULL_CONFIG=true; shift ;;
             --memory)             MEMORY_LIMIT="$2"; shift 2 ;;
-            --cpus)               CPU_LIMIT="$2"; shift 2 ;;
-            --version)            echo "$VIBRATOR_VERSION"; exit 0 ;;
+            --cpu)                CPU_LIMIT="$2"; shift 2 ;;
+            --version)            args::_show_version; exit 0 ;;
             --)                   shift; break ;;
             -*)                   log::die "Unknown option: $1" ;;
             *)                    break ;;
@@ -110,6 +110,20 @@ args::parse() {
     done
 
     REMAINING_ARGS=("$@")
+}
+
+args::_show_version() {
+    cat <<EOF
+vibrator version $VIBRATOR_VERSION
+
+Docker runner for Claude Code with:
+  • Auto-detection of Docker runtimes
+  • Pre-configured MCP servers (Serena, Context7, Agent Browser)
+  • Optional Langfuse observability integration
+  • Graduated privilege system for security
+
+Repository: https://github.com/wlame/vibrator
+EOF
 }
 
 args::_enable_aws() {

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint source files
+        run: make lint
+
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make build VERSION=0.0.0-ci
+
+      - name: Run validation tests
+        run: bash tests/validate-build.sh build/vibrate.sh
+
+      - name: Run unit tests
+        run: bash tests/test-docker-runtime.sh
+
+      - name: Run integration tests
+        run: bash tests/test-runtime-integration.sh
+
+      - name: Test version output
+        run: |
+          VERSION=$(build/vibrate.sh --version | head -1)
+          echo "Version output: $VERSION"
+          if [[ ! "$VERSION" =~ "vibrator version 0.0.0-ci" ]]; then
+            echo "Error: Version output doesn't match expected format"
+            exit 1
+          fi
+
+      - name: Test help output
+        run: build/vibrate.sh --help
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibrate.sh
+          path: build/vibrate.sh
+          retention-days: 30

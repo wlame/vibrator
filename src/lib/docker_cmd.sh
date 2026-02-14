@@ -45,7 +45,7 @@ docker_cmd::build() {
 
     # Resource limits
     [[ -n "$MEMORY_LIMIT" ]] && cmd+=(--memory "$MEMORY_LIMIT")
-    [[ -n "$CPU_LIMIT" ]]    && cmd+=(--cpus "$CPU_LIMIT")
+    [[ -n "$CPU_LIMIT" ]]    && cmd+=(--cpu "$CPU_LIMIT")
 
     # Labels
     cmd+=(

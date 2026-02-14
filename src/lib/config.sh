@@ -6,7 +6,8 @@ config::init() {
     CFG_USERNAME="$(whoami)"
 
     # Paths
-    WORKSPACE="$(pwd)"
+    # Get absolute canonical path (resolves symlinks, normalizes ..)
+    WORKSPACE="$(realpath "$(pwd)")"
     CLAUDE_CONFIG="$HOME/.claude"
 
     # Image naming

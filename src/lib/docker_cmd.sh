@@ -57,10 +57,8 @@ docker_cmd::build() {
     )
 
     # Core environment
-    local ws_basename
-    ws_basename=$(basename "$WORKSPACE")
     cmd+=(
-        -e "WORKSPACE_PATH=/home/$CFG_USERNAME/$ws_basename"
+        -e "WORKSPACE_PATH=$WORKSPACE"
         -e "CLAUDE_CONFIG_PATH=/home/$CFG_USERNAME/.claude"
         -e "CONTAINER_USER=$CFG_USERNAME"
     )
@@ -107,17 +105,14 @@ docker_cmd::_add_forwarded_env() {
 }
 
 docker_cmd::_add_volumes() {
-    local ws_basename
-    ws_basename=$(basename "$WORKSPACE")
-
     # Host claude.json for config merging in entrypoint
     if [[ -f "$HOME/.claude.json" ]]; then
         cmd+=(-v "$HOME/.claude.json:/home/$CFG_USERNAME/.claude.host.json:ro")
         log::verbose "Host Claude config detected, will be mounted for merging"
     fi
 
-    # Workspace (always mounted)
-    cmd+=(-v "$WORKSPACE:/home/$CFG_USERNAME/$ws_basename")
+    # Workspace (always mounted at same path as host)
+    cmd+=(-v "$WORKSPACE:$WORKSPACE")
 
     # Claude config directory
     if [[ "$SELECTIVE_MOUNT" == true ]]; then

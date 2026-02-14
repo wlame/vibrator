@@ -10,6 +10,8 @@ Options:
   -E, --forward-env VAR    Forward environment variable (use !VAR to exclude)
   --config PATH            Claude config directory (default: ~/.claude)
   --workspace PATH         Workspace directory to mount (default: current directory)
+                           Mounted at the SAME PATH inside container as on host
+                           Example: /home/user/project → /home/user/project
   --image NAME             Docker image name (default: claude-vb-<user>:latest)
   --name NAME              Container name (auto-generated from workspace path)
   --verbose                Show detailed output and Docker commands
@@ -70,7 +72,7 @@ USAGE
 args::parse() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --workspace)          WORKSPACE="$2"; shift 2 ;;
+            --workspace)          WORKSPACE="$(realpath "$2")"; shift 2 ;;
             --config)             CLAUDE_CONFIG="$2"; shift 2 ;;
             --name)               CONTAINER_NAME="$2"; shift 2 ;;
             --image)              IMAGE_NAME="$2"; shift 2 ;;

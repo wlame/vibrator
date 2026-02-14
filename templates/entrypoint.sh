@@ -202,6 +202,24 @@ if command -v agent-browser >/dev/null 2>&1; then
   fi
 fi
 
+# --- Create workspace parent directories if needed ---
+if [ -n "$WORKSPACE_PATH" ]; then
+  WORKSPACE_PARENT=$(dirname "$WORKSPACE_PATH")
+
+  # Create parent directories if they don't exist
+  if [ ! -d "$WORKSPACE_PARENT" ]; then
+    sudo mkdir -p "$WORKSPACE_PARENT" 2>/dev/null || true
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Workspace: created parent directory $WORKSPACE_PARENT"
+  fi
+
+  # Ensure container user can access the workspace
+  # The workspace itself is mounted, but we need access to parent dirs
+  if [ -d "$WORKSPACE_PARENT" ] && [ ! -w "$WORKSPACE_PARENT" ]; then
+    sudo chown "$CONTAINER_USER:$(id -gn)" "$WORKSPACE_PARENT" 2>/dev/null || true
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Workspace: adjusted permissions on $WORKSPACE_PARENT"
+  fi
+fi
+
 # --- Change to workspace ---
 if [ -n "$WORKSPACE_PATH" ] && [ -d "$WORKSPACE_PATH" ]; then
   cd "$WORKSPACE_PATH"

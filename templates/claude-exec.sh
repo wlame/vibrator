@@ -5,18 +5,18 @@
 SERENA_PORT="${SERENA_PORT:-8765}"
 SERENA_MESSAGE=""
 
-if curl -sf --connect-timeout 0.3 --max-time 0.5 "http://localhost:$SERENA_PORT/mcp" 2>/dev/null | grep -q "mcp-session-id\|jsonrpc" || \
-   curl -sf --connect-timeout 0.3 --max-time 0.5 -I "http://localhost:$SERENA_PORT/mcp" 2>/dev/null | grep -q "mcp-session-id"; then
+if curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$SERENA_PORT/mcp" 2>/dev/null | grep -q "mcp-session-id\|jsonrpc" || \
+   curl -sf --connect-timeout 0.3 --max-time 0.5 -I "http://host.docker.internal:$SERENA_PORT/mcp" 2>/dev/null | grep -q "mcp-session-id"; then
   if [ -f "$HOME/.claude.json" ]; then
     CURRENT_TYPE=$(jq -r '.mcpServers.serena.type // "unknown"' "$HOME/.claude.json" 2>/dev/null)
     if [ "$CURRENT_TYPE" != "http" ]; then
-      jq --arg url "http://localhost:$SERENA_PORT/mcp" \
+      jq --arg url "http://host.docker.internal:$SERENA_PORT/mcp" \
         '.mcpServers.serena = {type: "http", url: $url}' \
         "$HOME/.claude.json" > "$HOME/.claude.json.tmp" 2>/dev/null && \
-        mv "$HOME/.claude.json.tmp" "$HOME/.claude.json" 2>/dev/null
-      SERENA_MESSAGE="Serena: Connected to host server at localhost:$SERENA_PORT"
+        mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json" 2>/dev/null
+      SERENA_MESSAGE="Serena: Connected to host server at host.docker.internal:$SERENA_PORT"
     else
-      SERENA_MESSAGE="Serena: Using host server at localhost:$SERENA_PORT"
+      SERENA_MESSAGE="Serena: Using host server at host.docker.internal:$SERENA_PORT"
     fi
   fi
 else
@@ -28,7 +28,7 @@ else
         command: "uvx",
         args: ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--project-from-cwd"]
       }' "$HOME/.claude.json" > "$HOME/.claude.json.tmp" 2>/dev/null && \
-        mv "$HOME/.claude.json.tmp" "$HOME/.claude.json" 2>/dev/null
+        mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json" 2>/dev/null
       SERENA_MESSAGE="Serena: Host server unavailable, using built-in stdio mode"
     else
       SERENA_MESSAGE="Serena: Using built-in stdio mode"

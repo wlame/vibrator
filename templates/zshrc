@@ -4,7 +4,7 @@ plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
 source $ZSH/oh-my-zsh.sh
 
 # Prompt prefix
-export PS1="%F{yellow}[%F{red}cc%F{yellow}]%f $PS1"
+export PS1="%F{yellow}[%F{red}vb%F{yellow}]%f $PS1"
 
 # History
 HISTFILE=~/.zsh_history
@@ -19,8 +19,12 @@ alias claude-safe="command claude"
 
 # General aliases
 alias ll="ls -la"
-alias vim="nvim"
-alias vi="nvim"
+
+# Use neovim if available, otherwise fall back to vim
+if command -v nvim >/dev/null 2>&1; then
+  alias vim="nvim"
+  alias vi="nvim"
+fi
 
 # Git SSH configuration
 export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
@@ -46,13 +50,16 @@ if [[ -o interactive ]]; then
   echo -e "\033[1;32mTools:\033[0m Go $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'), Python $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A'), Vim, Git, GitHub CLI"
   echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena, Agent Browser"
   if pgrep -x agent-browser >/dev/null 2>&1; then
-    echo -e "\033[1;36m   Agent Browser Web UI:\033[0m http://localhost:8080/ui/"
+    echo -e "\033[1;32mAgent Browser Web UI:\033[0m http://localhost:8080/ui/"
   fi
 
   # Langfuse observability status
-  if [ "$LANGFUSE_DETECTED" = "1" ]; then
-    LANGFUSE_PORT="${LANGFUSE_PORT:-3050}"
-    echo -e "\033[1;32mObservability:\033[0m Langfuse (http://localhost:$LANGFUSE_PORT)"
+  if [ "$LANGFUSE_MODE" = "host" ]; then
+    echo -e "\033[1;32mLangfuse:\033[0m Enabled (host hook)"
+  elif [ "$LANGFUSE_MODE" = "auto" ]; then
+    echo -e "\033[1;32mLangfuse:\033[0m Enabled (auto-detected)"
+  else
+    echo -e "\033[1;90mLangfuse:\033[0m Not configured"
   fi
 
   echo ""

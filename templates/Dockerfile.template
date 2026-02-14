@@ -94,6 +94,9 @@ FROM claude-mcp AS runtime
 
 USER root
 
+# Install Langfuse SDK for observability hook
+RUN pip3 install --break-system-packages langfuse
+
 # Create container-specific Claude rules directory
 RUN mkdir -p /opt/container-rules
 

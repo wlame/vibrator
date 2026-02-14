@@ -48,6 +48,15 @@ fi
 TOTAL_RULES=$(ls -1 "$HOME/.claude/rules/"*.md 2>/dev/null | wc -l)
 [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: $TOTAL_RULES total rules loaded"
 
+# --- Initialize settings.json from host (allows runtime modification) ---
+if [ -f "$HOME/.claude/settings.host.json" ]; then
+  cp "$HOME/.claude/settings.host.json" "$HOME/.claude/settings.json"
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Settings: copied from host settings.json"
+elif [ -f "$HOME/.claude-full/settings.json" ]; then
+  cp "$HOME/.claude-full/settings.json" "$HOME/.claude/settings.json"
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Settings: copied from full-mount settings.json"
+fi
+
 # --- Link GPG agent socket if forwarded ---
 if [ -S "/gpg-agent-extra" ]; then
   EXPECTED_SOCKET=$(gpgconf --list-dirs agent-socket 2>/dev/null)
@@ -87,40 +96,88 @@ else
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Serena: no host server detected, using built-in stdio mode"
 fi
 
-# --- Detect host Langfuse server and configure stop hook ---
+# --- Detect and configure Langfuse observability ---
 LANGFUSE_PORT="${LANGFUSE_PORT:-3050}"
 LANGFUSE_DETECTED=0
+LANGFUSE_MODE=""
 
-if curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$LANGFUSE_PORT" -o /dev/null 2>/dev/null; then
+mkdir -p "$HOME/.claude/hooks"
+mkdir -p "$HOME/.claude"
+[ ! -f "$HOME/.claude/settings.json" ] && echo '{}' > "$HOME/.claude/settings.json"
+
+# Mode 1 (host): User has a Langfuse hook on host with TRACE_TO_LANGFUSE configured
+HOST_HOOK=""
+if [ -d "$HOME/.claude/hooks-host" ]; then
+  for f in "$HOME/.claude/hooks-host"/langfuse*hook*.py "$HOME/.claude/hooks-host"/langfuse_hook*.py; do
+    [ -f "$f" ] && HOST_HOOK="$f" && break
+  done
+fi
+
+if [ -n "$HOST_HOOK" ] && \
+   [ -f "$HOME/.claude/settings.json" ] && \
+   jq -e '.env.TRACE_TO_LANGFUSE == "true"' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
   LANGFUSE_DETECTED=1
+  LANGFUSE_MODE="host"
 
-  # Create hooks directory
-  mkdir -p "$HOME/.claude/hooks"
+  # Copy host's hook file into container hooks dir
+  HOOK_BASENAME=$(basename "$HOST_HOOK")
+  cp "$HOST_HOOK" "$HOME/.claude/hooks/$HOOK_BASENAME"
+  chmod +x "$HOME/.claude/hooks/$HOOK_BASENAME"
 
-  # Install the Langfuse hook script
+  # Fix hook paths in settings.json: replace host user's home path with container user's home
+  # Host settings may reference /Users/foo/.claude/hooks/... or /home/foo/.claude/hooks/...
+  # We need these to point to /home/$CONTAINER_USER/.claude/hooks/...
+  if jq -e '.hooks' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
+    jq --arg home "$HOME" \
+      'walk(if type == "string" and test("/(?:Users|home)/[^/]+/\\.claude/hooks/") then gsub("/(?:Users|home)/[^/]+/\\.claude/hooks/"; ($home + "/.claude/hooks/")) else . end)' \
+      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+  fi
+
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: using host hook ($HOOK_BASENAME)"
+
+# Mode 2 (auto): Langfuse server detected on host, use embedded hook
+elif curl -sf --connect-timeout 0.3 --max-time 0.5 "http://localhost:$LANGFUSE_PORT" -o /dev/null 2>/dev/null; then
+  LANGFUSE_DETECTED=1
+  LANGFUSE_MODE="auto"
+  LANGFUSE_URL="http://localhost:$LANGFUSE_PORT"
+
   if [ -f /opt/langfuse-hook.py ]; then
     cp /opt/langfuse-hook.py "$HOME/.claude/hooks/langfuse-hook.py"
     chmod +x "$HOME/.claude/hooks/langfuse-hook.py"
 
-    # Configure stop hook in settings
-    mkdir -p "$HOME/.claude"
-    if [ ! -f "$HOME/.claude/settings.json" ]; then
-      echo '{}' > "$HOME/.claude/settings.json"
-    fi
-
-    jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" \
-      '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = "http://host.docker.internal:'"$LANGFUSE_PORT"'"' \
+    jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" --arg url "$LANGFUSE_URL" \
+      '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = $url' \
       "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
       mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
-
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: connected to host at host.docker.internal:$LANGFUSE_PORT (tracing enabled)"
   fi
+
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: auto-detected server at $LANGFUSE_URL"
+
+elif curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$LANGFUSE_PORT" -o /dev/null 2>/dev/null; then
+  LANGFUSE_DETECTED=1
+  LANGFUSE_MODE="auto"
+  LANGFUSE_URL="http://host.docker.internal:$LANGFUSE_PORT"
+
+  if [ -f /opt/langfuse-hook.py ]; then
+    cp /opt/langfuse-hook.py "$HOME/.claude/hooks/langfuse-hook.py"
+    chmod +x "$HOME/.claude/hooks/langfuse-hook.py"
+
+    jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" --arg url "$LANGFUSE_URL" \
+      '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = $url' \
+      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+  fi
+
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: auto-detected server at $LANGFUSE_URL"
+
 else
-  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: no host server detected, tracing disabled"
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: not configured"
 fi
 
 # Export for use in welcome message
 export LANGFUSE_DETECTED
+export LANGFUSE_MODE
 
 # --- Start agent-browser MCP hub in background ---
 if command -v agent-browser >/dev/null 2>&1; then

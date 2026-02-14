@@ -122,8 +122,9 @@ docker_cmd::_add_volumes() {
     # Claude config directory
     if [[ "$SELECTIVE_MOUNT" == true ]]; then
         log::verbose "Using selective config mount (macOS mode)"
+        # Mount as settings.host.json so entrypoint can copy and modify
         [[ -f "$CLAUDE_CONFIG/settings.json" ]] && \
-            cmd+=(-v "$CLAUDE_CONFIG/settings.json:/home/$CFG_USERNAME/.claude/settings.json:ro")
+            cmd+=(-v "$CLAUDE_CONFIG/settings.json:/home/$CFG_USERNAME/.claude/settings.host.json:ro")
         # Mount host rules to separate location for merging with container rules
         [[ -d "$CLAUDE_CONFIG/rules" ]] && \
             cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
@@ -138,6 +139,10 @@ docker_cmd::_add_volumes() {
             cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude")
         fi
     fi
+
+    # Host hooks directory (for Langfuse hook detection)
+    [[ -d "$CLAUDE_CONFIG/hooks" ]] && \
+        cmd+=(-v "$CLAUDE_CONFIG/hooks:/home/$CFG_USERNAME/.claude/hooks-host:ro")
 
     # SSH keys (read-only)
     [[ -d "$HOME/.ssh" ]] && \

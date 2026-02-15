@@ -101,6 +101,48 @@ vibrate --docker-socket=/custom/docker.sock
 vibrate --colima-profile=staging
 ```
 
+### Authentication
+
+Vibrator requires a Claude Code OAuth token to authenticate with Anthropic's API.
+
+#### Obtaining a Long-Lived OAuth Token
+
+1. **Run the Claude Code CLI setup command:**
+
+   ```bash
+   claude setup-token
+   ```
+
+   This will:
+   - Open your browser for authentication
+   - Generate a long-lived OAuth token
+   - Display the token in your terminal
+
+2. **Save the token to file (recommended):**
+
+   ```bash
+   echo "eyJhbGcgOvIBey0RSElfHgsWR5cCI6IkpXVCJ9..." > ~/.claude-docker-token
+   ```
+
+   Replace `eyJhbGc...` with your actual token from step 1.
+
+   Vibrator will automatically load the token from this file on every run.
+
+3. **Verify it works:**
+   ```bash
+   vibrate
+   # You should see Claude Code starting without /login request
+   ```
+
+#### Legacy: Anthropic API Key
+
+You can also use a legacy API key:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Note:** OAuth tokens are preferred as they're longer-lived
+
 ---
 
 ## Command Line Options

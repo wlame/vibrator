@@ -65,6 +65,7 @@ RUN (getent group ${HOST_GID} || groupadd -g ${HOST_GID} ${USERNAME}) && \
 # Stage 2: User environment (zsh, oh-my-zsh, uv)
 # ============================================================================
 FROM base AS user-env
+ARG USERNAME=claude-user
 
 USER $USERNAME
 WORKDIR /home/$USERNAME
@@ -80,6 +81,7 @@ ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 # Stage 3: Claude CLI and MCP servers
 # ============================================================================
 FROM user-env AS claude-mcp
+ARG USERNAME=claude-user
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH=/home/$USERNAME/.local/bin:$PATH
@@ -101,6 +103,7 @@ RUN uvx superclaude install
 # Stage 4: Final runtime
 # ============================================================================
 FROM claude-mcp AS runtime
+ARG USERNAME=claude-user
 
 USER root
 
@@ -122,6 +125,8 @@ USER $USERNAME
 WORKDIR /home/$USERNAME
 
 ENV COLORTERM=truecolor
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 RUN echo '@@ZSHRC_B64@@' | base64 -d > ~/.zshrc
 

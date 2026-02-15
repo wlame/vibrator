@@ -247,6 +247,40 @@ if command -v agent-browser >/dev/null 2>&1; then
   fi
 fi
 
+# --- Configure Playwright MCP server (stdio mode with playwright-mcp binary) ---
+# Playwright MCP is installed globally during image build but needs runtime configuration
+# since ~/.claude.json may be overwritten by host settings merge.
+# Uses the globally installed playwright-mcp binary directly (node -> bun symlink
+# resolves the #!/usr/bin/env node shebang). This avoids bunx tempdir permission issues.
+if command -v playwright-mcp >/dev/null 2>&1; then
+  PLAYWRIGHT_CMD=$(jq -r '.mcpServers.playwright.command // ""' "$HOME/.claude.json" 2>/dev/null)
+  if [ "$PLAYWRIGHT_CMD" != "playwright-mcp" ]; then
+    # Resolve Chrome/Chromium executable path for --executable-path flag.
+    # The wrapper at /opt/google/chrome/chrome (created during build) exec's the
+    # real Chromium binary with --no-sandbox flags. This ensures playwright-mcp
+    # works in containers without unprivileged user namespaces.
+    CHROME_PATH="/opt/google/chrome/chrome"
+    if [ ! -x "$CHROME_PATH" ]; then
+      CHROME_PATH=$(find /ms-playwright -name chrome -path '*/chrome-linux/chrome' 2>/dev/null | head -1)
+    fi
+    PLAYWRIGHT_ARGS='["--headless"]'
+    if [ -n "$CHROME_PATH" ] && [ -x "$CHROME_PATH" ]; then
+      PLAYWRIGHT_ARGS="[\"--headless\", \"--executable-path\", \"$CHROME_PATH\"]"
+    fi
+    jq --argjson args "$PLAYWRIGHT_ARGS" '.mcpServers.playwright = {
+      type: "stdio",
+      command: "playwright-mcp",
+      args: $args
+    }' "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
+      mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Playwright MCP: configured (stdio mode with playwright-mcp)"
+  else
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Playwright MCP: already configured"
+  fi
+else
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Playwright MCP: playwright-mcp not available, skipping"
+fi
+
 # --- Create workspace parent directories if needed ---
 if [ -n "$WORKSPACE_PATH" ]; then
   WORKSPACE_PARENT=$(dirname "$WORKSPACE_PATH")

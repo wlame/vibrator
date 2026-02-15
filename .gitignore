@@ -11,3 +11,4 @@ build/
 web/
 
 .DS_Store
+core

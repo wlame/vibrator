@@ -44,7 +44,8 @@ No manual configuration needed - just run `vibrate` and it works!
 
 - **Serena**: Semantic code analysis (LSP-based). Automatically connects to host Serena server if running
 - **Context7**: Library documentation lookup
-- **agent-browser**: Headless web debugging with Playwright
+- **Playwright**: Browser automation with Chromium (stdio mode, in-container)
+- **agent-browser**: Headless web debugging and interaction (SSE mode)
 
 ### Pre-installed Tools
 

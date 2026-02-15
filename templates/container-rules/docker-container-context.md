@@ -32,11 +32,104 @@ You are running inside a Docker container managed by vibrator.
 - Docker commands: Only available with `--dind` or `--docker` flag
 - Agent Browser UI: http://localhost:8080/ui/
 
-### Browser Automation (Playwright MCP)
-- Navigate to URLs, take screenshots, click elements, fill forms
-- Chromium runs in headless mode (no display required)
-- Use for web page rendering, debugging, testing, and interaction
-- Available as `playwright` MCP server (stdio, launched on demand)
+### Browser Automation (Playwright + Chrome)
+
+Chrome and the Playwright library are pre-installed in this container.
+A wrapper script at `/opt/google/chrome/chrome` automatically injects `--no-sandbox`
+and other container-safe flags, so Chrome works without elevated privileges.
+
+#### Option 1: Playwright MCP Tools (Preferred)
+
+The Playwright MCP server is pre-configured. Use its tools directly:
+- `browser_navigate` — open a URL
+- `browser_snapshot` — get accessibility tree (better than screenshots for actions)
+- `browser_take_screenshot` — capture PNG screenshots
+- `browser_click`, `browser_type`, `browser_hover` — interact with elements
+- `browser_evaluate` — run JavaScript on the page
+- `browser_console_messages` — read console output
+
+To test local files, start an HTTP server first:
+```bash
+python3 -m http.server 8765 &
+```
+Then use `browser_navigate` to `http://localhost:8765/`.
+
+#### Option 2: Playwright Scripts (Advanced)
+
+For complex automation (multi-viewport testing, batch screenshots, data extraction),
+write a Node.js script. The `playwright-core` library is available globally via `NODE_PATH`:
+
+```javascript
+const { chromium } = require('playwright-core');
+
+(async () => {
+    const browser = await chromium.launch({
+        executablePath: '/opt/google/chrome/chrome',
+        headless: true
+        // No need to pass --no-sandbox — the wrapper handles it
+    });
+
+    const page = await browser.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('http://localhost:8765/', { waitUntil: 'networkidle' });
+    await page.screenshot({ path: '/tmp/screenshot.png', fullPage: true });
+    await browser.close();
+})();
+```
+
+Run with: `node /tmp/pw-script.js`
+
+View screenshots with the Read tool on the PNG files.
+
+#### Key Paths
+
+| Resource | Path |
+|----------|------|
+| Chrome wrapper | `/opt/google/chrome/chrome` (auto-adds `--no-sandbox`) |
+| Chrome binary | `/opt/google/chrome/chrome.real` |
+| Playwright library | Available via `require('playwright-core')` (NODE_PATH set) |
+| Node.js / Bun | `/usr/local/bin/node`, `/usr/local/bin/bun` |
+
+#### Common Recipes
+
+**Multi-viewport responsive testing:**
+```javascript
+for (const vp of [{w:1440,h:900,name:'desktop'}, {w:768,h:1024,name:'tablet'}, {w:375,h:812,name:'mobile'}]) {
+    await page.setViewportSize({ width: vp.w, height: vp.h });
+    await page.goto(url, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: `/tmp/${vp.name}.png`, fullPage: true });
+}
+```
+
+**CSS debugging — extract computed styles:**
+```javascript
+const styles = await page.evaluate(() => {
+    const el = document.querySelector('.my-element');
+    const cs = getComputedStyle(el);
+    return { display: cs.display, grid: cs.gridTemplateColumns, color: cs.color };
+});
+```
+
+**JS debugging — check console errors:**
+```javascript
+page.on('console', msg => console.log(`[${msg.type()}] ${msg.text()}`));
+page.on('pageerror', err => console.log(`[PAGE ERROR] ${err.message}`));
+await page.goto(url);
+```
+
+**Test hover/click interactions:**
+```javascript
+await page.hover('.feature-card');
+await page.waitForTimeout(500);
+await page.screenshot({ path: '/tmp/hover-state.png' });
+```
+
+**Network request monitoring:**
+```javascript
+page.on('request', req => console.log(`>> ${req.method()} ${req.url()}`));
+page.on('response', res => console.log(`<< ${res.status()} ${res.url()}`));
+```
 
 ## Security Context
 

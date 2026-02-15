@@ -97,113 +97,125 @@ else
 fi
 
 # --- Detect and configure Langfuse observability ---
+# Claude Code hooks format (PascalCase event names, nested structure):
+#   {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "..."}]}]}}
 LANGFUSE_PORT="${LANGFUSE_PORT:-3050}"
 LANGFUSE_DETECTED=0
 LANGFUSE_MODE=""
+CONTAINER_HOOK_CMD="python3 /opt/langfuse-hook.py"
 
 mkdir -p "$HOME/.claude/hooks"
 mkdir -p "$HOME/.claude"
 [ ! -f "$HOME/.claude/settings.json" ] && echo '{}' > "$HOME/.claude/settings.json"
 
-# Mode 1 (host): User has a Langfuse hook on host with TRACE_TO_LANGFUSE configured
-HOST_HOOK=""
-if [ -d "$HOME/.claude/hooks-host" ]; then
-  for f in "$HOME/.claude/hooks-host"/langfuse*hook*.py "$HOME/.claude/hooks-host"/langfuse_hook*.py; do
-    [ -f "$f" ] && HOST_HOOK="$f" && break
-  done
-fi
+# Helper: remove langfuse Stop hooks from settings.json
+# Filters out hook entries whose command contains "langfuse" (case-insensitive)
+langfuse_remove_hooks() {
+  jq '
+    if .hooks.Stop then
+      .hooks.Stop = [
+        .hooks.Stop[] |
+        .hooks = [.hooks[] | select(.command | test("langfuse"; "i") | not)] |
+        select(.hooks | length > 0)
+      ]
+    else . end |
+    if .hooks.Stop == [] then del(.hooks.Stop) else . end |
+    if .hooks == {} then del(.hooks) else . end
+  ' "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+    mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+}
 
-if [ -n "$HOST_HOOK" ] && \
-   [ -f "$HOME/.claude/settings.json" ] && \
+# Helper: remove langfuse env vars from settings.json
+langfuse_remove_env() {
+  jq '
+    if .env then
+      .env |= with_entries(select(.key | test("LANGFUSE|TRACE_TO_LANGFUSE"; "i") | not))
+    else . end |
+    if .env == {} then del(.env) else . end
+  ' "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+    mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+}
+
+# Helper: set langfuse Stop hook in settings.json with proper Claude Code format
+langfuse_set_hook() {
+  local hook_cmd="$1"
+  local langfuse_url="$2"
+
+  # First remove any existing langfuse hooks
+  langfuse_remove_hooks
+
+  # Add new hook in correct Claude Code format and set env vars
+  # Also rewrite LANGFUSE_HOST: localhost -> host.docker.internal for container networking
+  jq --arg cmd "$hook_cmd" --arg url "$langfuse_url" '
+    .hooks.Stop = ((.hooks.Stop // []) + [{"hooks": [{"type": "command", "command": $cmd}]}]) |
+    .env.TRACE_TO_LANGFUSE = "true" |
+    .env.LANGFUSE_HOST = $url |
+    if .env.LANGFUSE_HOST then
+      .env.LANGFUSE_HOST = (.env.LANGFUSE_HOST | gsub("localhost"; "host.docker.internal") | gsub("127\\.0\\.0\\.1"; "host.docker.internal"))
+    else . end
+  ' "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+    mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+}
+
+# Mode 1 (host): User has Langfuse configured in host settings.json
+# Detect by checking for TRACE_TO_LANGFUSE env var AND langfuse-related Stop hooks
+if [ -f "$HOME/.claude/settings.json" ] && \
    jq -e '.env.TRACE_TO_LANGFUSE == "true"' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
 
-  # Copy host's hook file into container hooks dir
-  HOOK_BASENAME=$(basename "$HOST_HOOK")
-  if cp "$HOST_HOOK" "$HOME/.claude/hooks/$HOOK_BASENAME" 2>/dev/null && \
-     chmod +x "$HOME/.claude/hooks/$HOOK_BASENAME" 2>/dev/null; then
+  # Extract LANGFUSE_HOST from host settings, default to host.docker.internal
+  HOST_LANGFUSE_URL=$(jq -r '.env.LANGFUSE_HOST // ""' "$HOME/.claude/settings.json")
+  if [ -z "$HOST_LANGFUSE_URL" ]; then
+    HOST_LANGFUSE_URL="http://host.docker.internal:$LANGFUSE_PORT"
+  fi
 
+  # Rewrite localhost/127.0.0.1 to host.docker.internal for container networking
+  CONTAINER_LANGFUSE_URL=$(echo "$HOST_LANGFUSE_URL" | sed -e 's|localhost|host.docker.internal|g' -e 's|127\.0\.0\.1|host.docker.internal|g')
+
+  # Check if langfuse server is actually reachable
+  if curl -sf --connect-timeout 0.5 --max-time 1 "$CONTAINER_LANGFUSE_URL" -o /dev/null 2>/dev/null; then
     LANGFUSE_DETECTED=1
     LANGFUSE_MODE="host"
 
-    # Fix hook paths in settings.json: replace host user's home path with container user's home
-    # Host settings may reference /Users/foo/.claude/hooks/... or /home/foo/.claude/hooks/...
-    # We need these to point to /home/$CONTAINER_USER/.claude/hooks/...
-    if jq -e '.hooks' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
-      jq --arg home "$HOME" \
-        'walk(if type == "string" and test("/(?:Users|home)/[^/]+/\\.claude/hooks/") then gsub("/(?:Users|home)/[^/]+/\\.claude/hooks/"; ($home + "/.claude/hooks/")) else . end)' \
-        "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-        mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+    # Try to copy host's hook file if available (may have custom logic)
+    HOST_HOOK=""
+    if [ -d "$HOME/.claude/hooks-host" ]; then
+      for f in "$HOME/.claude/hooks-host"/langfuse*hook*.py "$HOME/.claude/hooks-host"/langfuse_hook*.py; do
+        [ -f "$f" ] && HOST_HOOK="$f" && break
+      done
     fi
 
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: using host hook ($HOOK_BASENAME)"
-  else
-    # Failed to copy hook, remove Langfuse hooks from settings.json
-    jq 'if .hooks.stop then .hooks.stop = [.hooks.stop[] | select(type == "string" and (test("langfuse.*hook"; "i") | not))] else . end |
-        if .hooks.stop == [] then del(.hooks.stop) else . end |
-        if .hooks == {} then del(.hooks) else . end' \
-      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+    if [ -n "$HOST_HOOK" ]; then
+      HOOK_BASENAME=$(basename "$HOST_HOOK")
+      cp "$HOST_HOOK" "$HOME/.claude/hooks/$HOOK_BASENAME" 2>/dev/null && \
+        chmod +x "$HOME/.claude/hooks/$HOOK_BASENAME" 2>/dev/null
+      CONTAINER_HOOK_CMD="python3 $HOME/.claude/hooks/$HOOK_BASENAME"
+      [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: copied host hook ($HOOK_BASENAME)"
+    fi
 
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: failed to copy host hook, hook removed from settings"
+    # Replace host hook command with container-local command
+    langfuse_set_hook "$CONTAINER_HOOK_CMD" "$CONTAINER_LANGFUSE_URL"
+
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: using host config, server at $CONTAINER_LANGFUSE_URL"
+  else
+    # Langfuse server not reachable, clean up hooks
+    langfuse_remove_hooks
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: host config found but server unreachable at $CONTAINER_LANGFUSE_URL"
   fi
 
-# Mode 2 (auto): Langfuse server detected on host, use embedded hook
-elif curl -sf --connect-timeout 0.3 --max-time 0.5 "http://localhost:$LANGFUSE_PORT" -o /dev/null 2>/dev/null; then
-  LANGFUSE_URL="http://localhost:$LANGFUSE_PORT"
-
-  if [ -f /opt/langfuse-hook.py ] && \
-     cp /opt/langfuse-hook.py "$HOME/.claude/hooks/langfuse-hook.py" 2>/dev/null && \
-     chmod +x "$HOME/.claude/hooks/langfuse-hook.py" 2>/dev/null; then
-
-    LANGFUSE_DETECTED=1
-    LANGFUSE_MODE="auto"
-
-    jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" --arg url "$LANGFUSE_URL" \
-      '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = $url' \
-      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
-
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: auto-detected server at $LANGFUSE_URL"
-  else
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: server detected at $LANGFUSE_URL but hook file missing or copy failed"
-  fi
-
+# Mode 2 (auto): No host config, but detect Langfuse server running on host
 elif curl -sf --connect-timeout 0.3 --max-time 0.5 "http://host.docker.internal:$LANGFUSE_PORT" -o /dev/null 2>/dev/null; then
+  LANGFUSE_DETECTED=1
+  LANGFUSE_MODE="auto"
   LANGFUSE_URL="http://host.docker.internal:$LANGFUSE_PORT"
 
-  if [ -f /opt/langfuse-hook.py ] && \
-     cp /opt/langfuse-hook.py "$HOME/.claude/hooks/langfuse-hook.py" 2>/dev/null && \
-     chmod +x "$HOME/.claude/hooks/langfuse-hook.py" 2>/dev/null; then
+  langfuse_set_hook "$CONTAINER_HOOK_CMD" "$LANGFUSE_URL"
 
-    LANGFUSE_DETECTED=1
-    LANGFUSE_MODE="auto"
-
-    jq --arg hook "$HOME/.claude/hooks/langfuse-hook.py" --arg url "$LANGFUSE_URL" \
-      '.hooks.stop = [$hook] | .env.TRACE_TO_LANGFUSE = "true" | .env.LANGFUSE_HOST = $url' \
-      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
-
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: auto-detected server at $LANGFUSE_URL"
-  else
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: server detected at $LANGFUSE_URL but hook file missing or copy failed"
-  fi
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: auto-detected server at $LANGFUSE_URL"
 
 else
-  # Langfuse not detected: remove any Langfuse hooks from settings.json
-  if [ -f "$HOME/.claude/settings.json" ]; then
-    # Remove Langfuse hooks from hooks.stop array
-    jq 'if .hooks.stop then .hooks.stop = [.hooks.stop[] | select(type == "string" and (test("langfuse.*hook"; "i") | not))] else . end |
-        if .hooks.stop == [] then del(.hooks.stop) else . end |
-        if .hooks == {} then del(.hooks) else . end' \
-      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
-
-    # Optionally remove Langfuse env vars to keep settings clean
-    jq 'if .env then .env |= with_entries(select(.key | test("LANGFUSE|TRACE_TO_LANGFUSE"; "i") | not)) else . end |
-        if .env == {} then del(.env) else . end' \
-      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
-      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
-  fi
+  # No Langfuse detected: clean up any stale hooks and env vars from host settings
+  langfuse_remove_hooks
+  langfuse_remove_env
 
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Langfuse: not configured (hooks removed from settings)"
 fi

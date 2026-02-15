@@ -9,3 +9,5 @@ build/
 
 # website build artifacts
 web/
+
+.DS_Store

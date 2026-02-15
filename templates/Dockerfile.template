@@ -32,6 +32,16 @@ RUN apt-get update && \
     apt-get install -y golang-go && \
     rm -rf /var/lib/apt/lists/*
 
+# Install Bun (needed by Playwright MCP server)
+ENV BUN_INSTALL=/usr/local
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Install Playwright MCP server and Chromium browser
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN bun install -g @playwright/mcp && \
+    bunx playwright install --with-deps chromium && \
+    chmod -R 777 /ms-playwright
+
 # Install agent-browser MCP server (headless web app debugging)
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then AGENT_ARCH="amd64"; else AGENT_ARCH="arm64"; fi && \
@@ -95,6 +105,11 @@ RUN claude mcp add serena \
     --scope user \
     -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd
 
+RUN claude mcp add playwright \
+    --scope user \
+    --transport stdio \
+    -- bunx @playwright/mcp --headless
+
 RUN uvx superclaude install
 
 @@PLUGIN_SECTION@@
@@ -124,6 +139,7 @@ RUN echo '@@LANGFUSE_HOOK_B64@@' | base64 -d > /opt/langfuse-hook.py && chmod +x
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV COLORTERM=truecolor
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8

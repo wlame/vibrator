@@ -46,6 +46,10 @@ No manual configuration needed - just run `vibrate` and it works!
 - **Context7**: Library documentation lookup
 - **agent-browser**: Headless web debugging with Playwright
 
+### Pre-installed Tools
+
+- **[ralphex](https://ralphex.com/)**: Autonomous coding loop for Claude Code - executes implementation plans task-by-task in fresh sessions with multi-agent code review
+
 ### 🎯 Developer Experience
 
 - **Smart agent forwarding**: SSH and GPG agents auto-detected and forwarded. Can be disabled with `--no-agents` for maximum security

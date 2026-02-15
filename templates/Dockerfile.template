@@ -42,6 +42,16 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/agent-browser && \
     rm agent-browser.tar.gz
 
+# Install ralphex (autonomous coding loop for Claude Code)
+RUN ARCH=$(dpkg --print-architecture) && \
+    RALPHEX_VERSION="0.12.0" && \
+    curl -fsSL "https://github.com/umputun/ralphex/releases/download/v${RALPHEX_VERSION}/ralphex_${RALPHEX_VERSION}_linux_${ARCH}.tar.gz" \
+    -o ralphex.tar.gz && \
+    tar -xzf ralphex.tar.gz && \
+    mv ralphex /usr/local/bin/ && \
+    chmod +x /usr/local/bin/ralphex && \
+    rm ralphex.tar.gz
+
 # Create user with host UID/GID for proper file permissions on mounted volumes
 ARG USERNAME=claude-user
 ARG HOST_UID=1000

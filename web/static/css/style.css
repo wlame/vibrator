@@ -131,7 +131,7 @@ body::before {
     padding: 8rem 0 4rem;
     background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
     position: relative;
-    overflow: hidden;
+    overflow: clip;
 }
 
 .hero::before {

@@ -25,6 +25,7 @@ Options:
   --no-plugins             Skip Claude plugin installation
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
+  --mcp                    Start agent-browser MCP hub (Web UI at localhost:8080)
   --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
   --docker-socket PATH     Override Docker socket path (auto-detected by default)
   --colima-profile NAME    Colima profile name (default: default)
@@ -88,6 +89,7 @@ args::parse() {
             --rm)                 REMOVE_AFTER=true; shift ;;
             --non-interactive)    INTERACTIVE=false; shift ;;
             --privileged)         PRIVILEGED=true; shift ;;
+            --mcp)                MCP_HUB=true; shift ;;
             --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
             --docker-socket)      VIBRATOR_DOCKER_SOCKET="$2"; shift 2 ;;
             --colima-profile)     COLIMA_PROFILE="$2"; shift 2 ;;
@@ -118,7 +120,7 @@ vibrator version $VIBRATOR_VERSION
 
 Docker runner for Claude Code with:
   • Auto-detection of Docker runtimes
-  • Pre-configured MCP servers (Serena, Context7, Agent Browser)
+  • Pre-configured MCP servers (Serena, Context7, Playwright)
   • Optional Langfuse observability integration
   • Graduated privilege system for security
 

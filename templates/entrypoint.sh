@@ -1,6 +1,6 @@
 #!/bin/sh
 # Container entrypoint: runs once at container creation.
-# Merges host Claude config, sets up GPG, detects Serena, starts agent-browser.
+# Merges host Claude config, sets up GPG, detects Serena, optionally starts agent-browser.
 
 # --- Merge Claude config from host ---
 if [ -f "$HOME/.claude.host.json" ]; then
@@ -224,8 +224,8 @@ fi
 export LANGFUSE_DETECTED
 export LANGFUSE_MODE
 
-# --- Start agent-browser MCP hub in background ---
-if command -v agent-browser >/dev/null 2>&1; then
+# --- Start agent-browser MCP hub in background (only with --mcp flag) ---
+if [ "$VIBRATOR_MCP_HUB" = "1" ] && command -v agent-browser >/dev/null 2>&1; then
   if ! pgrep -x agent-browser >/dev/null 2>&1; then
     mkdir -p "$HOME/.agent-browser"
     agent-browser > "$HOME/.agent-browser/agent-browser.log" 2>&1 &
@@ -245,6 +245,8 @@ if command -v agent-browser >/dev/null 2>&1; then
   else
     [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Agent Browser: already running"
   fi
+elif [ "$VIBRATOR_VERBOSE" = "1" ]; then
+  echo "Agent Browser: skipped (use --mcp to enable)"
 fi
 
 # --- Configure Playwright MCP server (stdio mode with playwright-mcp binary) ---

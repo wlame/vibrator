@@ -48,9 +48,11 @@ if [[ -o interactive ]]; then
 
   echo ""
   echo -e "\033[1;32mTools:\033[0m Go $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'), Python $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A'), Vim, Git, GitHub CLI"
-  echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena, Agent Browser"
   if pgrep -x agent-browser >/dev/null 2>&1; then
+    echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena, Agent Browser"
     echo -e "\033[1;32mAgent Browser Web UI:\033[0m http://localhost:8080/ui/"
+  else
+    echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena"
   fi
 
   # Langfuse observability status

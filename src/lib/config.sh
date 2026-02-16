@@ -22,6 +22,7 @@ config::init() {
     VERBOSE=false
     INSTALL_PLUGINS=true
     DOCKER_IN_DOCKER=false
+    MCP_HUB=false
 
     # Build/action flags
     FLAG_BUILD_ONLY=false

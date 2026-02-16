@@ -12,7 +12,7 @@ Go vibe yourself!
 **TLDR:** put the `vibrate.sh` script in your PATH, cd to your project and just run `vibrate` - it will:
 - automatically detect your Docker runtime
 - build the image with Claude Code CLI and plugins (pre-configured + host Claude config)
-- automatically connect to MCP servers (Serena, Context7, agent-browser) if running on the host
+- automatically connect to MCP servers (Serena, Context7) if running on the host
 - run an interactive shell in a container with your project mounted inside, forwarding SSH/GPG agents and needed environment variables
 - Profit! 
 
@@ -45,7 +45,7 @@ No manual configuration needed - just run `vibrate` and it works!
 - **Serena**: Semantic code analysis (LSP-based). Automatically connects to host Serena server if running
 - **Context7**: Library documentation lookup
 - **Playwright**: Browser automation with Chromium (stdio mode, in-container)
-- **agent-browser**: Headless web debugging and interaction (SSE mode)
+- **[agent-browser](https://github.com/kontext-dev/agent-browser)**: MCP server aggregation hub with Web UI (SSE mode, opt-in with `--mcp`). When enabled, available at `http://localhost:8080/ui/` and exposes an SSE endpoint at `http://localhost:8087/sse`
 
 ### Pre-installed Tools
 
@@ -167,6 +167,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ### Security Options
 
 ```bash
+--mcp                        Start agent-browser MCP hub (Web UI at localhost:8080)
 --dind, --docker             Enable Docker-in-Docker mode (elevated privileges inside container)
 --docker-socket PATH         Override Docker socket path (auto-detected)
 --colima-profile NAME        Colima profile name (default: default)

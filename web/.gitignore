@@ -1,0 +1,13 @@
+# Traefik SSL certificates (sensitive!)
+traefik/acme.json
+
+# Logs
+*.log
+traefik/*.log
+
+# Backups
+*.backup
+
+deploy.sh
+docker-compose.yml
+README.md

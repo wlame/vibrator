@@ -1,6 +1,6 @@
 #!/bin/sh
 # Container entrypoint: runs once at container creation.
-# Merges host Claude config, sets up GPG, detects Serena, optionally starts agent-browser.
+# Merges host Claude config, sets up GPG, detects Serena, optionally starts mcp-hub.
 
 # --- Merge Claude config from host ---
 if [ -f "$HOME/.claude.host.json" ]; then
@@ -224,29 +224,29 @@ fi
 export LANGFUSE_DETECTED
 export LANGFUSE_MODE
 
-# --- Start agent-browser MCP hub in background (only with --mcp flag) ---
-if [ "$VIBRATOR_MCP_HUB" = "1" ] && command -v agent-browser >/dev/null 2>&1; then
-  if ! pgrep -x agent-browser >/dev/null 2>&1; then
-    mkdir -p "$HOME/.agent-browser"
-    agent-browser > "$HOME/.agent-browser/agent-browser.log" 2>&1 &
+# --- Start MCP hub in background (only with --mcp flag) ---
+if [ "$VIBRATOR_MCP_HUB" = "1" ] && command -v mcp-hub >/dev/null 2>&1; then
+  if ! pgrep -x mcp-hub >/dev/null 2>&1; then
+    mkdir -p "$HOME/.mcp-hub"
+    mcp-hub > "$HOME/.mcp-hub/mcp-hub.log" 2>&1 &
 
     for i in $(seq 1 10); do
       if curl -sf --connect-timeout 0.5 --max-time 0.5 "http://localhost:8087/sse" -o /dev/null 2>/dev/null; then
-        if ! jq -e '.mcpServers["agent-browser"]' "$HOME/.claude.json" >/dev/null 2>&1; then
-          jq '.mcpServers["agent-browser"] = {type: "sse", url: "http://localhost:8087/sse"}' \
+        if ! jq -e '.mcpServers["mcp-hub"]' "$HOME/.claude.json" >/dev/null 2>&1; then
+          jq '.mcpServers["mcp-hub"] = {type: "sse", url: "http://localhost:8087/sse"}' \
             "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
             mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
         fi
-        [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Agent Browser: started (Web UI: http://localhost:8080/ui/)"
+        [ "$VIBRATOR_VERBOSE" = "1" ] && echo "MCP Hub: started (Web UI: http://localhost:8080/ui/)"
         break
       fi
       sleep 0.1
     done
   else
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Agent Browser: already running"
+    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "MCP Hub: already running"
   fi
 elif [ "$VIBRATOR_VERBOSE" = "1" ]; then
-  echo "Agent Browser: skipped (use --mcp to enable)"
+  echo "MCP Hub: skipped (use --mcp to enable)"
 fi
 
 # --- Configure Playwright MCP server (stdio mode with playwright-mcp binary) ---

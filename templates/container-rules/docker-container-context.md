@@ -23,14 +23,15 @@ You are running inside a Docker container managed by vibrator.
 ## Available Tools
 
 ### Always Available
-- Claude CLI with MCP servers (Serena, Context7, Agent Browser, Playwright)
+- Claude CLI with MCP servers (Serena, Context7, Playwright)
 - Git, GitHub CLI
 - Python, Go, Bun
 - Standard Unix utilities
 
 ### Conditionally Available
 - Docker commands: Only available with `--dind` or `--docker` flag
-- Agent Browser UI: http://localhost:8080/ui/
+- agent-browser CLI: Token-efficient browser automation (Vercel, installed as Claude skill)
+- MCP Hub UI: http://localhost:8080/ui/ (only with --mcp flag)
 
 ### Browser Automation (Playwright + Chrome)
 

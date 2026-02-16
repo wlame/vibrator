@@ -59,15 +59,21 @@ RUN bun install -g @playwright/mcp && \
 # NODE_PATH lets require('playwright-core') work from any script without hardcoding paths.
 ENV NODE_PATH=/usr/local/install/global/node_modules
 
-# Install agent-browser MCP server (headless web app debugging)
+# Install mcp-hub (kontext-dev/agent-browser) — MCP server aggregation gateway
+# Opt-in via --mcp flag; provides Web UI at localhost:8080, SSE at localhost:8087
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then AGENT_ARCH="amd64"; else AGENT_ARCH="arm64"; fi && \
     curl -fsSL "https://github.com/kontext-dev/agent-browser/releases/download/v1.1.0/agent-browser-v1.1.0-linux-${AGENT_ARCH}.tar.gz" \
     -o agent-browser.tar.gz && \
     tar -xzf agent-browser.tar.gz && \
-    mv agent-browser /usr/local/bin/ && \
-    chmod +x /usr/local/bin/agent-browser && \
+    mv agent-browser /usr/local/bin/mcp-hub && \
+    chmod +x /usr/local/bin/mcp-hub && \
     rm agent-browser.tar.gz
+
+# Install Vercel agent-browser — token-efficient browser automation CLI for AI agents
+# Reuses existing Chromium via AGENT_BROWSER_EXECUTABLE_PATH (no duplicate download)
+RUN bun install -g agent-browser
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
 
 # Install ralphex (autonomous coding loop for Claude Code)
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -127,6 +133,11 @@ RUN claude mcp add playwright \
     --transport stdio \
     -- playwright-mcp --headless --executable-path /opt/google/chrome/chrome
 
+# Install agent-browser skill so Claude auto-discovers it
+RUN mkdir -p ~/.claude/skills/agent-browser && \
+    cp /usr/local/install/global/node_modules/agent-browser/skills/agent-browser/SKILL.md \
+       ~/.claude/skills/agent-browser/SKILL.md
+
 RUN uvx superclaude install
 
 @@PLUGIN_SECTION@@
@@ -157,6 +168,7 @@ USER $USERNAME
 WORKDIR /home/$USERNAME
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
 ENV COLORTERM=truecolor
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8

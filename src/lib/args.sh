@@ -25,7 +25,7 @@ Options:
   --no-plugins             Skip Claude plugin installation
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
-  --mcp                    Start agent-browser MCP hub (Web UI at localhost:8080)
+  --mcp                    Start MCP Hub gateway (Web UI at localhost:8080)
   --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
   --docker-socket PATH     Override Docker socket path (auto-detected by default)
   --colima-profile NAME    Colima profile name (default: default)

@@ -7,8 +7,5 @@ build/
 # Claude authentication token (NEVER commit this!)
 .claude-docker-token
 
-# website build artifacts
-web/
-
 .DS_Store
 core

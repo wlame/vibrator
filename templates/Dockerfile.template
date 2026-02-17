@@ -47,10 +47,45 @@ RUN bun install -g @playwright/mcp
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN bunx playwright install-deps chromium
 
-# Download Chromium browser binary (CDN download, cached separately).
-# Extended timeout prevents stalls on slow connections (default is 30s).
-ENV PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=600000
-RUN bunx playwright install chromium
+# Download Chromium browser.
+# x86_64: curl is much faster than Playwright's Bun/Node downloader in Docker builds.
+#          Version info read from playwright-core's browsers.json for forward compatibility.
+# ARM64:  Chrome for Testing has no linux-arm64 builds (https://crbug.com/374811603).
+#          Playwright uses a different Chromium source, so we let its own downloader handle it.
+RUN set -e && \
+    ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then \
+      REGISTRY=$(find /usr/local -path '*/playwright-core/browsers.json' | head -1) && \
+      test -f "$REGISTRY" || { echo "ERROR: playwright-core browsers.json not found"; exit 1; } && \
+      CR_REV=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').revision)") && \
+      CR_VER=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').browserVersion)") && \
+      FF_REV=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='ffmpeg').revision)") && \
+      echo "Downloading Chromium ${CR_VER} (rev ${CR_REV}) for linux64 via curl..." && \
+      mkdir -p /ms-playwright/chromium-${CR_REV} && \
+      curl -fSL --retry 3 --retry-delay 5 \
+        "https://cdn.playwright.dev/builds/cft/${CR_VER}/linux64/chrome-linux64.zip" \
+        -o /tmp/pw-chrome.zip && \
+      unzip -q /tmp/pw-chrome.zip -d /ms-playwright/chromium-${CR_REV}/ && \
+      rm /tmp/pw-chrome.zip && \
+      echo "  Chrome for Testing: OK" && \
+      mkdir -p /ms-playwright/chromium_headless_shell-${CR_REV} && \
+      curl -fSL --retry 3 --retry-delay 5 \
+        "https://cdn.playwright.dev/builds/cft/${CR_VER}/linux64/chrome-headless-shell-linux64.zip" \
+        -o /tmp/pw-headless.zip && \
+      unzip -q /tmp/pw-headless.zip -d /ms-playwright/chromium_headless_shell-${CR_REV}/ && \
+      rm /tmp/pw-headless.zip && \
+      echo "  Chrome Headless Shell: OK" && \
+      mkdir -p /ms-playwright/ffmpeg-${FF_REV} && \
+      curl -fSL --retry 3 --retry-delay 5 \
+        "https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/${FF_REV}/ffmpeg-linux.zip" \
+        -o /tmp/pw-ffmpeg.zip && \
+      unzip -q /tmp/pw-ffmpeg.zip -d /ms-playwright/ffmpeg-${FF_REV}/ && \
+      rm /tmp/pw-ffmpeg.zip && \
+      echo "  FFmpeg: OK"; \
+    else \
+      echo "ARM64: using Playwright downloader (no Chrome for Testing ARM64 builds)..." && \
+      bunx playwright install chromium; \
+    fi
 
 # Set up Chrome wrapper — symlink real binary and inject container-safe flags.
 # No chmod -R needed: Playwright sets correct permissions during extraction.

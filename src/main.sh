@@ -47,6 +47,12 @@ main() {
     checks::docker_daemon
     checks::docker_runtime
     checks::disk_space
+
+    # Handle --pull (pull pre-built image, then exit)
+    if [[ -n "$FLAG_PULL" ]]; then
+        image::pull_registry "$FLAG_PULL"
+        exit 0
+    fi
     [[ "$GENERIC" == false ]] && plugins::detect
 
     # Handle --build (build only, then exit)

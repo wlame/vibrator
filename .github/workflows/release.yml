@@ -74,20 +74,36 @@ jobs:
           body: |
             ## Installation
 
-            Download and install:
+            **Option A: Pre-built Docker image (fastest)**
             ```bash
-            # Download
+            # Download vibrate.sh
             curl -fsSL https://github.com/wlame/vibrator/releases/download/${{ env.TAG_NAME }}/vibrate.sh -o vibrate.sh
+            chmod +x vibrate.sh
+
+            # Pull pre-built image (~2GB, skips 10+ min build)
+            ./vibrate.sh --pull
+
+            # Run
+            ./vibrate.sh
+            ```
+
+            **Option B: Build locally**
+            ```bash
+            curl -fsSL https://github.com/wlame/vibrator/releases/download/${{ env.TAG_NAME }}/vibrate.sh -o vibrate.sh
+            chmod +x vibrate.sh
 
             # Verify checksum (optional)
             curl -fsSL https://github.com/wlame/vibrator/releases/download/${{ env.TAG_NAME }}/vibrate.sh.sha256 -o vibrate.sh.sha256
             sha256sum -c vibrate.sh.sha256
 
-            # Make executable
-            chmod +x vibrate.sh
+            # First run builds the image automatically
+            ./vibrate.sh
+            ```
 
-            # Move to PATH (optional)
-            sudo mv vibrate.sh /usr/local/bin/vibrate
+            ## Docker Image
+
+            ```bash
+            docker pull ghcr.io/wlame/vibrator:${{ env.TAG_NAME }}
             ```
 
             ## Quick Start

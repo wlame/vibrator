@@ -2,7 +2,7 @@
 
 checks::basic_tools() {
     local -a missing=()
-    local -a required=(awk cut grep sed sha256sum wc)
+    local -a required=(awk cut grep sed sha256sum)
 
     # jq is only needed for host config parsing (non-generic mode)
     [[ "$GENERIC" == false ]] && required+=(jq)

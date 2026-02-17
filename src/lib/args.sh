@@ -21,6 +21,7 @@ Options:
   --generic                Build generic image (no host Claude config baked in)
                            Auto-enabled when no Claude Code installation is detected
   --build                  Build Docker image and exit
+  --pull [TAG]             Pull pre-built image from ghcr.io (default: latest)
   --export-dockerfile FILE Write generated Dockerfile to file
   --mount-full-config      Mount entire ~/.claude directory (overrides selective mode)
   --no-agents              Disable SSH and GPG agent forwarding
@@ -100,6 +101,13 @@ args::parse() {
             --colima-profile)     COLIMA_PROFILE="$2"; shift 2 ;;
             --no-agents)          NO_AGENTS=true; shift ;;
             --build)              FLAG_BUILD_ONLY=true; shift ;;
+            --pull)
+                # Optional tag argument (default: latest)
+                if [[ -n "${2:-}" && "$2" != -* ]]; then
+                    FLAG_PULL="$2"; shift 2
+                else
+                    FLAG_PULL="latest"; shift
+                fi ;;
             --rebuild)            FLAG_REBUILD=true; shift ;;
             --recreate)           FLAG_RECREATE=true; shift ;;
             --export-dockerfile)  EXPORT_DOCKERFILE="$2"; shift 2 ;;

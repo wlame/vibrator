@@ -30,6 +30,7 @@ config::init() {
     FLAG_BUILD_ONLY=false
     FLAG_REBUILD=false
     FLAG_RECREATE=false
+    FLAG_PULL=""
     EXPORT_DOCKERFILE=""
 
     # Resource limits

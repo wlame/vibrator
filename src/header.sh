@@ -6,3 +6,4 @@
 set -euo pipefail
 
 VIBRATOR_VERSION="%%VERSION%%"
+VIBRATOR_REGISTRY="ghcr.io/wlame/vibrator"

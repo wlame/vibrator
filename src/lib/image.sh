@@ -47,20 +47,19 @@ image::build() {
     fi
 }
 
-image::pull() {
-    local remote="${VIBRATOR_IMAGE:-icanhasjonas/claude-code}:latest"
-    log::info "Pulling remote image ${remote}..."
+image::pull_registry() {
+    local tag="$1"
+    local remote="${VIBRATOR_REGISTRY}:${tag}"
+    local local_name="claude-vb-generic:latest"
+
+    log::info "Pulling ${remote}..."
 
     if docker pull "$remote"; then
-        log::success "Pulled ${remote}"
-        log::info "Tagging as ${IMAGE_NAME}..."
-        docker tag "$remote" "$IMAGE_NAME" || {
-            log::warn "Failed to tag. Falling back to local build..."
-            image::build
-        }
+        log::info "Tagging as ${local_name}..."
+        docker tag "$remote" "$local_name" || log::die "Failed to tag image"
+        log::success "Ready. Run 'vibrate' to start."
     else
-        log::warn "Failed to pull. Building from source..."
-        image::build
+        log::die "Failed to pull image. Check https://github.com/wlame/vibrator/pkgs/container/vibrator for available tags."
     fi
 }
 

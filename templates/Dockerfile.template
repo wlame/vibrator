@@ -20,9 +20,8 @@ RUN apt-get update && apt-get install -y \
     gh \
     vim \
     htop \
-    jq \
+    sqlite3 \
     tree \
-    ripgrep \
     fd-find \
     gpg \
  && rm -rf /var/lib/apt/lists/*
@@ -85,6 +84,64 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/ralphex && \
     rm ralphex.tar.gz
 
+# Sequential Thinking MCP server (binary registered in Stage 3 as user)
+RUN bun install -g @modelcontextprotocol/server-sequential-thinking
+
+# --- Developer CLI tools (latest binary releases) ---
+
+# jq — JSON processor (latest release, faster than apt version)
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/jqlang/jq/releases/latest/download/jq-linux-${ARCH}" \
+    -o /usr/local/bin/jq && chmod +x /usr/local/bin/jq
+
+# ripgrep — Fast regex search (latest release)
+# Note: aarch64 has no musl build, use gnu instead
+RUN ARCH=$(dpkg --print-architecture) && \
+    RG_VERSION="15.1.0" && \
+    if [ "$ARCH" = "amd64" ]; then RG_TRIPLE="x86_64-unknown-linux-musl"; else RG_TRIPLE="aarch64-unknown-linux-gnu"; fi && \
+    curl -fsSL "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-${RG_TRIPLE}.tar.gz" \
+    -o rg.tar.gz && \
+    tar -xzf rg.tar.gz --strip-components=1 -C /usr/local/bin/ "ripgrep-${RG_VERSION}-${RG_TRIPLE}/rg" && \
+    rm rg.tar.gz
+
+# yq — YAML/JSON/XML processor (like jq but for YAML)
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}" \
+    -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
+
+# hadolint — Dockerfile linter
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then HL_ARCH="x86_64"; else HL_ARCH="arm64"; fi && \
+    curl -fsSL "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-${HL_ARCH}" \
+    -o /usr/local/bin/hadolint && chmod +x /usr/local/bin/hadolint
+
+# delta — Better git diff viewer with syntax highlighting
+# Note: aarch64 has no musl build, use gnu instead
+RUN ARCH=$(dpkg --print-architecture) && \
+    DELTA_VERSION="0.18.2" && \
+    if [ "$ARCH" = "amd64" ]; then DELTA_TRIPLE="x86_64-unknown-linux-musl"; else DELTA_TRIPLE="aarch64-unknown-linux-gnu"; fi && \
+    curl -fsSL "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-${DELTA_TRIPLE}.tar.gz" \
+    -o delta.tar.gz && \
+    tar -xzf delta.tar.gz --strip-components=1 -C /usr/local/bin/ \
+      "delta-${DELTA_VERSION}-${DELTA_TRIPLE}/delta" && \
+    rm delta.tar.gz
+
+# websocat — WebSocket CLI client
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then WS_ARCH="x86_64"; else WS_ARCH="aarch64"; fi && \
+    curl -fsSL "https://github.com/vi/websocat/releases/latest/download/websocat.${WS_ARCH}-unknown-linux-musl" \
+    -o /usr/local/bin/websocat && chmod +x /usr/local/bin/websocat
+
+# lazygit — Terminal UI for git operations
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then LG_ARCH="x86_64"; else LG_ARCH="arm64"; fi && \
+    LAZYGIT_VERSION="0.44.1" && \
+    curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LG_ARCH}.tar.gz" \
+    -o lazygit.tar.gz && \
+    tar -xzf lazygit.tar.gz lazygit && \
+    mv lazygit /usr/local/bin/ && chmod +x /usr/local/bin/lazygit && \
+    rm lazygit.tar.gz
+
 # Create user with host UID/GID for proper file permissions on mounted volumes
 ARG USERNAME=claude-user
 ARG HOST_UID=1000
@@ -110,6 +167,13 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 
+# --- Python developer tools (isolated venvs via uv, binaries in ~/.local/bin/) ---
+RUN uv tool install ruff && \
+    uv tool install httpie && \
+    uv tool install csvkit
+
+@@AIDER_SECTION@@
+
 # ============================================================================
 # Stage 3: Claude CLI and MCP servers
 # ============================================================================
@@ -132,6 +196,19 @@ RUN claude mcp add playwright \
     --scope user \
     --transport stdio \
     -- playwright-mcp --headless --executable-path /opt/google/chrome/chrome
+
+# Sequential Thinking MCP — structured multi-step reasoning (installed in Stage 1)
+RUN claude mcp add sequential-thinking \
+    --scope user \
+    --transport stdio \
+    -- mcp-server-sequential-thinking
+
+# SQLite MCP — natural-language database queries
+RUN uv tool install mcp-server-sqlite && \
+    claude mcp add sqlite \
+    --scope user \
+    --transport stdio \
+    -- mcp-server-sqlite --db-path /tmp/scratch.db
 
 # Install agent-browser skill so Claude auto-discovers it
 RUN mkdir -p ~/.claude/skills/agent-browser && \

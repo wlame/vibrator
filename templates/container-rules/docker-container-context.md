@@ -22,11 +22,65 @@ You are running inside a Docker container managed by vibrator.
 
 ## Available Tools
 
-### Always Available
-- Claude CLI with MCP servers (Serena, Context7, Playwright)
-- Git, GitHub CLI
-- Python, Go, Bun
-- Standard Unix utilities
+### MCP Servers
+- **Serena**: Semantic code analysis (LSP-based symbol search, references, rename)
+- **Context7**: Library documentation lookup (resolve-library-id then query-docs)
+- **Playwright**: Browser automation (browser_navigate, browser_snapshot, browser_click, etc.)
+- **Sequential Thinking**: Structured multi-step reasoning. Call the `sequentialthinking` tool
+  to break down complex problems into steps before acting.
+- **SQLite**: Query SQLite databases via natural language. Default: `/tmp/scratch.db`.
+  To use a project database: `claude mcp add sqlite --scope=project -- mcp-server-sqlite --db-path=./mydb.sqlite`
+
+### Data Processing
+- **jq**: JSON processing. Example: `cat data.json | jq '.users[] | .name'`
+- **yq**: YAML/TOML/XML processing. Example: `yq '.services' docker-compose.yml`
+- **sqlite3**: SQLite CLI. Example: `sqlite3 data.db "SELECT * FROM users LIMIT 5"`
+- **csvkit**: CSV tools suite.
+  - `csvlook data.csv` — pretty-print CSV
+  - `csvsql --query "SELECT col FROM data" data.csv` — SQL on CSV
+  - `csvgrep -c name -m "pattern" data.csv` — filter rows
+  - `csvstat data.csv` — column statistics
+
+### API & Network Debugging
+- **httpie**: HTTP client (better than curl for APIs).
+  - `http GET api.example.com/users` — GET request
+  - `http POST api.example.com/users name=John` — POST with JSON
+  - `http --form POST api.example.com/upload file@data.csv` — file upload
+- **websocat**: WebSocket CLI client.
+  - `websocat ws://localhost:8080/ws` — connect to WebSocket
+  - `echo '{"type":"ping"}' | websocat ws://localhost:8080/ws` — send message
+
+### Code Quality
+- **ruff**: Python linter + formatter (replaces flake8, isort, black).
+  - `ruff check .` — lint Python files
+  - `ruff format .` — format Python files
+  - `ruff check --fix .` — auto-fix issues
+- **hadolint**: Dockerfile linter.
+  - `hadolint Dockerfile` — lint a Dockerfile
+  - `hadolint --ignore DL3008 Dockerfile` — ignore specific rule
+
+### Git Enhancement
+- **delta**: Syntax-highlighted git diffs. Configure with:
+  `git config --global core.pager delta`
+- **lazygit**: Terminal UI for git. Launch: `lazygit`
+
+### Search & Navigation
+- **ripgrep (rg)**: Fast regex search. Example: `rg "TODO" --type=py`
+- **fd**: Fast file finder. Example: `fd "\.py$" src/`
+- **fzf**: Fuzzy finder. Example: `rg --files | fzf`
+- **tree**: Directory tree. Example: `tree -L 2 src/`
+
+### AI Pair Programming (opt-in with --aider flag)
+- **aider**: Multi-model AI coding assistant. Only available when container built with `--aider`.
+  - `aider --model claude-3.5-sonnet` — start with Claude
+  - `aider --model gpt-4o` — start with GPT-4o
+  - Uses ANTHROPIC_API_KEY / OPENAI_API_KEY (already forwarded by vibrator)
+
+### Always Available (Core)
+- Claude CLI with all MCP servers listed above
+- Git, GitHub CLI (gh)
+- Python 3, Go, Bun
+- Standard Unix utilities (curl, wget, vim, htop, etc.)
 
 ### Conditionally Available
 - Docker commands: Only available with `--dind` or `--docker` flag

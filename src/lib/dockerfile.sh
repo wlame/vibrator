@@ -24,6 +24,14 @@ dockerfile::generate() {
     content="${content//@@CONTAINER_RULES_CONTEXT_B64@@/$CONTAINER_RULES_CONTEXT_B64}"
     content="${content//@@CONTAINER_RULES_SAFETY_B64@@/$CONTAINER_RULES_SAFETY_B64}"
 
+    # Aider section: opt-in installation via --aider flag
+    if [[ "${AIDER:-false}" == true ]]; then
+        content="${content//@@AIDER_SECTION@@/# aider — AI pair programming (opt-in via --aider flag)
+RUN uv tool install aider-chat}"
+    else
+        content="${content//@@AIDER_SECTION@@/}"
+    fi
+
     # Plugin section: line-based replacement to avoid bash/awk special char issues
     # (bash ${//} treats & and \ as special in replacements; awk gsub does too)
     if [[ -n "${DETECTED_PLUGINS:-}" ]]; then

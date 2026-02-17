@@ -67,6 +67,7 @@ docker_cmd::build() {
     [[ "$VERBOSE" == true ]]         && cmd+=(-e "VIBRATOR_VERBOSE=1")
     [[ "$DOCKER_IN_DOCKER" == true ]] && cmd+=(-e "VIBRATOR_DOCKER_IN_DOCKER=1")
     [[ "$MCP_HUB" == true ]]         && cmd+=(-e "VIBRATOR_MCP_HUB=1")
+    [[ "$AIDER" == true ]]           && cmd+=(-e "VIBRATOR_AIDER=1")
 
     # Forwarded environment variables
     docker_cmd::_add_forwarded_env

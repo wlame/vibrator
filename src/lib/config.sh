@@ -24,6 +24,7 @@ config::init() {
     DOCKER_IN_DOCKER=false
     MCP_HUB=false
     AIDER=false
+    GENERIC=false
 
     # Build/action flags
     FLAG_BUILD_ONLY=false

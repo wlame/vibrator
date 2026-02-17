@@ -2,7 +2,10 @@
 
 checks::basic_tools() {
     local -a missing=()
-    local -a required=(awk cut grep jq sed sha256sum wc)
+    local -a required=(awk cut grep sed sha256sum wc)
+
+    # jq is only needed for host config parsing (non-generic mode)
+    [[ "$GENERIC" == false ]] && required+=(jq)
 
     for tool in "${required[@]}"; do
         command -v "$tool" &>/dev/null || missing+=("$tool")
@@ -13,6 +16,13 @@ checks::basic_tools() {
         log::info "Install them and try again."
         exit 1
     fi
+}
+
+checks::claude_on_host() {
+    # Check if Claude Code is installed or configured on the host
+    [[ -d "$CLAUDE_CONFIG" ]] && return 0
+    command -v claude &>/dev/null && return 0
+    return 1
 }
 
 checks::docker_available() {

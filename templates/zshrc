@@ -44,6 +44,10 @@ if [[ -o interactive ]]; then
     echo -e "\033[1;32mAuthentication:\033[0m Authenticated by Anthropic API Key"
   else
     echo -e "\033[1;33mAuthentication:\033[0m Not authenticated"
+    echo ""
+    echo -e "\033[1;33m  Tip:\033[0m Run \033[1mclaude auth login\033[0m to authenticate interactively,"
+    echo -e "       or set \033[1mANTHROPIC_API_KEY\033[0m on the host and restart with:"
+    echo -e "       \033[1;90mANTHROPIC_API_KEY=sk-... vibrate\033[0m"
   fi
 
   echo ""

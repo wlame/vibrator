@@ -68,6 +68,7 @@ docker_cmd::build() {
     [[ "$DOCKER_IN_DOCKER" == true ]] && cmd+=(-e "VIBRATOR_DOCKER_IN_DOCKER=1")
     [[ "$MCP_HUB" == true ]]         && cmd+=(-e "VIBRATOR_MCP_HUB=1")
     [[ "$AIDER" == true ]]           && cmd+=(-e "VIBRATOR_AIDER=1")
+    [[ "$GENERIC" == true ]]         && cmd+=(-e "VIBRATOR_GENERIC=1")
 
     # Forwarded environment variables
     docker_cmd::_add_forwarded_env
@@ -107,39 +108,44 @@ docker_cmd::_add_forwarded_env() {
 }
 
 docker_cmd::_add_volumes() {
-    # Host claude.json for config merging in entrypoint
-    if [[ -f "$HOME/.claude.json" ]]; then
-        cmd+=(-v "$HOME/.claude.json:/home/$CFG_USERNAME/.claude.host.json:ro")
-        log::verbose "Host Claude config detected, will be mounted for merging"
-    fi
-
     # Workspace (always mounted at same path as host)
     cmd+=(-v "$WORKSPACE:$WORKSPACE")
 
-    # Claude config directory
-    if [[ "$SELECTIVE_MOUNT" == true ]]; then
-        log::verbose "Using selective config mount (macOS mode)"
-        # Mount as settings.host.json so entrypoint can copy and modify
-        [[ -f "$CLAUDE_CONFIG/settings.json" ]] && \
-            cmd+=(-v "$CLAUDE_CONFIG/settings.json:/home/$CFG_USERNAME/.claude/settings.host.json:ro")
-        # Mount host rules to separate location for merging with container rules
-        [[ -d "$CLAUDE_CONFIG/rules" ]] && \
-            cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
-    else
-        log::verbose "Using full config mount (Linux mode)"
-        # In full mount mode, mount rules separately for merging
-        if [[ -d "$CLAUDE_CONFIG/rules" ]]; then
-            cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
-            # Mount config without rules subdirectory
-            cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude-full")
-        else
-            cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude")
+    # Host Claude config mounts (skipped in generic mode)
+    if [[ "$GENERIC" == false ]]; then
+        # Host claude.json for config merging in entrypoint
+        if [[ -f "$HOME/.claude.json" ]]; then
+            cmd+=(-v "$HOME/.claude.json:/home/$CFG_USERNAME/.claude.host.json:ro")
+            log::verbose "Host Claude config detected, will be mounted for merging"
         fi
-    fi
 
-    # Host hooks directory (for Langfuse hook detection)
-    [[ -d "$CLAUDE_CONFIG/hooks" ]] && \
-        cmd+=(-v "$CLAUDE_CONFIG/hooks:/home/$CFG_USERNAME/.claude/hooks-host:ro")
+        # Claude config directory
+        if [[ "$SELECTIVE_MOUNT" == true ]]; then
+            log::verbose "Using selective config mount (macOS mode)"
+            # Mount as settings.host.json so entrypoint can copy and modify
+            [[ -f "$CLAUDE_CONFIG/settings.json" ]] && \
+                cmd+=(-v "$CLAUDE_CONFIG/settings.json:/home/$CFG_USERNAME/.claude/settings.host.json:ro")
+            # Mount host rules to separate location for merging with container rules
+            [[ -d "$CLAUDE_CONFIG/rules" ]] && \
+                cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
+        else
+            log::verbose "Using full config mount (Linux mode)"
+            # In full mount mode, mount rules separately for merging
+            if [[ -d "$CLAUDE_CONFIG/rules" ]]; then
+                cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
+                # Mount config without rules subdirectory
+                cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude-full")
+            else
+                cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude")
+            fi
+        fi
+
+        # Host hooks directory (for Langfuse hook detection)
+        [[ -d "$CLAUDE_CONFIG/hooks" ]] && \
+            cmd+=(-v "$CLAUDE_CONFIG/hooks:/home/$CFG_USERNAME/.claude/hooks-host:ro")
+    else
+        log::verbose "Generic mode: skipping host Claude config mounts"
+    fi
 
     # SSH keys (read-only)
     [[ -d "$HOME/.ssh" ]] && \

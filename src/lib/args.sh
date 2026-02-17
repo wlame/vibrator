@@ -18,6 +18,8 @@ Options:
   --help                   Display help message
 
   --aws                    Enable AWS integration (credentials + ~/.aws mount)
+  --generic                Build generic image (no host Claude config baked in)
+                           Auto-enabled when no Claude Code installation is detected
   --build                  Build Docker image and exit
   --export-dockerfile FILE Write generated Dockerfile to file
   --mount-full-config      Mount entire ~/.claude directory (overrides selective mode)
@@ -92,6 +94,7 @@ args::parse() {
             --privileged)         PRIVILEGED=true; shift ;;
             --mcp)                MCP_HUB=true; shift ;;
             --aider)              AIDER=true; shift ;;
+            --generic)            GENERIC=true; shift ;;
             --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
             --docker-socket)      VIBRATOR_DOCKER_SOCKET="$2"; shift 2 ;;
             --colima-profile)     COLIMA_PROFILE="$2"; shift 2 ;;

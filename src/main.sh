@@ -6,6 +6,22 @@ main() {
 
     args::parse "$@"
 
+    # Auto-detect generic mode: if user doesn't have Claude Code and didn't
+    # explicitly pass --generic, warn and switch automatically.
+    if [[ "$GENERIC" == false ]] && ! checks::claude_on_host; then
+        log::warn "No Claude Code installation detected on host (~/.claude not found)."
+        log::warn "Switching to generic image mode (no host settings will be baked in)."
+        log::info "To silence this warning, use: vibrate --generic"
+        echo ""
+        GENERIC=true
+    fi
+
+    # In generic mode, override image name and username
+    if [[ "$GENERIC" == true ]]; then
+        IMAGE_NAME="claude-vb-generic:latest"
+        CFG_USERNAME="claude-user"
+    fi
+
     # Derive container name if not explicitly set via --name
     if [[ -z "${CONTAINER_NAME:-}" ]]; then
         config::derive_container_name
@@ -20,7 +36,7 @@ main() {
     # --- Special commands that don't need Docker ---
 
     if [[ -n "$EXPORT_DOCKERFILE" ]]; then
-        plugins::detect
+        [[ "$GENERIC" == false ]] && plugins::detect
         dockerfile::export "$EXPORT_DOCKERFILE"
         exit 0
     fi
@@ -31,7 +47,7 @@ main() {
     checks::docker_daemon
     checks::docker_runtime
     checks::disk_space
-    plugins::detect
+    [[ "$GENERIC" == false ]] && plugins::detect
 
     # Handle --build (build only, then exit)
     if [[ "$FLAG_BUILD_ONLY" == true ]]; then

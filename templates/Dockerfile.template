@@ -39,13 +39,18 @@ RUN curl -fsSL https://bun.sh/install | bash && \
 # Install Playwright MCP server (npm package only — fast, cached separately)
 RUN bun install -g @playwright/mcp
 
-# Download Chromium browser + system dependencies (large download, cached layer)
+# Install Chromium system dependencies (apt-get only, no browser download — fast & reliable)
 # NOTE: playwright-mcp defaults to the "chrome" channel which expects Google Chrome
 # at /opt/google/chrome/chrome. We install Chromium (smaller) and create a wrapper
 # script at that path. The wrapper injects --no-sandbox flags so Chrome works in
 # containers without unprivileged user namespaces (disabled by AppArmor on Ubuntu 23.10+).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN bunx playwright install --with-deps chromium
+RUN bunx playwright install-deps chromium
+
+# Download Chromium browser binary (CDN download, cached separately).
+# Extended timeout prevents stalls on slow connections (default is 30s).
+ENV PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=600000
+RUN bunx playwright install chromium
 
 # Set up Chrome wrapper — symlink real binary and inject container-safe flags.
 # No chmod -R needed: Playwright sets correct permissions during extraction.

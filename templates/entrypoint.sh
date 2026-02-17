@@ -263,7 +263,7 @@ if command -v playwright-mcp >/dev/null 2>&1; then
     # works in containers without unprivileged user namespaces.
     CHROME_PATH="/opt/google/chrome/chrome"
     if [ ! -x "$CHROME_PATH" ]; then
-      CHROME_PATH=$(find /ms-playwright -name chrome -path '*/chrome-linux/chrome' 2>/dev/null | head -1)
+      CHROME_PATH=$(find /ms-playwright -name chrome -path '*/chrome-linux*/chrome' 2>/dev/null | head -1)
     fi
     PLAYWRIGHT_ARGS='["--headless"]'
     if [ -n "$CHROME_PATH" ] && [ -x "$CHROME_PATH" ]; then

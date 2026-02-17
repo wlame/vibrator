@@ -36,17 +36,22 @@ ENV BUN_INSTALL=/usr/local
 RUN curl -fsSL https://bun.sh/install | bash && \
     ln -sf /usr/local/bin/bun /usr/local/bin/node
 
-# Install Playwright MCP server and Chromium browser
+# Install Playwright MCP server (npm package only — fast, cached separately)
+RUN bun install -g @playwright/mcp
+
+# Download Chromium browser + system dependencies (large download, cached layer)
 # NOTE: playwright-mcp defaults to the "chrome" channel which expects Google Chrome
 # at /opt/google/chrome/chrome. We install Chromium (smaller) and create a wrapper
 # script at that path. The wrapper injects --no-sandbox flags so Chrome works in
 # containers without unprivileged user namespaces (disabled by AppArmor on Ubuntu 23.10+).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN bun install -g @playwright/mcp && \
-    bunx playwright install --with-deps chromium && \
-    chmod -R 777 /ms-playwright && \
-    mkdir -p /opt/google/chrome && \
-    CHROMIUM_BIN=$(find /ms-playwright -name chrome -path '*/chrome-linux/chrome' | head -1) && \
+RUN bunx playwright install --with-deps chromium
+
+# Set up Chrome wrapper — symlink real binary and inject container-safe flags.
+# No chmod -R needed: Playwright sets correct permissions during extraction.
+RUN mkdir -p /opt/google/chrome && \
+    CHROMIUM_BIN=$(find /ms-playwright -name chrome -path '*/chrome-linux*/chrome' | head -1) && \
+    test -n "$CHROMIUM_BIN" || { echo "ERROR: Chrome binary not found in /ms-playwright"; find /ms-playwright -type f -name chrome; exit 1; } && \
     ln -sf "$CHROMIUM_BIN" /opt/google/chrome/chrome.real && \
     printf '#!/bin/sh\nexec /opt/google/chrome/chrome.real --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage "$@"\n' \
       > /opt/google/chrome/chrome && \

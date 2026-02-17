@@ -11,6 +11,15 @@ image::build() {
     host_uid=$(id -u)
     host_gid=$(id -g)
 
+    # Running as root (UID 0) breaks user creation in the container.
+    # Fall back to standard 1000:1000 — file permissions on mounted volumes
+    # will still work because the container user has sudo.
+    if [[ "$host_uid" -eq 0 ]]; then
+        log::verbose "Running as root; using UID/GID 1000 for container user"
+        host_uid=1000
+        host_gid=1000
+    fi
+
     local tmpdir
     tmpdir=$(mktemp -d)
     # shellcheck disable=SC2064

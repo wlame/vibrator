@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vibrator - Claude Code in Docker, Auto-Configured</title>
-    <meta name="description" content="Run Claude Code CLI in Docker containers with automatic runtime detection. One command, zero configuration.">
+    <meta name="description" content="Run Claude Code CLI in Docker containers with automatic runtime detection, pre-configured MCP servers, 30+ developer tools, and enhanced security. One command, zero configuration.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,6 +17,7 @@
             <div class="nav-content">
                 <div class="nav-logo">vibrator</div>
                 <div class="nav-links">
+                    <a href="#tools" class="nav-link">Tools</a>
                     <a href="https://github.com/wlame/vibrator" target="_blank" class="nav-link">GitHub</a>
                     <a href="#install" class="nav-link install-btn">Install</a>
                 </div>
@@ -34,7 +35,7 @@
                 </p>
                 <p class="hero-description">
                     Run Claude Code CLI in isolated containers with automatic Docker runtime detection,
-                    pre-configured MCP servers, and enhanced security. As easy as <code>vibrate</code>.
+                    pre-configured MCP servers, 30+ developer tools, and enhanced security. As easy as <code>vibrate</code>.
                 </p>
 
                 <!-- Terminal Demo -->
@@ -58,10 +59,10 @@
                             <span class="output-dim">[vibrator] Container: claude-vb-myproject-a1b2c3d4</span>
                         </div>
                         <div class="terminal-line" style="animation-delay: 1.2s">
-                            <span class="output-success">✓</span> <span class="output-dim">MCP servers connected</span> <span class="output-accent">(Serena, Context7, agent-browser)</span>
+                            <span class="output-success">&#10003;</span> <span class="output-dim">MCP servers connected</span> <span class="output-accent">(Serena, Context7, Playwright, SQLite)</span>
                         </div>
                         <div class="terminal-line" style="animation-delay: 1.5s">
-                            <span class="output-success">✓</span> <span class="output-dim">SSH agent forwarded</span>
+                            <span class="output-success">&#10003;</span> <span class="output-dim">SSH agent forwarded</span>
                         </div>
                         <div class="terminal-line" style="animation-delay: 1.8s">
                             <span class="prompt">claude-vb</span> <span class="command">claude</span> <span class="output-dim">"analyze this codebase"</span>
@@ -72,36 +73,103 @@
                     </div>
                 </div>
 
-                <!-- Quick Install -->
-                <div id="install" class="install-box">
-                    <div class="install-header">
-                        <span class="install-label">Quick Install</span>
-                        <button class="copy-btn" data-copy="mkdir -p ~/.local/bin && curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh -o ~/.local/bin/vibrate && chmod +x ~/.local/bin/vibrate && export PATH=&quot;$HOME/.local/bin:$PATH&quot;">Copy</button>
+                <!-- Installation Modes -->
+                <div class="install-modes" id="install">
+                    <div class="mode-tabs">
+                        <button class="mode-tab active" data-tab="existing">For Claude Code Users</button>
+                        <button class="mode-tab" data-tab="new">New to Claude Code</button>
                     </div>
-                    <pre class="install-command"><code>mkdir -p ~/.local/bin && curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh -o ~/.local/bin/vibrate && chmod +x ~/.local/bin/vibrate && export PATH="$HOME/.local/bin:$PATH"</code></pre>
+
+                    <!-- Tab: For Claude Code Users -->
+                    <div class="mode-panel active" id="tab-existing">
+                        <p class="mode-description">
+                            Already have Claude Code installed? Vibrator builds a personalized image
+                            with your host config, MCP connections, and SSH/GPG agents forwarded automatically.
+                        </p>
+
+                        <div class="install-box">
+                            <div class="install-header">
+                                <span class="install-label">Quick Install</span>
+                                <button class="copy-btn" data-copy="mkdir -p ~/.local/bin && curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh -o ~/.local/bin/vibrate && chmod +x ~/.local/bin/vibrate && export PATH=&quot;$HOME/.local/bin:$PATH&quot;">Copy</button>
+                            </div>
+                            <pre class="install-command"><code>mkdir -p ~/.local/bin && curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh \
+  -o ~/.local/bin/vibrate && chmod +x ~/.local/bin/vibrate</code></pre>
+                        </div>
+
+                        <div class="install-box token-box">
+                            <div class="install-header">
+                                <span class="install-label">Authentication</span>
+                            </div>
+                            <pre class="install-command"><code><span class="comment"># Generate a long-lived OAuth token</span>
+claude setup-token
+<span class="comment"># Copy the token from the output and save it</span>
+echo "eyJhbG..." > ~/.claude-docker-token</code></pre>
+                            <div class="install-note" style="text-align:left; margin-top:0.75rem">
+                                Vibrator loads the token from <code>~/.claude-docker-token</code> automatically on every run.
+                            </div>
+                        </div>
+
+                        <div class="quick-start">
+                            <h3>Then just:</h3>
+                            <pre><code>cd ~/my-project
+vibrate</code></pre>
+                            <p class="install-note">First run builds a personalized image (~10 min). Subsequent starts are instant.</p>
+                        </div>
+                    </div>
+
+                    <!-- Tab: New to Claude Code -->
+                    <div class="mode-panel" id="tab-new">
+                        <p class="mode-description">
+                            Don't have Claude Code yet? No problem. Vibrator ships a fully self-contained Docker image
+                            with Claude Code, MCP servers, and 30+ developer tools pre-installed.
+                        </p>
+
+                        <div class="install-box">
+                            <div class="install-header">
+                                <span class="install-label">1. Download vibrate.sh</span>
+                                <button class="copy-btn" data-copy="mkdir -p ~/.local/bin && curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh -o ~/.local/bin/vibrate && chmod +x ~/.local/bin/vibrate && export PATH=&quot;$HOME/.local/bin:$PATH&quot;">Copy</button>
+                            </div>
+                            <pre class="install-command"><code>mkdir -p ~/.local/bin && curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh \
+  -o ~/.local/bin/vibrate && chmod +x ~/.local/bin/vibrate</code></pre>
+                        </div>
+
+                        <div class="install-box">
+                            <div class="install-header">
+                                <span class="install-label">2. Get the Docker Image</span>
+                            </div>
+                            <pre class="install-command"><code><span class="comment"># Option A: Pull pre-built image (~2GB download, skips 10+ min build)</span>
+vibrate --pull
+
+<span class="comment"># Option B: Build locally (takes 10-15 min on first run)</span>
+vibrate --generic --build</code></pre>
+                        </div>
+
+                        <div class="install-box token-box">
+                            <div class="install-header">
+                                <span class="install-label">3. Authenticate</span>
+                            </div>
+                            <pre class="install-command"><code><span class="comment"># Option A: Interactive login (opens browser URL)</span>
+<span class="comment"># Inside the container, run:</span>
+claude auth login
+
+<span class="comment"># Option B: Pass API key from host</span>
+ANTHROPIC_API_KEY=sk-ant-... vibrate</code></pre>
+                            <div class="install-note" style="text-align:left; margin-top:0.75rem">
+                                Claude Code needs to authenticate with Anthropic. You only need to do this once.
+                            </div>
+                        </div>
+
+                        <div class="quick-start">
+                            <h3>Then just:</h3>
+                            <pre><code>cd ~/my-project
+vibrate</code></pre>
+                            <p class="install-note">Uses the pre-built generic image. All tools included, no host dependencies needed.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="install-note">
                     Or install to <code>/usr/local/bin</code> or any other directory in your <code>$PATH</code>
-                </div>
-
-                <div class="install-box token-box">
-                    <div class="install-header">
-                        <span class="install-label">Authentication</span>
-                    </div>
-                    <pre class="install-command"><code><span class="comment"># 1. Generate a long-lived OAuth token</span>
-claude setup-token
-<span class="comment"># 2. Copy the token from the output and save it</span>
-echo "eyJhbG..." > ~/.claude-docker-token</code></pre>
-                    <div class="install-note" style="text-align:left; margin-top:0.75rem">
-                        Vibrator will load the token from <code>~/.claude-docker-token</code> automatically on every run.
-                    </div>
-                </div>
-
-                <div class="quick-start">
-                    <h3>Then just:</h3>
-                    <pre><code>cd ~/my-project
-vibrate</code></pre>
                 </div>
             </div>
         </div>
@@ -114,41 +182,265 @@ vibrate</code></pre>
 
             <div class="features-grid">
                 <div class="feature">
-                    <div class="feature-icon">🚀</div>
+                    <div class="feature-icon">&#x1F680;</div>
                     <h3>Auto-Detection</h3>
                     <p>Automatically detects Docker Desktop, OrbStack, Colima, Rancher, Podman, and native Docker. No configuration needed.</p>
                 </div>
 
                 <div class="feature">
-                    <div class="feature-icon">🔌</div>
+                    <div class="feature-icon">&#x1F50C;</div>
                     <h3>Pre-configured MCP</h3>
-                    <p>Serena, Context7, and agent-browser MCP servers automatically connect if running on host. Just works.</p>
+                    <p>5 MCP servers ready out of the box: Serena, Context7, Playwright, Sequential Thinking, and SQLite. Just works.</p>
                 </div>
 
                 <div class="feature">
-                    <div class="feature-icon">🔒</div>
+                    <div class="feature-icon">&#x1F512;</div>
                     <h3>Secure by Default</h3>
                     <p>Minimal privileges by default. Docker-in-Docker opt-in with <code>--docker</code> flag. Clear security warnings.</p>
                 </div>
 
                 <div class="feature">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Fast & Cached</h3>
+                    <div class="feature-icon">&#x26A1;</div>
+                    <h3>Fast &amp; Cached</h3>
                     <p>Multi-stage builds, efficient layer caching, and smart container reuse. Start coding in seconds.</p>
                 </div>
 
                 <div class="feature">
-                    <div class="feature-icon">🔑</div>
+                    <div class="feature-icon">&#x1F511;</div>
                     <h3>Agent Forwarding</h3>
                     <p>SSH and GPG agents auto-detected and forwarded. Git operations with your keys, seamlessly.</p>
                 </div>
 
                 <div class="feature">
-                    <div class="feature-icon">📦</div>
+                    <div class="feature-icon">&#x1F4E6;</div>
                     <h3>Workspace Isolation</h3>
                     <p>Each project in its own container. Clean environments. No tool conflicts. Full reproducibility.</p>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- Batteries Included Section -->
+    <section class="tools-section" id="tools">
+        <div class="container">
+            <h2 class="section-title">Batteries Included</h2>
+            <p class="tools-subtitle">
+                Everything you need for AI-powered development, pre-configured and ready to go.
+                30+ tools, 5 MCP servers, and multiple AI coding assistants in a single container.
+            </p>
+
+            <div class="tools-grid">
+
+                <!-- MCP Servers -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F50C;</span>
+                        <h3>MCP Servers</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://github.com/oraios/serena" target="_blank" rel="noopener">Serena</a>
+                            <span class="tool-desc">&mdash; Semantic code analysis via LSP</span>
+                        </li>
+                        <li>
+                            <a href="https://context7.com" target="_blank" rel="noopener">Context7</a>
+                            <span class="tool-desc">&mdash; Up-to-date library documentation</span>
+                        </li>
+                        <li>
+                            <a href="https://playwright.dev" target="_blank" rel="noopener">Playwright</a>
+                            <span class="tool-desc">&mdash; Browser automation with Chromium</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/modelcontextprotocol/servers" target="_blank" rel="noopener">Sequential Thinking</a>
+                            <span class="tool-desc">&mdash; Structured multi-step reasoning</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/modelcontextprotocol/servers" target="_blank" rel="noopener">SQLite</a>
+                            <span class="tool-desc">&mdash; Natural-language database queries</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/kontext-dev/agent-browser" target="_blank" rel="noopener">MCP Hub</a>
+                            <span class="tool-desc">&mdash; MCP aggregation gateway with Web UI</span>
+                            <span class="badge-optin">--mcp</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- AI Coding Tools -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F916;</span>
+                        <h3>AI Coding Tools</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">Claude Code</a>
+                            <span class="tool-desc">&mdash; Anthropic's agentic coding CLI</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/vercel-labs/agent-browser" target="_blank" rel="noopener">agent-browser</a>
+                            <span class="tool-desc">&mdash; Token-efficient browser automation by Vercel</span>
+                        </li>
+                        <li>
+                            <a href="https://ralphex.com" target="_blank" rel="noopener">ralphex</a>
+                            <span class="tool-desc">&mdash; Autonomous coding loop for Claude Code</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/SuperClaude-Org/SuperClaude_Framework" target="_blank" rel="noopener">SuperClaude</a>
+                            <span class="tool-desc">&mdash; Enhanced commands and workflows</span>
+                        </li>
+                        <li>
+                            <a href="https://aider.chat" target="_blank" rel="noopener">aider</a>
+                            <span class="tool-desc">&mdash; Multi-model AI coding assistant</span>
+                            <span class="badge-optin">--aider</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Search & Navigation -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F50D;</span>
+                        <h3>Search &amp; Navigation</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://github.com/BurntSushi/ripgrep" target="_blank" rel="noopener">ripgrep</a>
+                            <span class="tool-desc">&mdash; Fast regex search across files</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/sharkdp/fd" target="_blank" rel="noopener">fd</a>
+                            <span class="tool-desc">&mdash; Fast, user-friendly file finder</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/junegunn/fzf" target="_blank" rel="noopener">fzf</a>
+                            <span class="tool-desc">&mdash; Fuzzy finder for files, history, and more</span>
+                        </li>
+                        <li>
+                            <span class="tool-name">tree</span>
+                            <span class="tool-desc">&mdash; Directory structure viewer</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Data Processing -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F4CA;</span>
+                        <h3>Data Processing</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://jqlang.github.io/jq/" target="_blank" rel="noopener">jq</a>
+                            <span class="tool-desc">&mdash; JSON processor and transformer</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/mikefarah/yq" target="_blank" rel="noopener">yq</a>
+                            <span class="tool-desc">&mdash; YAML/JSON/XML processor</span>
+                        </li>
+                        <li>
+                            <a href="https://sqlite.org" target="_blank" rel="noopener">sqlite3</a>
+                            <span class="tool-desc">&mdash; SQLite command-line interface</span>
+                        </li>
+                        <li>
+                            <a href="https://csvkit.readthedocs.io" target="_blank" rel="noopener">csvkit</a>
+                            <span class="tool-desc">&mdash; CSV tools suite (csvlook, csvsql, csvgrep)</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Git & Version Control -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F500;</span>
+                        <h3>Git &amp; Version Control</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://cli.github.com" target="_blank" rel="noopener">GitHub CLI</a>
+                            <span class="tool-desc">&mdash; GitHub from the command line</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/dandavison/delta" target="_blank" rel="noopener">delta</a>
+                            <span class="tool-desc">&mdash; Syntax-highlighted git diffs</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/jesseduffield/lazygit" target="_blank" rel="noopener">lazygit</a>
+                            <span class="tool-desc">&mdash; Terminal UI for git operations</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Code Quality -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x2728;</span>
+                        <h3>Code Quality</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://github.com/astral-sh/ruff" target="_blank" rel="noopener">ruff</a>
+                            <span class="tool-desc">&mdash; Python linter + formatter (replaces flake8, black, isort)</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/hadolint/hadolint" target="_blank" rel="noopener">hadolint</a>
+                            <span class="tool-desc">&mdash; Dockerfile linter</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- API & Network -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F310;</span>
+                        <h3>API &amp; Network</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://httpie.io" target="_blank" rel="noopener">HTTPie</a>
+                            <span class="tool-desc">&mdash; Modern, human-friendly HTTP client</span>
+                        </li>
+                        <li>
+                            <a href="https://github.com/vi/websocat" target="_blank" rel="noopener">websocat</a>
+                            <span class="tool-desc">&mdash; WebSocket CLI client</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Runtimes & Shell -->
+                <div class="tool-card">
+                    <div class="tool-card-header">
+                        <span class="tool-card-icon">&#x1F4BB;</span>
+                        <h3>Runtimes &amp; Shell</h3>
+                    </div>
+                    <ul class="tool-list">
+                        <li>
+                            <a href="https://python.org" target="_blank" rel="noopener">Python 3</a>
+                            +
+                            <a href="https://github.com/astral-sh/uv" target="_blank" rel="noopener">uv</a>
+                            <span class="tool-desc">&mdash; Python runtime &amp; fast package manager</span>
+                        </li>
+                        <li>
+                            <a href="https://go.dev" target="_blank" rel="noopener">Go</a>
+                            <span class="tool-desc">&mdash; Go programming language</span>
+                        </li>
+                        <li>
+                            <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a>
+                            <span class="tool-desc">&mdash; Fast JavaScript/TypeScript runtime</span>
+                        </li>
+                        <li>
+                            <a href="https://ohmyz.sh" target="_blank" rel="noopener">zsh + Oh My Zsh</a>
+                            <span class="tool-desc">&mdash; Enhanced shell with plugins</span>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+
+            <p class="tools-footnote">
+                Tools marked with a flag badge are opt-in &mdash; pass the flag when starting <code>vibrate</code> to include them.
+                All other tools are pre-installed and ready to use.
+            </p>
         </div>
     </section>
 
@@ -196,7 +488,7 @@ vibrate</code></pre>
             </div>
 
             <div class="alias-box">
-                <h3>Pro Tip: Add PATH & Alias</h3>
+                <h3>Pro Tip: Add PATH &amp; Alias</h3>
                 <p>Make <code>vibrate</code> available permanently and add a shorter <code>vb</code> alias:</p>
 
                 <div class="alias-commands">
@@ -234,7 +526,7 @@ vibrate</code></pre>
                         </svg>
                         View on GitHub
                     </a>
-                    <span class="separator">•</span>
+                    <span class="separator">&bull;</span>
                     <a href="https://github.com/wlame/vibrator/blob/main/LICENSE" target="_blank">MIT License</a>
                 </div>
             </div>

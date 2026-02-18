@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Smooth scroll for anchor links (if any are added later)
+    // Smooth scroll for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             e.preventDefault();
@@ -73,6 +73,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     block: 'start'
                 });
             }
+        });
+    });
+
+    // Installation mode tab switching
+    const modeTabs = document.querySelectorAll('.mode-tab');
+    const modePanels = document.querySelectorAll('.mode-panel');
+
+    modeTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+
+            modeTabs.forEach(t => t.classList.remove('active'));
+            modePanels.forEach(p => p.classList.remove('active'));
+
+            this.classList.add('active');
+            document.getElementById('tab-' + targetTab).classList.add('active');
         });
     });
 });

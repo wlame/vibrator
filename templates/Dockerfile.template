@@ -187,6 +187,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
     mv lazygit /usr/local/bin/ && chmod +x /usr/local/bin/lazygit && \
     rm lazygit.tar.gz
 
+# uv — Python package/tool manager (system-wide so all stages can use it)
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh && \
+    uv --version
+
 # Create user with host UID/GID for proper file permissions on mounted volumes.
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID 1000 — remove any
 # existing user/group that conflicts with the target UID/GID before creating ours.
@@ -215,7 +219,6 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
     git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
     git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 
 # --- Python developer tools (isolated venvs via uv, binaries in ~/.local/bin/) ---

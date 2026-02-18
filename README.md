@@ -78,6 +78,37 @@ make build
 sudo cp build/vibrate.sh /usr/local/bin/vibrate
 ```
 
+### Quick Start without Claude Code on Host
+
+Don't have Claude Code installed yet? You can still use vibrator — it ships a fully
+self-contained Docker image with Claude Code, MCP servers, and developer tools pre-installed.
+
+```bash
+# Download vibrate.sh (from latest release or build from source)
+curl -fsSL https://github.com/wlame/vibrator/releases/latest/download/vibrate.sh -o vibrate.sh
+chmod +x vibrate.sh
+
+# Option A: Pull pre-built image (~2GB download, skips 10+ min build)
+./vibrate.sh --pull
+
+# Option B: Build locally (takes 10-15 min on first run)
+./vibrate.sh --generic --build
+
+# Run — cd to your project first
+cd ~/my-project
+vibrate
+```
+
+**Authentication is required.** Claude Code inside the container still needs to authenticate
+with Anthropic. On first run you'll see instructions in the welcome banner. Two options:
+
+- **Interactive login:** Run `claude auth login` inside the container — it opens a browser URL
+  to complete OAuth authentication
+- **API key:** Pass your key from the host:
+  ```bash
+  ANTHROPIC_API_KEY=sk-ant-... vibrate
+  ```
+
 ### Basic Usage
 
 ```bash

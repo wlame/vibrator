@@ -33,7 +33,7 @@ RUN apt-get update && \
 
 # Install Bun (needed by Playwright MCP server)
 ENV BUN_INSTALL=/usr/local
-RUN curl -fsSL https://bun.sh/install | bash && \
+RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://bun.sh/install | bash && \
     ln -sf /usr/local/bin/bun /usr/local/bin/node
 
 # Install Playwright MCP server (npm package only — fast, cached separately)
@@ -107,7 +107,7 @@ ENV NODE_PATH=/usr/local/install/global/node_modules
 # Opt-in via --mcp flag; provides Web UI at localhost:8080, SSE at localhost:8087
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then AGENT_ARCH="amd64"; else AGENT_ARCH="arm64"; fi && \
-    curl -fsSL "https://github.com/kontext-dev/agent-browser/releases/download/v1.1.0/agent-browser-v1.1.0-linux-${AGENT_ARCH}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/kontext-dev/agent-browser/releases/download/v1.1.0/agent-browser-v1.1.0-linux-${AGENT_ARCH}.tar.gz" \
     -o agent-browser.tar.gz && \
     tar -xzf agent-browser.tar.gz && \
     mv agent-browser /usr/local/bin/mcp-hub && \
@@ -122,7 +122,7 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
 # Install ralphex (autonomous coding loop for Claude Code)
 RUN ARCH=$(dpkg --print-architecture) && \
     RALPHEX_VERSION="0.12.0" && \
-    curl -fsSL "https://github.com/umputun/ralphex/releases/download/v${RALPHEX_VERSION}/ralphex_${RALPHEX_VERSION}_linux_${ARCH}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/umputun/ralphex/releases/download/v${RALPHEX_VERSION}/ralphex_${RALPHEX_VERSION}_linux_${ARCH}.tar.gz" \
     -o ralphex.tar.gz && \
     tar -xzf ralphex.tar.gz && \
     mv ralphex /usr/local/bin/ && \
@@ -136,7 +136,7 @@ RUN bun install -g @modelcontextprotocol/server-sequential-thinking
 
 # jq — JSON processor (latest release, faster than apt version)
 RUN ARCH=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/jqlang/jq/releases/latest/download/jq-linux-${ARCH}" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/jqlang/jq/releases/latest/download/jq-linux-${ARCH}" \
     -o /usr/local/bin/jq && chmod +x /usr/local/bin/jq
 
 # ripgrep — Fast regex search (latest release)
@@ -144,20 +144,20 @@ RUN ARCH=$(dpkg --print-architecture) && \
 RUN ARCH=$(dpkg --print-architecture) && \
     RG_VERSION="15.1.0" && \
     if [ "$ARCH" = "amd64" ]; then RG_TRIPLE="x86_64-unknown-linux-musl"; else RG_TRIPLE="aarch64-unknown-linux-gnu"; fi && \
-    curl -fsSL "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-${RG_TRIPLE}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep-${RG_VERSION}-${RG_TRIPLE}.tar.gz" \
     -o rg.tar.gz && \
     tar -xzf rg.tar.gz --strip-components=1 -C /usr/local/bin/ "ripgrep-${RG_VERSION}-${RG_TRIPLE}/rg" && \
     rm rg.tar.gz
 
 # yq — YAML/JSON/XML processor (like jq but for YAML)
 RUN ARCH=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}" \
     -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
 
 # hadolint — Dockerfile linter
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then HL_ARCH="x86_64"; else HL_ARCH="arm64"; fi && \
-    curl -fsSL "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-${HL_ARCH}" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-${HL_ARCH}" \
     -o /usr/local/bin/hadolint && chmod +x /usr/local/bin/hadolint
 
 # delta — Better git diff viewer with syntax highlighting
@@ -165,7 +165,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 RUN ARCH=$(dpkg --print-architecture) && \
     DELTA_VERSION="0.18.2" && \
     if [ "$ARCH" = "amd64" ]; then DELTA_TRIPLE="x86_64-unknown-linux-musl"; else DELTA_TRIPLE="aarch64-unknown-linux-gnu"; fi && \
-    curl -fsSL "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-${DELTA_TRIPLE}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-${DELTA_TRIPLE}.tar.gz" \
     -o delta.tar.gz && \
     tar -xzf delta.tar.gz --strip-components=1 -C /usr/local/bin/ \
       "delta-${DELTA_VERSION}-${DELTA_TRIPLE}/delta" && \
@@ -174,21 +174,21 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # websocat — WebSocket CLI client
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then WS_ARCH="x86_64"; else WS_ARCH="aarch64"; fi && \
-    curl -fsSL "https://github.com/vi/websocat/releases/latest/download/websocat.${WS_ARCH}-unknown-linux-musl" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/vi/websocat/releases/latest/download/websocat.${WS_ARCH}-unknown-linux-musl" \
     -o /usr/local/bin/websocat && chmod +x /usr/local/bin/websocat
 
 # lazygit — Terminal UI for git operations
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then LG_ARCH="x86_64"; else LG_ARCH="arm64"; fi && \
     LAZYGIT_VERSION="0.44.1" && \
-    curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LG_ARCH}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LG_ARCH}.tar.gz" \
     -o lazygit.tar.gz && \
     tar -xzf lazygit.tar.gz lazygit && \
     mv lazygit /usr/local/bin/ && chmod +x /usr/local/bin/lazygit && \
     rm lazygit.tar.gz
 
 # uv — Python package/tool manager (system-wide so all stages can use it)
-RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh && \
+RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh && \
     uv --version
 
 # Create user with host UID/GID for proper file permissions on mounted volumes.
@@ -215,7 +215,7 @@ ARG USERNAME=claude-user
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
+RUN sh -c "$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
     git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
     git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 
@@ -234,7 +234,7 @@ RUN uv tool install ruff && \
 FROM user-env AS claude-mcp
 ARG USERNAME=claude-user
 
-RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://claude.ai/install.sh | bash
 ENV PATH=/home/$USERNAME/.local/bin:$PATH
 
 RUN claude mcp add context7 \

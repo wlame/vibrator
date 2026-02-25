@@ -56,16 +56,17 @@ jobs:
         id: tag
         run: |
           git fetch --tags
-          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-          if [[ -z "$LATEST_TAG" ]]; then
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [[ -z "$PREV_TAG" ]]; then
             NEW_TAG="v0.0.1"
           else
-            VER="${LATEST_TAG#v}"
+            VER="${PREV_TAG#v}"
             MAJOR="${VER%%.*}"; REST="${VER#*.}"; MINOR="${REST%%.*}"; PATCH="${REST#*.}"
             NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
           fi
           echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
-          echo "New vibrator tag: $NEW_TAG"
+          echo "prev_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          echo "Previous tag: $PREV_TAG  →  New tag: $NEW_TAG"
 
       - name: Commit CLAUDE_CLI_VERSION to main
         if: steps.check.outputs.proceed == 'true'
@@ -87,4 +88,22 @@ jobs:
         run: |
           git tag -a "$NEW_TAG" -m "Release ${NEW_TAG} — Claude CLI ${CLAUDE_VERSION}"
           git push origin "$NEW_TAG"
-          echo "Pushed $NEW_TAG — release.yml and docker-publish.yml will now run automatically."
+
+      - name: Create GitHub release
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ steps.tag.outputs.tag }}
+          PREV_TAG: ${{ steps.tag.outputs.prev_tag }}
+          CLAUDE_VERSION: ${{ steps.claude.outputs.latest }}
+          REPO: ${{ github.repository }}
+        run: |
+          NOTES="New Claude Code CLI version ${CLAUDE_VERSION}."
+          if [[ -n "$PREV_TAG" ]]; then
+            NOTES="${NOTES}
+
+**Full Changelog**: https://github.com/${REPO}/compare/${PREV_TAG}...${NEW_TAG}"
+          fi
+          gh release create "$NEW_TAG" \
+            --title "[CLI ${CLAUDE_VERSION}]" \
+            --notes "$NOTES"

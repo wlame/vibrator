@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -62,7 +63,9 @@ jobs:
           sha256sum vibrate.sh > vibrate.sh.sha256
           cat vibrate.sh.sha256
 
+      # Tag-push: create the full release with installation instructions.
       - name: Create release
+        if: github.event_name == 'push'
         env:
           TAG_NAME: ${{ github.ref_name }}
         uses: softprops/action-gh-release@v2
@@ -122,3 +125,16 @@ jobs:
             ## What's Changed
 
             See the release notes below for detailed changes.
+
+      # workflow_dispatch (triggered by claude-cli-update): attach artifacts to the
+      # existing release without touching its title or body.
+      - name: Upload artifacts to existing release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release upload "$TAG_NAME" \
+            build/vibrate.sh \
+            build/vibrate.sh.sha256 \
+            --clobber

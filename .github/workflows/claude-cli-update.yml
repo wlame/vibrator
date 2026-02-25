@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   check-and-release:
@@ -105,3 +106,17 @@ jobs:
           gh release create "$NEW_TAG" \
             --title "[CLI ${CLAUDE_VERSION}]" \
             --notes "$NOTES"
+
+      - name: Trigger release build and artifact upload
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ steps.tag.outputs.tag }}
+        run: gh workflow run release.yml --ref "$NEW_TAG"
+
+      - name: Trigger Docker image rebuild and push
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ steps.tag.outputs.tag }}
+        run: gh workflow run docker-publish.yml --ref "$NEW_TAG"

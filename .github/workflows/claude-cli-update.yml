@@ -1,0 +1,90 @@
+name: Claude CLI Update
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force release even if Claude CLI version is unchanged'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    name: Check & Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required to see all tags for version computation
+
+      - name: Fetch latest Claude CLI version from npm
+        id: claude
+        run: |
+          LATEST=$(curl -fsSL https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r .version)
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest Claude CLI on npm: $LATEST"
+
+      - name: Read current tracked version
+        id: current
+        run: |
+          CURRENT=$(cat CLAUDE_CLI_VERSION 2>/dev/null | tr -d '[:space:]' || echo "")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Currently tracked:       $CURRENT"
+
+      - name: Decide whether to proceed
+        id: check
+        env:
+          LATEST: ${{ steps.claude.outputs.latest }}
+          CURRENT: ${{ steps.current.outputs.current }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [[ "$LATEST" != "$CURRENT" || "$FORCE" == "true" ]]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "Update needed: $CURRENT -> $LATEST"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "Already up to date ($CURRENT) — nothing to do."
+          fi
+
+      - name: Compute next vibrator tag
+        if: steps.check.outputs.proceed == 'true'
+        id: tag
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [[ -z "$LATEST_TAG" ]]; then
+            NEW_TAG="v0.0.1"
+          else
+            VER="${LATEST_TAG#v}"
+            MAJOR="${VER%%.*}"; REST="${VER#*.}"; MINOR="${REST%%.*}"; PATCH="${REST#*.}"
+            NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "New vibrator tag: $NEW_TAG"
+
+      - name: Commit CLAUDE_CLI_VERSION to main
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          CLAUDE_VERSION: ${{ steps.claude.outputs.latest }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "$CLAUDE_VERSION" > CLAUDE_CLI_VERSION
+          git add CLAUDE_CLI_VERSION
+          git commit -m "chore: update Claude CLI to ${CLAUDE_VERSION}"
+          git push origin main
+
+      - name: Create and push release tag
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          NEW_TAG: ${{ steps.tag.outputs.tag }}
+          CLAUDE_VERSION: ${{ steps.claude.outputs.latest }}
+        run: |
+          git tag -a "$NEW_TAG" -m "Release ${NEW_TAG} — Claude CLI ${CLAUDE_VERSION}"
+          git push origin "$NEW_TAG"
+          echo "Pushed $NEW_TAG — release.yml and docker-publish.yml will now run automatically."

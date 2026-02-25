@@ -100,9 +100,7 @@ jobs:
         run: |
           NOTES="New Claude Code CLI version ${CLAUDE_VERSION}."
           if [[ -n "$PREV_TAG" ]]; then
-            NOTES="${NOTES}
-
-**Full Changelog**: https://github.com/${REPO}/compare/${PREV_TAG}...${NEW_TAG}"
+            NOTES="${NOTES}"$'\n\n'"**Full Changelog**: https://github.com/${REPO}/compare/${PREV_TAG}...${NEW_TAG}"
           fi
           gh release create "$NEW_TAG" \
             --title "[CLI ${CLAUDE_VERSION}]" \

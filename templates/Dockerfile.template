@@ -60,27 +60,26 @@ RUN set -e && \
       CR_REV=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').revision)") && \
       CR_VER=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').browserVersion)") && \
       FF_REV=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='ffmpeg').revision)") && \
-      echo "Downloading Chromium ${CR_VER} (rev ${CR_REV}) for linux64 via curl..." && \
-      mkdir -p /ms-playwright/chromium-${CR_REV} && \
-      curl -fSL --retry 3 --retry-delay 5 \
+      echo "Downloading Chromium ${CR_VER} (rev ${CR_REV}) and FFmpeg in parallel..." && \
+      mkdir -p /ms-playwright/chromium-${CR_REV} /ms-playwright/chromium_headless_shell-${CR_REV} /ms-playwright/ffmpeg-${FF_REV} && \
+      curl -fSL --retry 3 --retry-delay 5 --retry-all-errors \
         "https://cdn.playwright.dev/builds/cft/${CR_VER}/linux64/chrome-linux64.zip" \
-        -o /tmp/pw-chrome.zip && \
-      unzip -q /tmp/pw-chrome.zip -d /ms-playwright/chromium-${CR_REV}/ && \
-      rm /tmp/pw-chrome.zip && \
-      echo "  Chrome for Testing: OK" && \
-      mkdir -p /ms-playwright/chromium_headless_shell-${CR_REV} && \
-      curl -fSL --retry 3 --retry-delay 5 \
+        -o /tmp/pw-chrome.zip & PW_DL1=$! ; \
+      curl -fSL --retry 3 --retry-delay 5 --retry-all-errors \
         "https://cdn.playwright.dev/builds/cft/${CR_VER}/linux64/chrome-headless-shell-linux64.zip" \
-        -o /tmp/pw-headless.zip && \
-      unzip -q /tmp/pw-headless.zip -d /ms-playwright/chromium_headless_shell-${CR_REV}/ && \
-      rm /tmp/pw-headless.zip && \
-      echo "  Chrome Headless Shell: OK" && \
-      mkdir -p /ms-playwright/ffmpeg-${FF_REV} && \
-      curl -fSL --retry 3 --retry-delay 5 \
+        -o /tmp/pw-headless.zip & PW_DL2=$! ; \
+      curl -fSL --retry 3 --retry-delay 5 --retry-all-errors \
         "https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/${FF_REV}/ffmpeg-linux.zip" \
-        -o /tmp/pw-ffmpeg.zip && \
-      unzip -q /tmp/pw-ffmpeg.zip -d /ms-playwright/ffmpeg-${FF_REV}/ && \
-      rm /tmp/pw-ffmpeg.zip && \
+        -o /tmp/pw-ffmpeg.zip & PW_DL3=$! ; \
+      wait $PW_DL1 && wait $PW_DL2 && wait $PW_DL3 && \
+      echo "  Downloads complete, extracting in parallel..." && \
+      unzip -q /tmp/pw-chrome.zip -d /ms-playwright/chromium-${CR_REV}/ & PW_UZ1=$! ; \
+      unzip -q /tmp/pw-headless.zip -d /ms-playwright/chromium_headless_shell-${CR_REV}/ & PW_UZ2=$! ; \
+      unzip -q /tmp/pw-ffmpeg.zip -d /ms-playwright/ffmpeg-${FF_REV}/ & PW_UZ3=$! ; \
+      wait $PW_UZ1 && wait $PW_UZ2 && wait $PW_UZ3 && \
+      rm /tmp/pw-chrome.zip /tmp/pw-headless.zip /tmp/pw-ffmpeg.zip && \
+      echo "  Chrome for Testing: OK" && \
+      echo "  Chrome Headless Shell: OK" && \
       echo "  FFmpeg: OK"; \
     else \
       echo "ARM64: using Playwright downloader (no Chrome for Testing ARM64 builds)..." && \

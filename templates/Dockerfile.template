@@ -33,8 +33,7 @@ RUN apt-get update && \
 
 # Install Bun (needed by Playwright MCP server)
 ENV BUN_INSTALL=/usr/local
-RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://bun.sh/install | bash && \
-    ln -sf /usr/local/bin/bun /usr/local/bin/node
+RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://bun.sh/install | bash
 
 # Install Playwright MCP server (npm package only — fast, cached separately)
 RUN bun install -g @playwright/mcp
@@ -57,9 +56,9 @@ RUN set -e && \
     if [ "$ARCH" = "amd64" ]; then \
       REGISTRY=$(find /usr/local -path '*/playwright-core/browsers.json' | head -1) && \
       test -f "$REGISTRY" || { echo "ERROR: playwright-core browsers.json not found"; exit 1; } && \
-      CR_REV=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').revision)") && \
-      CR_VER=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').browserVersion)") && \
-      FF_REV=$(node -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='ffmpeg').revision)") && \
+      CR_REV=$(bun -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').revision)") && \
+      CR_VER=$(bun -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='chromium').browserVersion)") && \
+      FF_REV=$(bun -e "process.stdout.write(require('$REGISTRY').browsers.find(b=>b.name==='ffmpeg').revision)") && \
       echo "Downloading Chromium ${CR_VER} (rev ${CR_REV}) and FFmpeg in parallel..." && \
       mkdir -p /ms-playwright/chromium-${CR_REV} /ms-playwright/chromium_headless_shell-${CR_REV} /ms-playwright/ffmpeg-${FF_REV} && \
       curl -fSL --retry 3 --retry-delay 5 --retry-all-errors \

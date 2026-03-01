@@ -69,6 +69,7 @@ docker_cmd::build() {
     [[ "$MCP_HUB" == true ]]         && cmd+=(-e "VIBRATOR_MCP_HUB=1")
     [[ "$AIDER" == true ]]           && cmd+=(-e "VIBRATOR_AIDER=1")
     [[ "$GENERIC" == true ]]         && cmd+=(-e "VIBRATOR_GENERIC=1")
+    [[ "$AGENT_TEAMS" == true ]]     && cmd+=(-e "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1")
 
     # Forwarded environment variables
     docker_cmd::_add_forwarded_env

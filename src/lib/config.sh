@@ -25,6 +25,7 @@ config::init() {
     MCP_HUB=false
     AIDER=false
     GENERIC=false
+    AGENT_TEAMS=false
 
     # Build/action flags
     FLAG_BUILD_ONLY=false

@@ -30,6 +30,7 @@ Options:
   --privileged             Enable Docker privileged mode
   --mcp                    Start MCP Hub gateway (Web UI at localhost:8080)
   --aider                  Install aider AI coding assistant (~80MB, opt-in)
+  --teams                  Enable Claude Code agent teams mode (experimental)
   --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
   --docker-socket PATH     Override Docker socket path (auto-detected by default)
   --colima-profile NAME    Colima profile name (default: default)
@@ -95,6 +96,7 @@ args::parse() {
             --privileged)         PRIVILEGED=true; shift ;;
             --mcp)                MCP_HUB=true; shift ;;
             --aider)              AIDER=true; shift ;;
+            --teams)              AGENT_TEAMS=true; shift ;;
             --generic)            GENERIC=true; shift ;;
             --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
             --docker-socket)      VIBRATOR_DOCKER_SOCKET="$2"; shift 2 ;;

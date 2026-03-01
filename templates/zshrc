@@ -35,7 +35,14 @@ if [[ -o interactive ]]; then
   echo -e "\033[1;36m|\033[0m  \033[1;33mClaude Code Docker Environment\033[0m                              \033[1;36m|\033[0m"
   echo -e "\033[1;36m+--------------------------------------------------------------+\033[0m"
   echo ""
-  echo -e "\033[1;32mClaude CLI:\033[0m $(claude --version 2>/dev/null | head -1 || echo 'Not installed')"
+  _claude_version=$(claude --version 2>/dev/null | head -1 || echo 'Not installed')
+  if [ "$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" = "1" ]; then
+    _teams_badge=" \033[38;5;208mAgent teams enabled\033[0m \033]8;;https://code.claude.com/docs/en/agent-teams\007↗ docs\033]8;;\007"
+  else
+    _teams_badge=""
+  fi
+  echo -e "\033[1;32mClaude CLI:\033[0m $_claude_version$_teams_badge"
+  unset _claude_version _teams_badge
 
   # Authentication status
   if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then

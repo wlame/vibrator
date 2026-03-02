@@ -62,7 +62,7 @@
                             <span class="output-success">&#10003;</span> <span class="output-dim">MCP servers connected</span> <span class="output-accent">(Serena, Context7, Playwright, SQLite)</span>
                         </div>
                         <div class="terminal-line" style="animation-delay: 1.5s">
-                            <span class="output-success">&#10003;</span> <span class="output-dim">SSH agent forwarded</span>
+                            <span class="output-success">&#10003;</span> <span class="output-dim">30+ developer tools ready</span>
                         </div>
                         <div class="terminal-line" style="animation-delay: 1.8s">
                             <span class="prompt">claude-vb</span> <span class="command">claude</span> <span class="output-dim">"analyze this codebase"</span>
@@ -84,7 +84,7 @@
                     <div class="mode-panel active" id="tab-existing">
                         <p class="mode-description">
                             Already have Claude Code installed? Vibrator builds a personalized image
-                            with your host config, MCP connections, and SSH/GPG agents forwarded automatically.
+                            with your host config and MCP connections. SSH/GPG agents can be forwarded with <code>--ssh-gpg-agents</code>.
                         </p>
 
                         <div class="install-box">
@@ -208,7 +208,7 @@ vibrate</code></pre>
                 <div class="feature">
                     <div class="feature-icon">&#x1F511;</div>
                     <h3>Agent Forwarding</h3>
-                    <p>SSH and GPG agents auto-detected and forwarded. Git operations with your keys, seamlessly.</p>
+                    <p>SSH and GPG agents forwarded on demand with <code>--ssh-gpg-agents</code>. Not forwarded by default for security.</p>
                 </div>
 
                 <div class="feature">

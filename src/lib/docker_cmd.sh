@@ -166,8 +166,8 @@ docker_cmd::_add_volumes() {
         fi
     fi
 
-    # SSH agent socket (auto-detect and forward unless --no-agents)
-    if [[ "$NO_AGENTS" != true ]]; then
+    # SSH agent socket (opt-in with --ssh-gpg-agents)
+    if [[ "$FORWARD_AGENTS" == true ]]; then
         if [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK:-}" ]]; then
             local resolved
             resolved=$(readlink -f "$SSH_AUTH_SOCK" 2>/dev/null || echo "$SSH_AUTH_SOCK")

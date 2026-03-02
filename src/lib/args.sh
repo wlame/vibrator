@@ -24,7 +24,7 @@ Options:
   --pull [TAG]             Pull pre-built image from ghcr.io (default: latest)
   --export-dockerfile FILE Write generated Dockerfile to file
   --mount-full-config      Mount entire ~/.claude directory (overrides selective mode)
-  --no-agents              Disable SSH and GPG agent forwarding
+  --ssh-gpg-agents         Enable SSH and GPG agent forwarding (disabled by default)
   --no-plugins             Skip Claude plugin installation
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
@@ -70,8 +70,8 @@ Docker Runtime:
     - Podman:         ~/.local/share/containers/podman/machine/podman.sock
     - Native Linux:   /var/run/docker.sock
 
-Note: SSH and GPG agents are automatically detected and forwarded if available.
-      Use --no-agents to disable this behavior.
+Note: SSH and GPG agents are NOT forwarded by default for security.
+      Use --ssh-gpg-agents to enable forwarding.
 USAGE
 }
 
@@ -101,7 +101,7 @@ args::parse() {
             --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
             --docker-socket)      VIBRATOR_DOCKER_SOCKET="$2"; shift 2 ;;
             --colima-profile)     COLIMA_PROFILE="$2"; shift 2 ;;
-            --no-agents)          NO_AGENTS=true; shift ;;
+            --ssh-gpg-agents)     FORWARD_AGENTS=true; shift ;;
             --build)              FLAG_BUILD_ONLY=true; shift ;;
             --pull)
                 # Optional tag argument (default: latest)

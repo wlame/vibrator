@@ -18,7 +18,7 @@ config::init() {
     REMOVE_AFTER=false
     PRIVILEGED=false
     DANGEROUS=true
-    NO_AGENTS=false
+    FORWARD_AGENTS=false
     VERBOSE=false
     INSTALL_PLUGINS=true
     DOCKER_IN_DOCKER=false

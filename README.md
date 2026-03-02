@@ -54,7 +54,7 @@ No manual configuration needed - just run `vibrate` and it works!
 
 ### 🎯 Developer Experience
 
-- **Smart agent forwarding**: SSH and GPG agents auto-detected and forwarded. Can be disabled with `--no-agents` for maximum security
+- **Smart agent forwarding**: SSH and GPG agents can be forwarded with `--ssh-gpg-agents`. Disabled by default for security
 - **OAuth token support**: Long-lived authentication
 - **Anthropic API key support**: Legacy short-lived authentication
 - **Workspace isolation**: Each project in its own container
@@ -204,7 +204,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 --docker-socket PATH         Override Docker socket path (auto-detected)
 --colima-profile NAME        Colima profile name (default: default)
 --privileged                 Enable Docker privileged mode
---no-agents                  Disable SSH and GPG agent forwarding
+--ssh-gpg-agents             Enable SSH and GPG agent forwarding (opt-in)
 ```
 
 ### Container Options
@@ -452,7 +452,7 @@ Vibrator merges two sets of Claude rules:
 
 ### Agent Forwarding
 
-SSH and GPG agents are automatically forwarded (unless `--no-agents`):
+SSH and GPG agents can be forwarded on demand (`--ssh-gpg-agents`):
 - Enables git operations with SSH keys
 - GPG signing support
 - Secure, socket-based forwarding

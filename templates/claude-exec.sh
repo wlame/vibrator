@@ -38,15 +38,17 @@ fi
 
 # Change to workspace
 if [[ -n "$WORKSPACE_PATH" && -d "$WORKSPACE_PATH" ]]; then
-  cd "$WORKSPACE_PATH"
+  cd "$WORKSPACE_PATH" || exit 1
 else
-  cd ~
+  cd ~ || exit 1
 fi
 
 # Execute command or start interactive shell
 if [[ $# -gt 0 ]]; then
   [[ "$VIBRATOR_VERBOSE" == "1" && -n "$SERENA_MESSAGE" ]] && echo "$SERENA_MESSAGE" >&2
+  # shellcheck disable=SC1090
   [[ -f ~/.zshenv ]] && source ~/.zshenv
+  # shellcheck disable=SC1090
   [[ -f ~/.zshrc ]] && source ~/.zshrc
   exec "$@"
 else

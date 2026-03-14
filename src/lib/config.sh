@@ -80,7 +80,7 @@ config::derive_container_name() {
     local two_parts
     two_parts=$(echo "$WORKSPACE" | awk -F'/' '{if(NF>=2) print $(NF-1)"/"$NF; else print $NF}')
     local sanitized
-    sanitized=$(echo "$two_parts" | sed 's/[^a-zA-Z0-9_-]/-/g')
+    sanitized="${two_parts//[^a-zA-Z0-9_-]/-}"
     local hash
     hash=$(echo "$WORKSPACE" | sha256sum | cut -c1-8)
     CONTAINER_NAME="claude-vb-${sanitized}-${hash}"

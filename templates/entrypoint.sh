@@ -34,6 +34,7 @@ mkdir -p "$HOME/.claude/rules"
 # Copy host rules if mounted (read-only at rules-host)
 if [ -d "$HOME/.claude/rules-host" ]; then
   cp -r "$HOME/.claude/rules-host/"*.md "$HOME/.claude/rules/" 2>/dev/null || true
+  # shellcheck disable=SC2012
   RULES_COUNT=$(ls -1 "$HOME/.claude/rules-host/"*.md 2>/dev/null | wc -l)
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: copied $RULES_COUNT host rules"
 fi
@@ -41,10 +42,12 @@ fi
 # Add container-specific rules
 if [ -d /opt/container-rules ]; then
   cp /opt/container-rules/*.md "$HOME/.claude/rules/" 2>/dev/null || true
+  # shellcheck disable=SC2012
   CONTAINER_RULES_COUNT=$(ls -1 /opt/container-rules/*.md 2>/dev/null | wc -l)
   [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: added $CONTAINER_RULES_COUNT container rules"
 fi
 
+# shellcheck disable=SC2012
 TOTAL_RULES=$(ls -1 "$HOME/.claude/rules/"*.md 2>/dev/null | wc -l)
 [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: $TOTAL_RULES total rules loaded"
 
@@ -241,7 +244,7 @@ if [ "$VIBRATOR_MCP_HUB" = "1" ] && command -v mcp-hub >/dev/null 2>&1; then
     mkdir -p "$HOME/.mcp-hub"
     mcp-hub > "$HOME/.mcp-hub/mcp-hub.log" 2>&1 &
 
-    for i in $(seq 1 10); do
+    for _ in $(seq 1 10); do
       if curl -sf --connect-timeout 0.5 --max-time 0.5 "http://localhost:8087/sse" -o /dev/null 2>/dev/null; then
         if ! jq -e '.mcpServers["mcp-hub"]' "$HOME/.claude.json" >/dev/null 2>&1; then
           jq '.mcpServers["mcp-hub"] = {type: "sse", url: "http://localhost:8087/sse"}' \
@@ -314,7 +317,7 @@ fi
 
 # --- Change to workspace ---
 if [ -n "$WORKSPACE_PATH" ] && [ -d "$WORKSPACE_PATH" ]; then
-  cd "$WORKSPACE_PATH"
+  cd "$WORKSPACE_PATH" || exit 1
 fi
 
 exec "$@"

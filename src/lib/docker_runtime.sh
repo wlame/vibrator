@@ -103,10 +103,10 @@ docker_runtime::_detect_by_context() {
         *"desktop-linux"*|*".docker"*)
             echo "docker-desktop:$HOME/.docker/run/docker.sock"
             ;;
-        *"orbstack"*|*".orbstack"*)
+        *"orbstack"*)
             echo "orbstack:$HOME/.orbstack/run/docker.sock"
             ;;
-        *"colima"*|*".colima"*)
+        *"colima"*)
             # Try to detect profile from socket path
             local profile="default"
             if [[ "$socket_path" =~ \.colima/([^/]+)/ ]]; then

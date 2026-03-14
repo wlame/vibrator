@@ -251,6 +251,12 @@ RUN uvx superclaude install
 
 @@PLUGIN_SECTION@@
 
+# Install cc-thingz plugins: brainstorm, review, planning, release-tools, thinking-tools, skill-eval, workflow
+RUN echo '@@CC_THINGZ_B64@@' | base64 -d > /tmp/install-cc-thingz.sh && \
+    chmod +x /tmp/install-cc-thingz.sh && \
+    /tmp/install-cc-thingz.sh && \
+    rm /tmp/install-cc-thingz.sh
+
 # ============================================================================
 # Stage 4: Final runtime
 # ============================================================================

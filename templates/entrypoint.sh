@@ -48,6 +48,17 @@ fi
 TOTAL_RULES=$(ls -1 "$HOME/.claude/rules/"*.md 2>/dev/null | wc -l)
 [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: $TOTAL_RULES total rules loaded"
 
+# Generate user identity rule so Claude uses the real username in code
+if [ -n "$CONTAINER_USER" ] && [ "$CONTAINER_USER" != "claude-user" ]; then
+  cat > "$HOME/.claude/rules/user-identity.md" <<USERRULE
+# User Identity
+
+The user's system username is: $CONTAINER_USER
+Use "$CONTAINER_USER" whenever a username, login, author name, or owner is needed in generated code — for example in package.json "author", Go module paths, GitHub references, shebang comments, copyright headers, git config examples, or placeholder values. Never use generic placeholders like "user", "username", "your-name", or "your-username" when this real username is available.
+USERRULE
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Claude rules: generated user-identity rule for $CONTAINER_USER"
+fi
+
 # --- Initialize settings.json from host (allows runtime modification) ---
 if [ -f "$HOME/.claude/settings.host.json" ]; then
   cp "$HOME/.claude/settings.host.json" "$HOME/.claude/settings.json"

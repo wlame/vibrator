@@ -22,6 +22,11 @@ main() {
         CFG_USERNAME="claude-user"
     fi
 
+    # Simple mode: use separate image tag to avoid conflicts with full builds
+    if [[ "$SIMPLE_BUILD" == true ]]; then
+        IMAGE_NAME="${IMAGE_NAME//:latest/:simple}"
+    fi
+
     # Derive container name if not explicitly set via --name
     if [[ -z "${CONTAINER_NAME:-}" ]]; then
         config::derive_container_name

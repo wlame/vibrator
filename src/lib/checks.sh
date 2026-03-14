@@ -65,6 +65,7 @@ checks::workspace_exists() {
 }
 
 checks::conflicting_flags() {
-    # Reserved for future flag conflict checks
-    :
+    if [[ "$SIMPLE_BUILD" == true && "$AIDER" == true ]]; then
+        log::die "--simple and --aider are incompatible (aider requires uv, excluded in simple mode)"
+    fi
 }

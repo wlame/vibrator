@@ -70,6 +70,7 @@ docker_cmd::build() {
     [[ "$AIDER" == true ]]           && cmd+=(-e "VIBRATOR_AIDER=1")
     [[ "$GENERIC" == true ]]         && cmd+=(-e "VIBRATOR_GENERIC=1")
     [[ "$AGENT_TEAMS" == true ]]     && cmd+=(-e "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1")
+    [[ "$SIMPLE_BUILD" == true ]]    && cmd+=(-e "VIBRATOR_SIMPLE=1")
 
     # Forwarded environment variables
     docker_cmd::_add_forwarded_env

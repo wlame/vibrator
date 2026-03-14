@@ -52,6 +52,33 @@ RUN uv tool install aider-chat}"
         content="${content//@@PLUGIN_SECTION@@/}"
     fi
 
+    # Conditional sections: @@IF_FULL@@/@@ENDIF_FULL@@ and @@IF_SIMPLE@@/@@ENDIF_SIMPLE@@
+    local processed=""
+    local skip_full=false
+    local skip_simple=false
+    while IFS= read -r line; do
+        if [[ "$line" == *"@@IF_FULL@@"* ]]; then
+            [[ "$SIMPLE_BUILD" == true ]] && skip_full=true
+            continue
+        fi
+        if [[ "$line" == *"@@ENDIF_FULL@@"* ]]; then
+            skip_full=false
+            continue
+        fi
+        if [[ "$line" == *"@@IF_SIMPLE@@"* ]]; then
+            [[ "$SIMPLE_BUILD" != true ]] && skip_simple=true
+            continue
+        fi
+        if [[ "$line" == *"@@ENDIF_SIMPLE@@"* ]]; then
+            skip_simple=false
+            continue
+        fi
+        if [[ "$skip_full" == false && "$skip_simple" == false ]]; then
+            processed+="$line"$'\n'
+        fi
+    done <<< "$content"
+    content="$processed"
+
     echo "$content"
 }
 

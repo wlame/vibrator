@@ -26,6 +26,7 @@ config::init() {
     AIDER=false
     GENERIC=false
     AGENT_TEAMS=false
+    SIMPLE_BUILD=false
 
     # Build/action flags
     FLAG_BUILD_ONLY=false

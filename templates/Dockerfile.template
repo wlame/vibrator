@@ -11,21 +11,27 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     git \
-    python3 \
-    python3-pip \
-    unzip \
     sudo \
-    fzf \
     zsh \
-    gh \
     vim \
     htop \
-    sqlite3 \
     tree \
-    fd-find \
     gpg \
  && rm -rf /var/lib/apt/lists/*
 
+@@IF_FULL@@
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    unzip \
+    fzf \
+    gh \
+    sqlite3 \
+    fd-find \
+ && rm -rf /var/lib/apt/lists/*
+@@ENDIF_FULL@@
+
+@@IF_FULL@@
 # Install Go from Ubuntu repos (needed by some MCP servers)
 RUN apt-get update && \
     apt-get install -y golang-go && \
@@ -116,6 +122,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # Reuses existing Chromium via AGENT_BROWSER_EXECUTABLE_PATH (no duplicate download)
 RUN bun install -g agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
+@@ENDIF_FULL@@
 
 # Install ralphex (autonomous coding loop for Claude Code)
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -127,8 +134,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/ralphex && \
     rm ralphex.tar.gz
 
+@@IF_FULL@@
 # Sequential Thinking MCP server (binary registered in Stage 3 as user)
 RUN bun install -g @modelcontextprotocol/server-sequential-thinking
+@@ENDIF_FULL@@
 
 # --- Developer CLI tools (latest binary releases) ---
 
@@ -137,6 +146,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/jqlang/jq/releases/latest/download/jq-linux-${ARCH}" \
     -o /usr/local/bin/jq && chmod +x /usr/local/bin/jq
 
+@@IF_FULL@@
 # ripgrep — Fast regex search (latest release)
 # Note: aarch64 has no musl build, use gnu instead
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -188,6 +198,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # uv — Python package/tool manager (system-wide so all stages can use it)
 RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh && \
     uv --version
+@@ENDIF_FULL@@
 
 # Create user with host UID/GID for proper file permissions on mounted volumes.
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID 1000 — remove any
@@ -219,10 +230,12 @@ RUN sh -c "$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://raw
 
 ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 
+@@IF_FULL@@
 # --- Python developer tools (isolated venvs via uv, binaries in ~/.local/bin/) ---
 RUN uv tool install ruff && \
     uv tool install httpie && \
     uv tool install csvkit
+@@ENDIF_FULL@@
 
 @@AIDER_SECTION@@
 
@@ -244,6 +257,7 @@ RUN claude mcp add serena \
     --scope user \
     -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd
 
+@@IF_FULL@@
 RUN claude mcp add playwright \
     --scope user \
     --transport stdio \
@@ -268,6 +282,7 @@ RUN mkdir -p ~/.claude/skills/agent-browser && \
        ~/.claude/skills/agent-browser/SKILL.md
 
 RUN uvx superclaude install
+@@ENDIF_FULL@@
 
 @@PLUGIN_SECTION@@
 
@@ -279,8 +294,10 @@ ARG USERNAME=claude-user
 
 USER root
 
+@@IF_FULL@@
 # Install Langfuse SDK for observability hook
 RUN pip3 install --break-system-packages langfuse
+@@ENDIF_FULL@@
 
 # Create container-specific Claude rules directory
 RUN mkdir -p /opt/container-rules
@@ -291,13 +308,17 @@ RUN echo '@@CONTAINER_RULES_SAFETY_B64@@' | base64 -d > /opt/container-rules/saf
 
 RUN echo '@@ENTRYPOINT_B64@@' | base64 -d > /entrypoint.sh && chmod +x /entrypoint.sh
 RUN echo '@@CLAUDE_EXEC_B64@@' | base64 -d > /usr/local/bin/claude-exec && chmod +x /usr/local/bin/claude-exec
+@@IF_FULL@@
 RUN echo '@@LANGFUSE_HOOK_B64@@' | base64 -d > /opt/langfuse-hook.py && chmod +x /opt/langfuse-hook.py
+@@ENDIF_FULL@@
 
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
+@@IF_FULL@@
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
+@@ENDIF_FULL@@
 ENV COLORTERM=truecolor
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
@@ -305,7 +326,12 @@ ENV LC_ALL=C.UTF-8
 RUN echo '@@ZSHRC_B64@@' | base64 -d > ~/.zshrc
 
 # Seed zsh history so "up arrow" gives a useful first command
+@@IF_FULL@@
 RUN echo ': 1731000000:0;claude "/sc:load"' > ~/.zsh_history
+@@ENDIF_FULL@@
+@@IF_SIMPLE@@
+RUN echo ': 1731000000:0;claude' > ~/.zsh_history
+@@ENDIF_SIMPLE@@
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/bin/zsh"]

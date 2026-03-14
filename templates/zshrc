@@ -58,7 +58,11 @@ if [[ -o interactive ]]; then
   fi
 
   echo ""
-  echo -e "\033[1;32mTools:\033[0m Go $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'), Python $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A'), Vim, Git, GitHub CLI"
+  if [ "$VIBRATOR_SIMPLE" = "1" ]; then
+    echo -e "\033[1;32mTools:\033[0m Vim, Git, jq (simple mode — install more with apt)"
+  else
+    echo -e "\033[1;32mTools:\033[0m Go $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'), Python $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A'), Vim, Git, GitHub CLI"
+  fi
   if pgrep -x mcp-hub >/dev/null 2>&1; then
     echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena, MCP Hub"
     echo -e "\033[1;32mMCP Hub Web UI:\033[0m http://localhost:8080/ui/"

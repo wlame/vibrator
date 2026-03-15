@@ -122,6 +122,17 @@ mkdir -p "$HOME/.claude/hooks"
 mkdir -p "$HOME/.claude"
 [ ! -f "$HOME/.claude/settings.json" ] && echo '{}' > "$HOME/.claude/settings.json"
 
+# Re-enable baked-in plugins after settings copy (host settings.json doesn't have them)
+if [ -f "$HOME/.claude/plugins/installed_plugins.json" ]; then
+  BAKED_PLUGINS=$(jq -r '.plugins // {} | keys | map({(.): true}) | add // {}' \
+    "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null)
+  if [ -n "$BAKED_PLUGINS" ] && [ "$BAKED_PLUGINS" != "null" ] && [ "$BAKED_PLUGINS" != "{}" ]; then
+    jq --argjson p "$BAKED_PLUGINS" '.enabledPlugins = ((.enabledPlugins // {}) + $p)' \
+      "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
+      mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
+  fi
+fi
+
 # Helper: remove langfuse Stop hooks from settings.json
 # Filters out hook entries whose command contains "langfuse" (case-insensitive)
 langfuse_remove_hooks() {

@@ -44,6 +44,7 @@ RUN uv tool install aider-chat}"
                 new_content+="# Setup Claude plugins from host configuration"$'\n'
                 new_content+="RUN echo '${SETUP_PLUGINS_B64}' | base64 -d > /tmp/setup-plugins.sh && chmod +x /tmp/setup-plugins.sh && \\"$'\n'
                 new_content+="    /tmp/setup-plugins.sh '${DETECTED_PLUGINS}' && \\"$'\n'
+                new_content+="    find ~/.claude/plugins -name '*.sh' -exec chmod +x {} \\; 2>/dev/null || true && \\"$'\n'
                 new_content+="    rm /tmp/setup-plugins.sh"$'\n'
             else
                 new_content+="$line"$'\n'

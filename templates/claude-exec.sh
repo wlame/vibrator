@@ -36,6 +36,9 @@ else
   fi
 fi
 
+# Ensure plugin hook scripts are executable (host-installed plugins may lack +x)
+find "$HOME/.claude/plugins" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+
 # Change to workspace
 if [[ -n "$WORKSPACE_PATH" && -d "$WORKSPACE_PATH" ]]; then
   cd "$WORKSPACE_PATH" || exit 1

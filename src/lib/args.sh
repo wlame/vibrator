@@ -32,6 +32,7 @@ Options:
   --aider                  Install aider AI coding assistant (~80MB, opt-in)
   --teams                  Enable Claude Code agent teams mode (experimental)
   --simple, --no-tools     Build minimal image (Claude CLI + core tools only, ~50% smaller)
+  --mount HOST:CONTAINER   Mount additional directory (can be repeated, e.g. /data:/data:ro)
   --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
   --docker-socket PATH     Override Docker socket path (auto-detected by default)
   --colima-profile NAME    Colima profile name (default: default)
@@ -100,6 +101,7 @@ args::parse() {
             --teams)              AGENT_TEAMS=true; shift ;;
             --simple|--no-tools)  SIMPLE_BUILD=true; shift ;;
             --generic)            GENERIC=true; shift ;;
+            --mount)              EXTRA_VOLUMES+=("$2"); shift 2 ;;
             --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
             --docker-socket)      VIBRATOR_DOCKER_SOCKET="$2"; shift 2 ;;
             --colima-profile)     COLIMA_PROFILE="$2"; shift 2 ;;

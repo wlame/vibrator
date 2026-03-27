@@ -122,6 +122,9 @@ mkdir -p "$HOME/.claude/hooks"
 mkdir -p "$HOME/.claude"
 [ ! -f "$HOME/.claude/settings.json" ] && echo '{}' > "$HOME/.claude/settings.json"
 
+# Ensure plugin hook scripts are executable (host-installed plugins may lack +x)
+find "$HOME/.claude/plugins" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+
 # Re-enable baked-in plugins after settings copy (host settings.json doesn't have them)
 if [ -f "$HOME/.claude/plugins/installed_plugins.json" ]; then
   BAKED_PLUGINS=$(jq -r '.plugins // {} | keys | map({(.): true}) | add // {}' \

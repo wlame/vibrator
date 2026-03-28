@@ -17,6 +17,7 @@ CACHE_DIR="$CLAUDE_DIR/plugins/cache/$MKT_NAME"
 
 mkdir -p "$(dirname "$MKT_DIR")"
 git clone --depth 1 "$MKT_REPO" "$MKT_DIR"
+find "$MKT_DIR" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 
 GIT_SHA=$(cd "$MKT_DIR" && git rev-parse HEAD)
 GIT_SHORT=$(echo "$GIT_SHA" | cut -c1-12)
@@ -46,6 +47,7 @@ for ENTRY in $PLUGIN_LIST; do
   DEST="$CACHE_DIR/$NAME/$GIT_SHORT"
   mkdir -p "$DEST"
   cp -r "$SRC/." "$DEST/"
+  find "$DEST" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 
   if [ "$FIRST" = true ]; then
     FIRST=false

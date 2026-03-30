@@ -283,6 +283,8 @@ RUN mkdir -p /opt/container-rules
 RUN echo '@@CONTAINER_RULES_CONTEXT_B64@@' | base64 -d > /opt/container-rules/docker-container-context.md
 RUN echo '@@CONTAINER_RULES_SAFETY_B64@@' | base64 -d > /opt/container-rules/safety-restrictions.md
 
+RUN chown $USERNAME:$USERNAME /tmp
+
 RUN echo '@@ENTRYPOINT_B64@@' | base64 -d > /entrypoint.sh && chmod +x /entrypoint.sh
 RUN echo '@@CLAUDE_EXEC_B64@@' | base64 -d > /usr/local/bin/claude-exec && chmod +x /usr/local/bin/claude-exec
 @@IF_FULL@@

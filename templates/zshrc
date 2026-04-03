@@ -70,15 +70,6 @@ if [[ -o interactive ]]; then
     echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena"
   fi
 
-  # Langfuse observability status
-  if [ "$LANGFUSE_MODE" = "host" ]; then
-    echo -e "\033[1;32mLangfuse:\033[0m Enabled (host hook)"
-  elif [ "$LANGFUSE_MODE" = "auto" ]; then
-    echo -e "\033[1;32mLangfuse:\033[0m Enabled (auto-detected)"
-  else
-    echo -e "\033[1;90mLangfuse:\033[0m Not configured"
-  fi
-
   echo ""
   echo -e "\033[1;32mWorkspace:\033[0m $WORKSPACE_PATH"
   echo ""

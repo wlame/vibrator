@@ -140,7 +140,6 @@ vibrator version $VIBRATOR_VERSION
 Docker runner for Claude Code with:
   • Auto-detection of Docker runtimes
   • Pre-configured MCP servers (Serena, Context7, Playwright)
-  • Optional Langfuse observability integration
   • Graduated privilege system for security
 
 Repository: https://github.com/wlame/vibrator

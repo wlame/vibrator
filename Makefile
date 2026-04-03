@@ -36,7 +36,7 @@ MODULES := \
 	$(SRC_DIR)/main.sh
 
 # Template scripts to base64-encode and embed
-EMBED_SCRIPTS := entrypoint.sh claude-exec.sh zshrc setup-plugins.sh langfuse-hook.py install-cc-thingz.sh
+EMBED_SCRIPTS := entrypoint.sh claude-exec.sh zshrc setup-plugins.sh install-cc-thingz.sh
 
 # Container rules files
 CONTAINER_RULES := $(TPL_DIR)/container-rules/docker-container-context.md $(TPL_DIR)/container-rules/safety-restrictions.md
@@ -95,7 +95,6 @@ $(OUTPUT): $(MODULES) $(TPL_FILES) Makefile
 	@$(call sed_inplace,"s|%%CLAUDE_EXEC_B64%%|$$(cat $(INTER_DIR)/claude-exec.sh.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%ZSHRC_B64%%|$$(cat $(INTER_DIR)/zshrc.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%SETUP_PLUGINS_B64%%|$$(cat $(INTER_DIR)/setup-plugins.sh.b64)|g",$(OUTPUT))
-	@$(call sed_inplace,"s|%%LANGFUSE_HOOK_B64%%|$$(cat $(INTER_DIR)/langfuse-hook.py.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%CC_THINGZ_B64%%|$$(cat $(INTER_DIR)/install-cc-thingz.sh.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%DOCKERFILE_TPL_B64%%|$$(cat $(INTER_DIR)/Dockerfile.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%CONTAINER_RULES_CONTEXT_B64%%|$$(cat $(INTER_DIR)/container-rules-context.b64)|g",$(OUTPUT))

@@ -271,11 +271,6 @@ ARG USERNAME=claude-user
 
 USER root
 
-@@IF_FULL@@
-# Install Langfuse SDK for observability hook
-RUN pip3 install --break-system-packages langfuse
-@@ENDIF_FULL@@
-
 # Create container-specific Claude rules directory
 RUN mkdir -p /opt/container-rules
 
@@ -287,10 +282,6 @@ RUN chown $USERNAME:$USERNAME /tmp
 
 RUN echo '@@ENTRYPOINT_B64@@' | base64 -d > /entrypoint.sh && chmod +x /entrypoint.sh
 RUN echo '@@CLAUDE_EXEC_B64@@' | base64 -d > /usr/local/bin/claude-exec && chmod +x /usr/local/bin/claude-exec
-@@IF_FULL@@
-RUN echo '@@LANGFUSE_HOOK_B64@@' | base64 -d > /opt/langfuse-hook.py && chmod +x /opt/langfuse-hook.py
-@@ENDIF_FULL@@
-
 USER $USERNAME
 WORKDIR /home/$USERNAME
 

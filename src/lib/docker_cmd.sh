@@ -141,10 +141,6 @@ docker_cmd::_add_volumes() {
                 cmd+=(-v "$CLAUDE_CONFIG:/home/$CFG_USERNAME/.claude")
             fi
         fi
-
-        # Host hooks directory (for Langfuse hook detection)
-        [[ -d "$CLAUDE_CONFIG/hooks" ]] && \
-            cmd+=(-v "$CLAUDE_CONFIG/hooks:/home/$CFG_USERNAME/.claude/hooks-host:ro")
     else
         log::verbose "Generic mode: skipping host Claude config mounts"
     fi

@@ -38,61 +38,13 @@ RUN apt-get update && apt-get install -y software-properties-common \
 @@ENDIF_FULL@@
 
 @@IF_FULL@@
-# Install Go from Ubuntu repos (needed by some MCP servers)
+# Install Go and Node.js from Ubuntu repos (Go for MCP servers, Node.js for Sequential Thinking MCP)
 RUN apt-get update && \
-    apt-get install -y golang-go && \
+    apt-get install -y golang-go nodejs npm && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Bun (needed by Playwright MCP server)
-ENV BUN_INSTALL=/usr/local
-RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://bun.sh/install | bash
-
-# Install Playwright MCP server (npm package only — fast, cached separately)
-RUN bun install -g @playwright/mcp
-
-# Install Chromium system dependencies (apt-get only, no browser download — fast & reliable)
-# NOTE: playwright-mcp defaults to the "chrome" channel which expects Google Chrome
-# at /opt/google/chrome/chrome. We install Chromium (smaller) and create a wrapper
-# script at that path. The wrapper injects --no-sandbox flags so Chrome works in
-# containers without unprivileged user namespaces (disabled by AppArmor on Ubuntu 23.10+).
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN bunx playwright install-deps chromium
-
-# Download Chromium browser via the official Playwright installer.
-# Handles all architectures and keeps version pinning in sync with playwright-core automatically.
-RUN bunx playwright install chromium
-
-# Set up Chrome wrapper — symlink real binary and inject container-safe flags.
-# No chmod -R needed: Playwright sets correct permissions during extraction.
-RUN mkdir -p /opt/google/chrome && \
-    CHROMIUM_BIN=$(find /ms-playwright -name chrome -path '*/chrome-linux*/chrome' | head -1) && \
-    test -n "$CHROMIUM_BIN" || { echo "ERROR: Chrome binary not found in /ms-playwright"; find /ms-playwright -type f -name chrome; exit 1; } && \
-    ln -sf "$CHROMIUM_BIN" /opt/google/chrome/chrome.real && \
-    printf '#!/bin/sh\nexec /opt/google/chrome/chrome.real --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage "$@"\n' \
-      > /opt/google/chrome/chrome && \
-    chmod +x /opt/google/chrome/chrome && \
-    ln -sf /usr/local/install/global/node_modules/playwright-core/cli.js /usr/local/bin/playwright && \
-    chmod +x /usr/local/bin/playwright
-
-# Make Playwright library available for script-based browser automation.
-# NODE_PATH lets require('playwright-core') work from any script without hardcoding paths.
-ENV NODE_PATH=/usr/local/install/global/node_modules
-
-# Install mcp-hub (kontext-dev/agent-browser) — MCP server aggregation gateway
-# Opt-in via --mcp flag; provides Web UI at localhost:8080, SSE at localhost:8087
-RUN ARCH=$(dpkg --print-architecture) && \
-    if [ "$ARCH" = "amd64" ]; then AGENT_ARCH="amd64"; else AGENT_ARCH="arm64"; fi && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/kontext-dev/agent-browser/releases/download/v1.1.0/agent-browser-v1.1.0-linux-${AGENT_ARCH}.tar.gz" \
-    -o agent-browser.tar.gz && \
-    tar -xzf agent-browser.tar.gz && \
-    mv agent-browser /usr/local/bin/mcp-hub && \
-    chmod +x /usr/local/bin/mcp-hub && \
-    rm agent-browser.tar.gz
-
-# Install Vercel agent-browser — token-efficient browser automation CLI for AI agents
-# Reuses existing Chromium via AGENT_BROWSER_EXECUTABLE_PATH (no duplicate download)
-RUN bun install -g agent-browser
-ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
+# Sequential Thinking MCP server (registered in Stage 3 as user)
+RUN npm install -g @modelcontextprotocol/server-sequential-thinking
 @@ENDIF_FULL@@
 
 # Install ralphex (autonomous coding loop for Claude Code)
@@ -104,11 +56,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
     mv ralphex /usr/local/bin/ && \
     chmod +x /usr/local/bin/ralphex && \
     rm ralphex.tar.gz
-
-@@IF_FULL@@
-# Sequential Thinking MCP server (binary registered in Stage 3 as user)
-RUN bun install -g @modelcontextprotocol/server-sequential-thinking
-@@ENDIF_FULL@@
 
 # --- Developer CLI tools (latest binary releases) ---
 
@@ -229,12 +176,6 @@ RUN claude mcp add serena \
     -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd
 
 @@IF_FULL@@
-RUN claude mcp add playwright \
-    --scope user \
-    --transport stdio \
-    -- playwright-mcp --headless --executable-path /opt/google/chrome/chrome
-
-# Sequential Thinking MCP — structured multi-step reasoning (installed in Stage 1)
 RUN claude mcp add sequential-thinking \
     --scope user \
     --transport stdio \
@@ -246,11 +187,6 @@ RUN uv tool install mcp-server-sqlite && \
     --scope user \
     --transport stdio \
     -- mcp-server-sqlite --db-path /tmp/scratch.db
-
-# Install agent-browser skill so Claude auto-discovers it
-RUN mkdir -p ~/.claude/skills/agent-browser && \
-    cp /usr/local/install/global/node_modules/agent-browser/skills/agent-browser/SKILL.md \
-       ~/.claude/skills/agent-browser/SKILL.md
 
 RUN uvx superclaude install
 @@ENDIF_FULL@@
@@ -285,10 +221,6 @@ RUN echo '@@CLAUDE_EXEC_B64@@' | base64 -d > /usr/local/bin/claude-exec && chmod
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
-@@IF_FULL@@
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/google/chrome/chrome
-@@ENDIF_FULL@@
 ENV COLORTERM=truecolor
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8

@@ -44,12 +44,8 @@ No manual configuration needed - just run `vibrate` and it works!
 
 - **Serena**: Semantic code analysis (LSP-based). Automatically connects to host Serena server if running
 - **Context7**: Library documentation lookup
-- **Playwright**: Browser automation with Chromium (stdio mode, in-container)
-- **[MCP Hub](https://github.com/kontext-dev/agent-browser)**: MCP server aggregation gateway with Web UI (SSE mode, opt-in with `--mcp`). When enabled, available at `http://localhost:8080/ui/` and exposes an SSE endpoint at `http://localhost:8087/sse`
-
 ### Pre-installed Tools
 
-- **[agent-browser](https://github.com/vercel-labs/agent-browser)**: Token-efficient browser automation CLI by Vercel. Uses 93% less context than Playwright MCP via compact `@ref` element notation. Installed as a Claude Code skill — Claude auto-discovers and invokes it via bash when browser interaction is needed
 - **[ralphex](https://ralphex.com/)**: Autonomous coding loop for Claude Code - executes implementation plans task-by-task in fresh sessions with multi-agent code review
 
 ### 🎯 Developer Experience
@@ -199,7 +195,6 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ### Security Options
 
 ```bash
---mcp                        Start MCP Hub gateway (Web UI at localhost:8080)
 --dind, --docker             Enable Docker-in-Docker mode (elevated privileges inside container)
 --docker-socket PATH         Override Docker socket path (auto-detected)
 --colima-profile NAME        Colima profile name (default: default)

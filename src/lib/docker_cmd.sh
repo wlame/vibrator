@@ -66,7 +66,6 @@ docker_cmd::build() {
     [[ "$DANGEROUS" == true ]]       && cmd+=(-e "VIBRATOR_DANGEROUS=1")
     [[ "$VERBOSE" == true ]]         && cmd+=(-e "VIBRATOR_VERBOSE=1")
     [[ "$DOCKER_IN_DOCKER" == true ]] && cmd+=(-e "VIBRATOR_DOCKER_IN_DOCKER=1")
-    [[ "$MCP_HUB" == true ]]         && cmd+=(-e "VIBRATOR_MCP_HUB=1")
     [[ "$AIDER" == true ]]           && cmd+=(-e "VIBRATOR_AIDER=1")
     [[ "$GENERIC" == true ]]         && cmd+=(-e "VIBRATOR_GENERIC=1")
     [[ "$AGENT_TEAMS" == true ]]     && cmd+=(-e "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1")

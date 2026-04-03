@@ -22,7 +22,6 @@ config::init() {
     VERBOSE=false
     INSTALL_PLUGINS=true
     DOCKER_IN_DOCKER=false
-    MCP_HUB=false
     AIDER=false
     GENERIC=false
     AGENT_TEAMS=false

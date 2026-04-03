@@ -1,6 +1,6 @@
 #!/bin/sh
 # Container entrypoint: runs once at container creation.
-# Merges host Claude config, sets up GPG, detects Serena, optionally starts mcp-hub.
+# Merges host Claude config, sets up GPG, detects Serena.
 
 # --- Merge Claude config from host ---
 if [ -f "$HOME/.claude.host.json" ]; then
@@ -126,65 +126,6 @@ if [ -f "$HOME/.claude/plugins/installed_plugins.json" ]; then
       "$HOME/.claude/settings.json" > "$HOME/.claude/settings.json.tmp" && \
       mv -f "$HOME/.claude/settings.json.tmp" "$HOME/.claude/settings.json"
   fi
-fi
-
-# --- Start MCP hub in background (only with --mcp flag) ---
-if [ "$VIBRATOR_MCP_HUB" = "1" ] && command -v mcp-hub >/dev/null 2>&1; then
-  if ! pgrep -x mcp-hub >/dev/null 2>&1; then
-    mkdir -p "$HOME/.mcp-hub"
-    mcp-hub > "$HOME/.mcp-hub/mcp-hub.log" 2>&1 &
-
-    for _ in $(seq 1 10); do
-      if curl -sf --connect-timeout 0.5 --max-time 0.5 "http://localhost:8087/sse" -o /dev/null 2>/dev/null; then
-        if ! jq -e '.mcpServers["mcp-hub"]' "$HOME/.claude.json" >/dev/null 2>&1; then
-          jq '.mcpServers["mcp-hub"] = {type: "sse", url: "http://localhost:8087/sse"}' \
-            "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
-            mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
-        fi
-        [ "$VIBRATOR_VERBOSE" = "1" ] && echo "MCP Hub: started (Web UI: http://localhost:8080/ui/)"
-        break
-      fi
-      sleep 0.1
-    done
-  else
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "MCP Hub: already running"
-  fi
-elif [ "$VIBRATOR_VERBOSE" = "1" ]; then
-  echo "MCP Hub: skipped (use --mcp to enable)"
-fi
-
-# --- Configure Playwright MCP server (stdio mode with playwright-mcp binary) ---
-# Playwright MCP is installed globally during image build but needs runtime configuration
-# since ~/.claude.json may be overwritten by host settings merge.
-# Uses the globally installed playwright-mcp binary directly (node -> bun symlink
-# resolves the #!/usr/bin/env node shebang). This avoids bunx tempdir permission issues.
-if command -v playwright-mcp >/dev/null 2>&1; then
-  PLAYWRIGHT_CMD=$(jq -r '.mcpServers.playwright.command // ""' "$HOME/.claude.json" 2>/dev/null)
-  if [ "$PLAYWRIGHT_CMD" != "playwright-mcp" ]; then
-    # Resolve Chrome/Chromium executable path for --executable-path flag.
-    # The wrapper at /opt/google/chrome/chrome (created during build) exec's the
-    # real Chromium binary with --no-sandbox flags. This ensures playwright-mcp
-    # works in containers without unprivileged user namespaces.
-    CHROME_PATH="/opt/google/chrome/chrome"
-    if [ ! -x "$CHROME_PATH" ]; then
-      CHROME_PATH=$(find /ms-playwright -name chrome -path '*/chrome-linux*/chrome' 2>/dev/null | head -1)
-    fi
-    PLAYWRIGHT_ARGS='["--headless"]'
-    if [ -n "$CHROME_PATH" ] && [ -x "$CHROME_PATH" ]; then
-      PLAYWRIGHT_ARGS="[\"--headless\", \"--executable-path\", \"$CHROME_PATH\"]"
-    fi
-    jq --argjson args "$PLAYWRIGHT_ARGS" '.mcpServers.playwright = {
-      type: "stdio",
-      command: "playwright-mcp",
-      args: $args
-    }' "$HOME/.claude.json" > "$HOME/.claude.json.tmp" && \
-      mv -f "$HOME/.claude.json.tmp" "$HOME/.claude.json"
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Playwright MCP: configured (stdio mode with playwright-mcp)"
-  else
-    [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Playwright MCP: already configured"
-  fi
-else
-  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Playwright MCP: playwright-mcp not available, skipping"
 fi
 
 # --- Create workspace parent directories if needed ---

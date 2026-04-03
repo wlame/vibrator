@@ -28,7 +28,6 @@ Options:
   --no-plugins             Skip Claude plugin installation
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
-  --mcp                    Start MCP Hub gateway (Web UI at localhost:8080)
   --aider                  Install aider AI coding assistant (~80MB, opt-in)
   --teams                  Enable Claude Code agent teams mode (experimental)
   --simple, --no-tools     Build minimal image (Claude CLI + core tools only, ~50% smaller)
@@ -96,7 +95,6 @@ args::parse() {
             --rm)                 REMOVE_AFTER=true; shift ;;
             --non-interactive)    INTERACTIVE=false; shift ;;
             --privileged)         PRIVILEGED=true; shift ;;
-            --mcp)                MCP_HUB=true; shift ;;
             --aider)              AIDER=true; shift ;;
             --teams)              AGENT_TEAMS=true; shift ;;
             --simple|--no-tools)  SIMPLE_BUILD=true; shift ;;
@@ -139,7 +137,7 @@ vibrator version $VIBRATOR_VERSION
 
 Docker runner for Claude Code with:
   • Auto-detection of Docker runtimes
-  • Pre-configured MCP servers (Serena, Context7, Playwright)
+  • Pre-configured MCP servers (Serena, Context7)
   • Graduated privilege system for security
 
 Repository: https://github.com/wlame/vibrator

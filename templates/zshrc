@@ -64,6 +64,9 @@ if [[ -o interactive ]]; then
     echo -e "\033[1;32mTools:\033[0m Go $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'), Python $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A'), Vim, Git, GitHub CLI"
   fi
   echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena"
+  if [ "$CLAUDE_CODE_UNDERCOVER" = "1" ]; then
+    echo -e "\033[1;32mUndercover mode:\033[0m ON"
+  fi
 
   echo ""
   echo -e "\033[1;32mWorkspace:\033[0m $WORKSPACE_PATH"

@@ -129,6 +129,9 @@ docker_cmd::_add_volumes() {
             # Mount host rules to separate location for merging with container rules
             [[ -d "$CLAUDE_CONFIG/rules" ]] && \
                 cmd+=(-v "$CLAUDE_CONFIG/rules:/home/$CFG_USERNAME/.claude/rules-host:ro")
+            # Mount hooks directory so hook scripts referenced in settings.json work in container
+            [[ -d "$CLAUDE_CONFIG/hooks" ]] && \
+                cmd+=(-v "$CLAUDE_CONFIG/hooks:/home/$CFG_USERNAME/.claude/hooks:ro")
         else
             log::verbose "Using full config mount (Linux mode)"
             # In full mount mode, mount rules separately for merging

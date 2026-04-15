@@ -63,12 +63,22 @@ USERRULE
 fi
 
 # --- Initialize settings.json from host (allows runtime modification) ---
+# After copying, rewrite macOS-style absolute hook paths (/Users/<user>/.claude/)
+# to the container home path. This prevents "no such file" errors when hooks
+# were configured on macOS but the hooks directory only exists there.
+_copy_and_fix_settings() {
+  local src="$1"
+  cp "$src" "$HOME/.claude/settings.json"
+  # Replace /Users/<any-username>/.claude/ with the container $HOME/.claude/
+  sed -i "s|/Users/[^/]*/.claude/|$HOME/.claude/|g" "$HOME/.claude/settings.json" 2>/dev/null || true
+}
+
 if [ -f "$HOME/.claude/settings.host.json" ]; then
-  cp "$HOME/.claude/settings.host.json" "$HOME/.claude/settings.json"
-  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Settings: copied from host settings.json"
+  _copy_and_fix_settings "$HOME/.claude/settings.host.json"
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Settings: copied from host settings.json (hook paths rewritten for container)"
 elif [ -f "$HOME/.claude-full/settings.json" ]; then
-  cp "$HOME/.claude-full/settings.json" "$HOME/.claude/settings.json"
-  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Settings: copied from full-mount settings.json"
+  _copy_and_fix_settings "$HOME/.claude-full/settings.json"
+  [ "$VIBRATOR_VERBOSE" = "1" ] && echo "Settings: copied from full-mount settings.json (hook paths rewritten for container)"
 fi
 
 # --- Link GPG agent socket if forwarded ---

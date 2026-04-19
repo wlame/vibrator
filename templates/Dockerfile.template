@@ -38,10 +38,21 @@ RUN apt-get update && apt-get install -y software-properties-common \
 @@ENDIF_FULL@@
 
 @@IF_FULL@@
-# Install Go and Node.js from Ubuntu repos (Go for MCP servers, Node.js for Sequential Thinking MCP)
+# Install Node.js from Ubuntu repos (for Sequential Thinking MCP)
 RUN apt-get update && \
-    apt-get install -y golang-go nodejs npm && \
+    apt-get install -y nodejs npm && \
     rm -rf /var/lib/apt/lists/*
+
+# Install Go from official release (Ubuntu 24.04 apt only ships 1.22)
+RUN ARCH=$(dpkg --print-architecture) && \
+    GO_VERSION="1.26.2" && \
+    if [ "$ARCH" = "amd64" ]; then GO_ARCH="amd64"; else GO_ARCH="arm64"; fi && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" \
+      -o go.tar.gz && \
+    tar -C /usr/local -xzf go.tar.gz && \
+    rm go.tar.gz
+ENV PATH="/usr/local/go/bin:$PATH"
 
 # Sequential Thinking MCP server (registered in Stage 3 as user)
 RUN npm install -g @modelcontextprotocol/server-sequential-thinking

@@ -83,6 +83,22 @@ if [[ -o interactive ]]; then
     unset _codex_version _codex_auth
   fi
 
+  # Audit toolkit status — shows which production-readiness audit tools
+  # are available. Drives the prompt at /opt/audit/production-audit-prompt.md
+  # (see also .claude/analysis/how-to-run-audit.md in any vibrator-enabled repo).
+  _audit_present=""
+  for _tool in trivy syft grype semgrep gitleaks trufflehog osv-scanner scc lizard bandit checkov dockle shellcheck hadolint; do
+    command -v "$_tool" >/dev/null 2>&1 && _audit_present="${_audit_present}${_tool} "
+  done
+  if [ -n "$_audit_present" ]; then
+    _audit_count=$(echo "$_audit_present" | wc -w)
+    echo -e "\033[1;32mAudit toolkit:\033[0m ${_audit_count} tools ready \033[1;90m(trivy, syft, grype, semgrep, gitleaks, ...)\033[0m"
+    if [ -f /opt/audit/production-audit-prompt.md ]; then
+      echo -e "  \033[1;90mStart audit:\033[0m \033[1mcat /opt/audit/production-audit-prompt.md\033[0m \033[1;90m(paste into Claude Code)\033[0m"
+    fi
+  fi
+  unset _audit_present _audit_count _tool
+
   echo ""
   echo -e "\033[1;32mWorkspace:\033[0m $WORKSPACE_PATH"
   echo ""

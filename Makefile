@@ -41,8 +41,11 @@ EMBED_SCRIPTS := entrypoint.sh claude-exec.sh zshrc setup-plugins.sh install-cc-
 # Container rules files
 CONTAINER_RULES := $(TPL_DIR)/container-rules/docker-container-context.md $(TPL_DIR)/container-rules/safety-restrictions.md
 
+# Audit prompt (baked into image at /opt/audit/production-audit-prompt.md)
+AUDIT_PROMPT := $(TPL_DIR)/audit/production-audit-prompt.md
+
 # All template files (for dependency tracking)
-TPL_FILES := $(TPL_DIR)/Dockerfile.template $(addprefix $(TPL_DIR)/,$(EMBED_SCRIPTS)) $(CONTAINER_RULES)
+TPL_FILES := $(TPL_DIR)/Dockerfile.template $(addprefix $(TPL_DIR)/,$(EMBED_SCRIPTS)) $(CONTAINER_RULES) $(AUDIT_PROMPT)
 
 .PHONY: build clean lint validate help
 
@@ -80,6 +83,13 @@ $(OUTPUT): $(MODULES) $(TPL_FILES) Makefile
 		echo "WARNING: container-rules/safety-restrictions.md not found" >&2; \
 		echo -n "" | $(B64_ENC) > "$(INTER_DIR)/container-rules-safety.b64"; \
 	fi
+	@# Step 2c: Base64-encode audit prompt
+	@if [ -f "$(AUDIT_PROMPT)" ]; then \
+		$(B64_ENC) < "$(AUDIT_PROMPT)" > "$(INTER_DIR)/audit-prompt.b64"; \
+	else \
+		echo "WARNING: $(AUDIT_PROMPT) not found" >&2; \
+		echo -n "" | $(B64_ENC) > "$(INTER_DIR)/audit-prompt.b64"; \
+	fi
 	@# Step 3: Concatenate source modules
 	@# Keep shebang from header.sh, strip shebangs from all others
 	@head -1 $(SRC_DIR)/header.sh > $(OUTPUT)
@@ -99,6 +109,7 @@ $(OUTPUT): $(MODULES) $(TPL_FILES) Makefile
 	@$(call sed_inplace,"s|%%DOCKERFILE_TPL_B64%%|$$(cat $(INTER_DIR)/Dockerfile.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%CONTAINER_RULES_CONTEXT_B64%%|$$(cat $(INTER_DIR)/container-rules-context.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%CONTAINER_RULES_SAFETY_B64%%|$$(cat $(INTER_DIR)/container-rules-safety.b64)|g",$(OUTPUT))
+	@$(call sed_inplace,"s|%%AUDIT_PROMPT_B64%%|$$(cat $(INTER_DIR)/audit-prompt.b64)|g",$(OUTPUT))
 	@# Step 6: Make executable and clean up
 	@chmod +x $(OUTPUT)
 	@rm -rf $(INTER_DIR)

@@ -66,9 +66,73 @@ RUN npm install -g @modelcontextprotocol/server-sequential-thinking
 RUN npm install -g @openai/codex
 @@ENDIF_FULL@@
 
+@@IF_FULL@@
+# ============================================================================
+# Audit toolkit — production-readiness audit tools.
+# Used by the audit prompt at templates/audit/production-audit-prompt.md
+# (copy it into a target repo before running). Tier-1 essentials: security
+# scanning, SBOM, SAST, complexity, secrets detection.
+# ============================================================================
+
+# Trivy — FS + container + IaC + secrets + SBOM in one binary.
+# Syft — SBOM generation (CycloneDX/SPDX).
+# Grype — CVE scan against an SBOM (layered detection with Trivy).
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+      | sh -s -- -b /usr/local/bin && \
+    curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+      | sh -s -- -b /usr/local/bin && \
+    curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+      | sh -s -- -b /usr/local/bin
+
+# shellcheck — shell linter
+RUN apt-get update && apt-get install -y --no-install-recommends shellcheck \
+ && rm -rf /var/lib/apt/lists/*
+
+# gitleaks — secret scanner (pinned; apt version is too old)
+RUN ARCH=$(dpkg --print-architecture) && \
+    GITLEAKS_VERSION="8.30.1" && \
+    if [ "$ARCH" = "amd64" ]; then GL_ARCH="x64"; else GL_ARCH="arm64"; fi && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GL_ARCH}.tar.gz" \
+      -o gitleaks.tar.gz && \
+    tar -xzf gitleaks.tar.gz gitleaks && \
+    mv gitleaks /usr/local/bin/ && chmod +x /usr/local/bin/gitleaks && \
+    rm gitleaks.tar.gz
+
+# trufflehog — secret scanner with auto-validation
+RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+      | sh -s -- -b /usr/local/bin
+
+# golangci-lint — bundled Go linter (replaces gosec+staticcheck+~40 others)
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+      | sh -s -- -b /usr/local/bin
+
+# Go-based audit tools installed via `go install` with GOBIN override so
+# binaries land in /usr/local/bin (visible to all users/stages).
+# - osv-scanner: multi-ecosystem lockfile CVE scan against OSV.dev
+# - scc: fast LOC + cyclomatic-complexity + COCOMO counter
+# - gosec: Go-specific security analyzer (complements golangci-lint)
+# - staticcheck: Go static analyzer (complements golangci-lint)
+RUN GOBIN=/usr/local/bin go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest && \
+    GOBIN=/usr/local/bin go install github.com/boyter/scc/v3@latest && \
+    GOBIN=/usr/local/bin go install github.com/securego/gosec/v2/cmd/gosec@latest && \
+    GOBIN=/usr/local/bin go install honnef.co/go/tools/cmd/staticcheck@latest
+
+# dockle — container image best-practices linter (complements hadolint)
+RUN ARCH=$(dpkg --print-architecture) && \
+    DOCKLE_VERSION="0.4.15" && \
+    if [ "$ARCH" = "amd64" ]; then DK_ARCH="64bit"; else DK_ARCH="ARM64"; fi && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      "https://github.com/goodwithtech/dockle/releases/download/v${DOCKLE_VERSION}/dockle_${DOCKLE_VERSION}_Linux-${DK_ARCH}.tar.gz" \
+      -o dockle.tar.gz && \
+    tar -xzf dockle.tar.gz dockle && \
+    mv dockle /usr/local/bin/ && chmod +x /usr/local/bin/dockle && \
+    rm dockle.tar.gz
+@@ENDIF_FULL@@
+
 # Install ralphex (autonomous coding loop for Claude Code)
 RUN ARCH=$(dpkg --print-architecture) && \
-    RALPHEX_VERSION="0.12.0" && \
+    RALPHEX_VERSION="1.0.1" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/umputun/ralphex/releases/download/v${RALPHEX_VERSION}/ralphex_${RALPHEX_VERSION}_linux_${ARCH}.tar.gz" \
     -o ralphex.tar.gz && \
     tar -xzf ralphex.tar.gz && \
@@ -108,7 +172,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # delta — Better git diff viewer with syntax highlighting
 # Note: aarch64 has no musl build, use gnu instead
 RUN ARCH=$(dpkg --print-architecture) && \
-    DELTA_VERSION="0.18.2" && \
+    DELTA_VERSION="0.19.2" && \
     if [ "$ARCH" = "amd64" ]; then DELTA_TRIPLE="x86_64-unknown-linux-musl"; else DELTA_TRIPLE="aarch64-unknown-linux-gnu"; fi && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-${DELTA_TRIPLE}.tar.gz" \
     -o delta.tar.gz && \
@@ -125,7 +189,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # lazygit — Terminal UI for git operations
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then LG_ARCH="x86_64"; else LG_ARCH="arm64"; fi && \
-    LAZYGIT_VERSION="0.44.1" && \
+    LAZYGIT_VERSION="0.61.1" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LG_ARCH}.tar.gz" \
     -o lazygit.tar.gz && \
     tar -xzf lazygit.tar.gz lazygit && \
@@ -172,6 +236,22 @@ ENV PATH="/home/$USERNAME/.local/bin:$PATH"
 RUN uv tool install ruff && \
     uv tool install httpie && \
     uv tool install csvkit
+
+# --- Python-based audit tools (isolated venvs via uv) ---
+# semgrep        - SAST with 5000+ rules (multi-language)
+# semgrep-mcp    - Exposes semgrep as an MCP server (registered in Stage 3)
+# lizard         - Language-agnostic cyclomatic complexity
+# bandit         - Python-specific security linter
+# pip-audit      - Python dependency vulnerability scanner
+# detect-secrets - Pre-commit-style secrets detector (baseline-based)
+# checkov        - Terraform/CloudFormation/Kubernetes/Dockerfile IaC scanner
+RUN uv tool install semgrep && \
+    uv tool install semgrep-mcp && \
+    uv tool install lizard && \
+    uv tool install bandit && \
+    uv tool install pip-audit && \
+    uv tool install detect-secrets && \
+    uv tool install checkov
 @@ENDIF_FULL@@
 
 @@AIDER_SECTION@@
@@ -207,6 +287,14 @@ RUN uv tool install mcp-server-sqlite && \
     --transport stdio \
     -- mcp-server-sqlite --db-path /tmp/scratch.db
 
+# Semgrep MCP — AI-accessible SAST (binary installed in Stage 2 via uv).
+# Exposes tools like `security_check`, `scan`, `rule authoring`, `AST access`.
+# Essential for the production-readiness audit workflow.
+RUN claude mcp add semgrep \
+    --scope user \
+    --transport stdio \
+    -- semgrep-mcp
+
 RUN uvx superclaude install
 @@ENDIF_FULL@@
 
@@ -232,6 +320,14 @@ RUN mkdir -p /opt/container-rules
 # Decode and install container rules
 RUN echo '@@CONTAINER_RULES_CONTEXT_B64@@' | base64 -d > /opt/container-rules/docker-container-context.md
 RUN echo '@@CONTAINER_RULES_SAFETY_B64@@' | base64 -d > /opt/container-rules/safety-restrictions.md
+
+# Decode and install the production-readiness audit prompt.
+# Available to every session at /opt/audit/production-audit-prompt.md —
+# copy it into a target repo (or paste its contents into Claude Code) to run
+# the full multi-phase audit. See .claude/analysis/how-to-run-audit.md in
+# the vibrator source repo for the full runbook.
+RUN mkdir -p /opt/audit && \
+    echo '@@AUDIT_PROMPT_B64@@' | base64 -d > /opt/audit/production-audit-prompt.md
 
 RUN chown $USERNAME:$USERNAME /tmp
 

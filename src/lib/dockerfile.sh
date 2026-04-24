@@ -10,6 +10,7 @@ SETUP_PLUGINS_B64="%%SETUP_PLUGINS_B64%%"
 CC_THINGZ_B64="%%CC_THINGZ_B64%%"
 CONTAINER_RULES_CONTEXT_B64="%%CONTAINER_RULES_CONTEXT_B64%%"
 CONTAINER_RULES_SAFETY_B64="%%CONTAINER_RULES_SAFETY_B64%%"
+AUDIT_PROMPT_B64="%%AUDIT_PROMPT_B64%%"
 
 dockerfile::generate() {
     local content
@@ -23,6 +24,7 @@ dockerfile::generate() {
     content="${content//@@CONTAINER_RULES_CONTEXT_B64@@/$CONTAINER_RULES_CONTEXT_B64}"
     content="${content//@@CONTAINER_RULES_SAFETY_B64@@/$CONTAINER_RULES_SAFETY_B64}"
     content="${content//@@CC_THINGZ_B64@@/$CC_THINGZ_B64}"
+    content="${content//@@AUDIT_PROMPT_B64@@/$AUDIT_PROMPT_B64}"
 
     # Aider section: opt-in installation via --aider flag
     if [[ "${AIDER:-false}" == true ]]; then

@@ -56,6 +56,14 @@ ENV PATH="/usr/local/go/bin:$PATH"
 
 # Sequential Thinking MCP server (registered in Stage 3 as user)
 RUN npm install -g @modelcontextprotocol/server-sequential-thinking
+
+# OpenAI Codex CLI — used by the "/planning:exec" skill for adversarial
+# code review (see skills/exec/scripts/run-codex.sh in the planning plugin).
+# Installed globally; binary lands at /usr/local/bin/codex so `which codex`
+# works for every user. Auth is handled at runtime via:
+#   - $OPENAI_API_KEY (forwarded from host by vibrator, see config.sh)
+#   - or ~/.codex/auth.json (mounted from host by docker_cmd.sh)
+RUN npm install -g @openai/codex
 @@ENDIF_FULL@@
 
 # Install ralphex (autonomous coding loop for Claude Code)

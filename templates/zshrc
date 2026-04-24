@@ -68,6 +68,21 @@ if [[ -o interactive ]]; then
     echo -e "\033[1;32mUndercover mode:\033[0m ON"
   fi
 
+  # Codex CLI status — used by the /planning:exec skill for external review.
+  # Auth comes from host ~/.codex (mounted) or $OPENAI_API_KEY (forwarded).
+  if command -v codex >/dev/null 2>&1; then
+    _codex_version=$(codex --version 2>/dev/null | head -1 || echo 'unknown')
+    if [ -f "$HOME/.codex/auth.json" ]; then
+      _codex_auth="host ~/.codex"
+    elif [ -n "$OPENAI_API_KEY" ]; then
+      _codex_auth="\$OPENAI_API_KEY"
+    else
+      _codex_auth="\033[1;33mnot authenticated\033[0m (run \033[1mcodex login\033[0m)"
+    fi
+    echo -e "\033[1;32mCodex CLI:\033[0m $_codex_version ($_codex_auth)"
+    unset _codex_version _codex_auth
+  fi
+
   echo ""
   echo -e "\033[1;32mWorkspace:\033[0m $WORKSPACE_PATH"
   echo ""

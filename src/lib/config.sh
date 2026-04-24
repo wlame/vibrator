@@ -48,7 +48,11 @@ config::init() {
     SELECTIVE_MOUNT="$IS_MACOS"
     MOUNT_FULL_CONFIG=false
 
-    # Environment forwarding list
+    # Environment forwarding list.
+    # Note: OPENAI_API_KEY is used by both OpenAI SDKs and the Codex CLI
+    # (baked into the image for the /planning:exec skill). Codex prefers
+    # ~/.codex/auth.json (mounted in docker_cmd.sh) but falls back to
+    # this env var when no OAuth login is present.
     FORWARDED_ENV=(
         ANTHROPIC_API_KEY
         OPENAI_API_KEY

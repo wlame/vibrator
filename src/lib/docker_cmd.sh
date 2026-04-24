@@ -147,6 +147,14 @@ docker_cmd::_add_volumes() {
         log::verbose "Generic mode: skipping host Claude config mounts"
     fi
 
+    # Codex CLI config and auth (read-write so OAuth token refresh persists
+    # back to the host, matching the ~/.claude mount pattern). Holds
+    # ~/.codex/auth.json (ChatGPT OAuth or API key) and config.toml.
+    # Required for the "/planning:exec" skill's codex-review phase to
+    # authenticate seamlessly using host credentials.
+    [[ -d "$HOME/.codex" ]] && \
+        cmd+=(-v "$HOME/.codex:/home/$CFG_USERNAME/.codex")
+
     # SSH keys (read-only)
     [[ -d "$HOME/.ssh" ]] && \
         cmd+=(-v "$HOME/.ssh:/home/$CFG_USERNAME/.ssh:ro")

@@ -19,21 +19,35 @@ RUN apt-get update && apt-get install -y \
     gpg \
  && rm -rf /var/lib/apt/lists/*
 
+# Install uv system-wide early — used to provision Python 3.13 below and
+# available to all later stages. Pulls from astral-sh/python-build-standalone,
+# which is more reliable than the deadsnakes PPA on Launchpad.
+RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh \
+      | UV_INSTALL_DIR=/usr/local/bin sh && \
+    uv --version
+
 @@IF_FULL@@
-# Install Python 3.13 via deadsnakes PPA (Ubuntu 24.04 ships 3.12 by default)
-RUN apt-get update && apt-get install -y software-properties-common \
- && add-apt-repository ppa:deadsnakes/ppa \
+# Install GitHub CLI (gh) via its official apt repo — not in Ubuntu 24.04 Docker default repos
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+ && apt-get update && apt-get install -y gh \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3.13 via uv (Ubuntu 24.04 ships 3.12 by default).
+# uv pulls a pre-built CPython from python-build-standalone — avoids the
+# deadsnakes PPA, which is frequently unreachable on Launchpad.
+# pip is intentionally not exposed: per project policy, use `uv pip ...`.
+RUN uv python install 3.13 \
+ && ln -sf "$(uv python find 3.13)" /usr/local/bin/python3.13 \
+ && update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.13 100 \
  && apt-get update && apt-get install -y \
-    python3.13 \
-    python3.13-venv \
     unzip \
     fzf \
-    gh \
     sqlite3 \
     fd-find \
- && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.13 \
- && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 100 \
- && update-alternatives --install /usr/bin/pip3 pip3 /usr/local/bin/pip3.13 100 \
  && rm -rf /var/lib/apt/lists/*
 @@ENDIF_FULL@@
 
@@ -107,16 +121,23 @@ RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
       | sh -s -- -b /usr/local/bin
 
-# Go-based audit tools installed via `go install` with GOBIN override so
-# binaries land in /usr/local/bin (visible to all users/stages).
-# - osv-scanner: multi-ecosystem lockfile CVE scan against OSV.dev
-# - scc: fast LOC + cyclomatic-complexity + COCOMO counter
-# - gosec: Go-specific security analyzer (complements golangci-lint)
-# - staticcheck: Go static analyzer (complements golangci-lint)
-RUN GOBIN=/usr/local/bin go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest && \
-    GOBIN=/usr/local/bin go install github.com/boyter/scc/v3@latest && \
+# Go-based audit tools.
+# - scc, gosec, staticcheck: installed via `go install` with GOBIN override so
+#   binaries land in /usr/local/bin (visible to all users/stages).
+# - osv-scanner: installed from pre-built GitHub release because its go.mod
+#   uses `replace` directives, which `go install pkg@version` rejects.
+RUN GOBIN=/usr/local/bin go install github.com/boyter/scc/v3@latest && \
     GOBIN=/usr/local/bin go install github.com/securego/gosec/v2/cmd/gosec@latest && \
     GOBIN=/usr/local/bin go install honnef.co/go/tools/cmd/staticcheck@latest
+
+# osv-scanner — multi-ecosystem lockfile CVE scan against OSV.dev
+RUN ARCH=$(dpkg --print-architecture) && \
+    OSV_VERSION="2.3.6" && \
+    if [ "$ARCH" = "amd64" ]; then OSV_ARCH="amd64"; else OSV_ARCH="arm64"; fi && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_${OSV_ARCH}" \
+      -o /usr/local/bin/osv-scanner && \
+    chmod +x /usr/local/bin/osv-scanner
 
 # dockle — container image best-practices linter (complements hadolint)
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -196,9 +217,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
     mv lazygit /usr/local/bin/ && chmod +x /usr/local/bin/lazygit && \
     rm lazygit.tar.gz
 
-# uv — Python package/tool manager (system-wide so all stages can use it)
-RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh && \
-    uv --version
 @@ENDIF_FULL@@
 
 # Create user with host UID/GID for proper file permissions on mounted volumes.

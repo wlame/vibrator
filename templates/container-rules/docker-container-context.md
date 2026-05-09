@@ -29,6 +29,85 @@ You are running inside a Docker container managed by vibrator.
   to break down complex problems into steps before acting.
 - **SQLite**: Query SQLite databases via natural language. Default: `/tmp/scratch.db`.
   To use a project database: `claude mcp add sqlite --scope=project -- mcp-server-sqlite --db-path=./mydb.sqlite`
+- **Semgrep**: AI-accessible SAST. Tools: `security_check`, `scan`, `rule authoring`, `AST access`.
+  Prefer this over the semgrep CLI for interactive analysis; use the CLI for scripted output.
+
+### Autonomous Coding
+- **ralphex**: Autonomous coding loop — executes implementation plans task-by-task in fresh sessions.
+  - `ralphex run plan.md` — run a plan file
+  - `ralphex run plan.md --dry-run` — preview tasks without executing
+- **codex**: OpenAI Codex CLI for adversarial code review (used by the `/planning:exec` skill).
+  Requires `OPENAI_API_KEY` forwarded from host.
+  - `codex "review this function for security issues" < file.go`
+
+### Security & Secrets Scanning
+- **gitleaks**: Detect hardcoded secrets in git history and files.
+  - `gitleaks detect --source .` — scan working tree
+  - `gitleaks detect --source . --log-opts HEAD~5..HEAD` — scan last 5 commits
+- **trufflehog**: Secret scanner with live credential validation.
+  - `trufflehog filesystem .` — scan current directory
+  - `trufflehog git file://. --since-commit HEAD~10` — scan recent commits
+- **detect-secrets**: Baseline-based pre-commit secrets detector.
+  - `detect-secrets scan > .secrets.baseline` — create baseline
+  - `detect-secrets audit .secrets.baseline` — audit findings
+
+### SAST & Static Analysis
+- **semgrep**: Multi-language SAST with 5000+ rules (also available via MCP).
+  - `semgrep scan --config=auto .` — auto-select rules for detected languages
+  - `semgrep scan --config=p/owasp-top-ten .` — OWASP Top 10 ruleset
+  - `semgrep scan --config=p/secrets .` — secrets ruleset
+- **bandit**: Python-specific security linter.
+  - `bandit -r src/` — scan Python source recursively
+  - `bandit -r src/ -f json` — JSON output for scripting
+- **golangci-lint**: Bundled Go linter (replaces gosec, staticcheck, ~40 others in one pass).
+  - `golangci-lint run ./...` — run all configured linters
+  - `golangci-lint run --enable=gosec ./...` — enable specific linter
+- **gosec**: Go security checker (also included via golangci-lint).
+  - `gosec ./...` — scan Go packages
+- **staticcheck**: Go static analysis for correctness and performance.
+  - `staticcheck ./...` — run all checks
+
+### SBOM & CVE Scanning
+- **trivy**: FS + container + IaC + secrets + SBOM in one binary.
+  - `trivy fs .` — scan current directory
+  - `trivy fs --scanners=secret .` — secrets only
+  - `trivy fs --format=json .` — JSON output
+- **syft**: Generate SBOMs in CycloneDX or SPDX format.
+  - `syft . -o cyclonedx-json` — CycloneDX SBOM
+  - `syft . -o spdx-json` — SPDX SBOM
+- **grype**: CVE scan against a directory or SBOM (pairs with syft).
+  - `grype .` — scan current directory
+  - `grype sbom:sbom.json` — scan from a syft SBOM
+- **osv-scanner**: Multi-ecosystem lockfile CVE scan against OSV.dev.
+  - `osv-scanner .` — scan all lockfiles in current directory
+  - `osv-scanner --format=json .` — JSON output
+- **pip-audit**: Python dependency vulnerability scanner.
+  - `pip-audit` — scan current environment
+  - `pip-audit -r requirements.txt` — scan a requirements file
+
+### IaC & Container Linting
+- **checkov**: Terraform / CloudFormation / Kubernetes / Dockerfile IaC scanner.
+  - `checkov -d .` — scan all IaC in directory
+  - `checkov -f Dockerfile` — scan a specific file
+  - `checkov --framework dockerfile -d .` — target framework
+- **dockle**: Container image best-practices linter (complements hadolint for built images).
+  - `dockle image-name:tag` — lint a built image (requires --dind)
+- **shellcheck**: Shell script linter.
+  - `shellcheck script.sh` — lint a shell script
+  - `shellcheck -S warning script.sh` — warnings and above only
+- **hadolint**: Dockerfile linter (static, no build needed).
+  - `hadolint Dockerfile` — lint a Dockerfile
+  - `hadolint --ignore DL3008 Dockerfile` — ignore specific rule
+
+### Code Complexity
+- **scc**: Fast LOC counter + cyclomatic complexity + COCOMO cost estimates.
+  - `scc .` — count lines and complexity for all files
+  - `scc --by-file .` — per-file breakdown
+  - `scc --format=json .` — JSON output
+- **lizard**: Language-agnostic cyclomatic complexity analyser.
+  - `lizard src/` — analyse source directory
+  - `lizard -l python src/` — Python only
+  - `lizard --CCN 10 src/` — flag functions above CCN 10
 
 ### Data Processing
 - **jq**: JSON processing. Example: `cat data.json | jq '.users[] | .name'`
@@ -54,9 +133,6 @@ You are running inside a Docker container managed by vibrator.
   - `ruff check .` — lint Python files
   - `ruff format .` — format Python files
   - `ruff check --fix .` — auto-fix issues
-- **hadolint**: Dockerfile linter.
-  - `hadolint Dockerfile` — lint a Dockerfile
-  - `hadolint --ignore DL3008 Dockerfile` — ignore specific rule
 
 ### Git Enhancement
 - **delta**: Syntax-highlighted git diffs. Configure with:
@@ -78,11 +154,17 @@ You are running inside a Docker container managed by vibrator.
 ### Always Available (Core)
 - Claude CLI with all MCP servers listed above
 - Git, GitHub CLI (gh)
-- Python 3, Go
+- Python 3.13, Go 1.26, Node.js
+- **uv**: Python package manager (`uv pip install`, `uv tool install`, `uv run`)
 - Standard Unix utilities (curl, wget, vim, htop, etc.)
 
 ### Conditionally Available
 - Docker commands: Only available with `--dind` or `--docker` flag
+
+### Production Audit Prompt
+A comprehensive multi-phase production-readiness audit prompt is pre-installed at
+`/opt/audit/production-audit-prompt.md`. Copy it into a target repo or paste its contents
+into Claude Code to run a full audit using the tools above.
 
 ## Security Context
 

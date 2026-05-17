@@ -33,6 +33,14 @@ image::build() {
         --build-arg "USERNAME=$CFG_USERNAME"
         --build-arg "HOST_UID=$host_uid"
         --build-arg "HOST_GID=$host_gid"
+        # Variant info baked into the image so the welcome message and any
+        # in-container tooling can introspect what's installed.
+        --build-arg "VIBRATOR_PROFILE=$PROFILE"
+        --build-arg "VIBRATOR_FEATURES=${FEATURES_ENABLED# }"
+        --build-arg "VIBRATOR_VARIANT_FINGERPRINT=${VARIANT_FINGERPRINT:-unknown}"
+        # Claude CLI version this build targets. Drives cache invalidation of
+        # the Stage 3 install layer and the claude.version image LABEL.
+        --build-arg "CLAUDE_CLI_VERSION=${CLAUDE_CLI_VERSION:-latest}"
     )
     [[ "$FLAG_REBUILD" == true ]] && build_args+=(--no-cache)
     build_args+=(-t "$IMAGE_NAME" "$tmpdir")
@@ -86,4 +94,91 @@ image::ensure() {
         log::info "Image ${IMAGE_NAME} not found. Building..."
         image::build
     fi
+}
+
+# List all vibrator-managed images for this user with their LABEL metadata,
+# one per line:
+#   <image_tag>|<vibrator.profile>|<vibrator.features>|<claude.version>
+image::list_managed() {
+    docker images \
+        --filter "reference=claude-vb-${CFG_USERNAME}-*" \
+        --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
+        | while read -r tag; do
+            [[ -z "$tag" ]] && continue
+            local p f v
+            p=$(docker inspect "$tag" --format '{{index .Config.Labels "vibrator.profile"}}' 2>/dev/null)
+            f=$(docker inspect "$tag" --format '{{index .Config.Labels "vibrator.features"}}' 2>/dev/null)
+            v=$(docker inspect "$tag" --format '{{index .Config.Labels "claude.version"}}' 2>/dev/null)
+            printf '%s|%s|%s|%s\n' "$tag" "$p" "$f" "$v"
+        done
+    return 0
+}
+
+# Rebuild one image using its LABEL-recorded profile/features. The fingerprint
+# the new build computes should match the tag, so docker reuses cached layers
+# everywhere except the Claude install + downstream MCP/plugin layers.
+image::_rebuild_from_labels() {
+    local tag="$1" profile="$2" features="$3"
+    if [[ -z "$profile" || -z "$features" ]]; then
+        log::warn "Image $tag has no vibrator.profile/features labels — skipping"
+        return 0
+    fi
+
+    # Reset the config state to match this image, then re-finalize.
+    PROFILE="$profile"
+    FEATURES_ENABLED=""
+    local f
+    for f in $features; do
+        config::is_known_feature "$f" || continue
+        config::feature_enable "$f"
+    done
+    IMAGE_NAME="claude-vb-${CFG_USERNAME}:latest"
+    VARIANT_FINGERPRINT=""
+    config::finalize_image_name
+
+    if [[ "$IMAGE_NAME" != "$tag" ]]; then
+        log::warn "Rebuild for $tag would produce $IMAGE_NAME instead (catalog drift?). Skipping."
+        return 0
+    fi
+
+    log::info "Rebuilding $tag (profile=$profile)"
+    image::build
+}
+
+# Walk every vibrator image and rebuild those whose baked Claude version
+# differs from the current CLAUDE_CLI_VERSION. Cache hits keep this fast
+# for image bytes that don't change — usually only Stage 3 + Stage 4 layers
+# actually rebuild.
+image::upgrade_claude() {
+    local current="${CLAUDE_CLI_VERSION:-latest}"
+    log::info "Target Claude CLI version: $current"
+
+    # Collect listing into an array so the loop body can mutate globals
+    # without being trapped in a subshell pipeline.
+    local -a rows=()
+    local row
+    while IFS= read -r row; do
+        [[ -n "$row" ]] && rows+=("$row")
+    done < <(image::list_managed)
+
+    if [[ "${#rows[@]}" -eq 0 ]]; then
+        log::info "No vibrator-managed images found."
+        return 0
+    fi
+
+    local total=${#rows[@]} stale=0 ok=0
+    for row in "${rows[@]}"; do
+        local tag profile features img_version
+        IFS='|' read -r tag profile features img_version <<< "$row"
+        if [[ "$img_version" == "$current" ]]; then
+            log::verbose "Up to date: $tag (claude=$img_version)"
+            ok=$((ok + 1))
+            continue
+        fi
+        log::info "Stale: $tag (claude=${img_version:-unknown}, target=$current)"
+        stale=$((stale + 1))
+        image::_rebuild_from_labels "$tag" "$profile" "$features"
+    done
+
+    log::success "Upgrade complete: $stale rebuilt, $ok already current ($total total)"
 }

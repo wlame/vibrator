@@ -88,6 +88,33 @@ ANTHROPIC_API_KEY       # API key (legacy auth)
 
 ---
 
+## Build options
+
+The image ships with everything by default (~2 GB). You can slim it via profiles
+and individual feature toggles:
+
+```bash
+vibrate --profile minimal             # ~150 MB, just dev-cli
+vibrate --profile backend             # ~600 MB, no Playwright / no audit toolkit
+vibrate --no-audit-toolkit            # default minus the security scanners
+vibrate --profile backend --with-playwright
+vibrate --explain                     # preview what would be installed (dry-run)
+```
+
+See **[docs/build-options.md](./docs/build-options.md)** for the full feature
+catalog, profile presets, dependency rules (e.g. `serena` auto-pulls in
+`python`), and worked examples.
+
+---
+
+## Integrations
+
+- **[claude-mem](./docs/integrations/claude-mem.md)** — persistent memory across sessions
+  via a host-side docker-compose stack. No `bun`/`node` on host required; multiple
+  vibrator containers share the same memory store.
+
+---
+
 ## Without Claude Code on the Host
 
 ```bash

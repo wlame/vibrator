@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     htop \
     tree \
     gpg \
+    postgresql-client \
  && rm -rf /var/lib/apt/lists/*
 
 # Install uv system-wide early — used to provision Python 3.13 below and
@@ -25,6 +26,25 @@ RUN apt-get update && apt-get install -y \
 RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh \
       | UV_INSTALL_DIR=/usr/local/bin sh && \
     uv --version
+
+# Install Bun via multi-stage copy from the official image. Always-on
+# substrate: claude-mem's plugin scripts re-exec into bun (bun-runner.js
+# looks for /usr/local/bin/bun first), and Playwright MCP also wants it.
+# Pulled by the multi-stage COPY pattern to avoid curl/install.sh and let
+# Docker handle the architecture (linux/amd64 vs linux/arm64) transparently.
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
+RUN bun --version
+
+# Install Node.js 22 via multi-stage copy from the official image. Always-on
+# substrate alongside Bun: claude-mem's hooks invoke `node bun-runner.js …`,
+# and the npm-based installer (`npx claude-mem install`) requires Node 20+
+# for the `styleText` export from node:util. Ubuntu 24.04 apt ships Node 18,
+# which is too old — hence the multi-stage copy from node:22-bookworm-slim.
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+ && node --version && npm --version && npx --version
 
 @@IF_FULL@@
 # Install GitHub CLI (gh) via its official apt repo — not in Ubuntu 24.04 Docker default repos
@@ -52,10 +72,9 @@ RUN uv python install 3.13 \
 @@ENDIF_FULL@@
 
 @@IF_FULL@@
-# Install Node.js from Ubuntu repos (for Sequential Thinking MCP)
-RUN apt-get update && \
-    apt-get install -y nodejs npm && \
-    rm -rf /var/lib/apt/lists/*
+# Node.js + npm are now always-on in Stage 1 (Node 22 via multi-stage copy).
+# The apt-based Node 18 install used to live here but was too old for
+# claude-mem's npm installer (needs node:util.styleText, Node 20+).
 
 # Install Go from the official Docker image — avoids go.dev/dl which redirects
 # through dl.google.com (blocked in many build environments). Multi-stage copy
@@ -235,6 +254,17 @@ RUN ARCH=$(dpkg --print-architecture) && \
     mv lazygit /usr/local/bin/ && chmod +x /usr/local/bin/lazygit && \
     rm lazygit.tar.gz
 
+# glow — Markdown CLI renderer (charm.sh). Use `glow file.md` to render,
+# `glow -p file.md` for pager mode, or pipe markdown into it: `echo '# hi' | glow`.
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then GLOW_ARCH="x86_64"; else GLOW_ARCH="arm64"; fi && \
+    GLOW_VERSION="2.0.0" && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${GLOW_ARCH}.tar.gz" \
+    -o glow.tar.gz && \
+    tar -xzf glow.tar.gz --strip-components=1 -C /usr/local/bin/ "glow_${GLOW_VERSION}_Linux_${GLOW_ARCH}/glow" && \
+    chmod +x /usr/local/bin/glow && \
+    rm glow.tar.gz
+
 @@ENDIF_FULL@@
 
 # Create user with host UID/GID for proper file permissions on mounted volumes.
@@ -294,11 +324,25 @@ RUN uv tool install semgrep && \
 
 # ============================================================================
 # Stage 3: Claude CLI and MCP servers
+# ----------------------------------------------------------------------------
+# This stage is the primary cache-invalidation point when Claude is upgraded.
+# Stages 1-2 (base apt + heavy tools) survive Claude version changes; only
+# this stage and Stage 4 rebuild. To keep that boundary tight, do NOT add
+# heavyweight installs here — they belong in Stage 2.
 # ============================================================================
 FROM user-env AS claude-mcp
 ARG USERNAME=claude-user
+ARG CLAUDE_CLI_VERSION=latest
+# Redeclared here so the conditional claude-mem install below can read it.
+ARG VIBRATOR_FEATURES=""
 
-RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://claude.ai/install.sh | bash
+# Cache-bust marker first so a CLAUDE_CLI_VERSION change always re-runs the
+# install. The install.sh from claude.ai ignores positional args today and
+# fetches the latest release, but the echo + ARG ensure the layer hash
+# differs whenever the build-arg differs, so cache invalidation is correct.
+RUN echo "Installing Claude CLI (target version: ${CLAUDE_CLI_VERSION})" && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors https://claude.ai/install.sh | bash && \
+    echo "claude --version: $(/home/${USERNAME}/.local/bin/claude --version 2>/dev/null || echo unknown)"
 ENV PATH=/home/$USERNAME/.local/bin:$PATH
 
 RUN claude mcp add context7 \
@@ -342,6 +386,56 @@ RUN echo '@@CC_THINGZ_B64@@' | base64 -d > /tmp/install-cc-thingz.sh && \
     /tmp/install-cc-thingz.sh && \
     rm /tmp/install-cc-thingz.sh
 
+# Conditional claude-mem install — manual approach (no npx wizard).
+#
+# We deliberately bypass `npx claude-mem install` because its non-TTY
+# defaults are unreliable: prompts like "Overwrite existing installation?"
+# silently default to No, and the IDE-specific hook wiring step doesn't
+# fire when stdin isn't a terminal. Instead we do exactly what's needed
+# to make Claude Code load the plugin and fire its hooks:
+#   1. Clone the marketplace
+#   2. Copy plugin into a versioned cache dir (where Claude's loader looks)
+#   3. Register in installed_plugins.json + known_marketplaces.json
+#   4. Merge the plugin's own hooks.json into ~/.claude/settings.json + mark enabled
+#
+# This produces the same on-disk state as a successful interactive install,
+# but is fully deterministic and visible in the build log. Failures don't
+# block the build — image still works, just without claude-mem wired.
+RUN case " $VIBRATOR_FEATURES " in \
+      *" claude-mem "*) \
+        echo "[vibrator] Installing claude-mem (manual approach)" && \
+        set -e && \
+        mkdir -p "$HOME/.claude/plugins/marketplaces" && \
+        git clone --depth 1 https://github.com/thedotmack/claude-mem.git \
+          "$HOME/.claude/plugins/marketplaces/thedotmack" && \
+        CM_GIT_SHA=$(cd "$HOME/.claude/plugins/marketplaces/thedotmack" && git rev-parse HEAD) && \
+        CM_GIT_SHORT=$(echo "$CM_GIT_SHA" | cut -c1-12) && \
+        CM_DEST="$HOME/.claude/plugins/cache/thedotmack/claude-mem/$CM_GIT_SHORT" && \
+        mkdir -p "$CM_DEST" && \
+        cp -r "$HOME/.claude/plugins/marketplaces/thedotmack/plugin/." "$CM_DEST/" && \
+        TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z) && \
+        [ -f "$HOME/.claude/plugins/installed_plugins.json" ] || echo '{"version":2,"plugins":{}}' > "$HOME/.claude/plugins/installed_plugins.json" && \
+        jq --arg path "$CM_DEST" --arg v "$CM_GIT_SHORT" --arg ts "$TS" --arg sha "$CM_GIT_SHA" \
+           '.plugins["claude-mem@thedotmack"] = [{scope:"user",installPath:$path,version:$v,installedAt:$ts,lastUpdated:$ts,gitCommitSha:$sha}]' \
+           "$HOME/.claude/plugins/installed_plugins.json" > /tmp/inst.json && \
+           mv /tmp/inst.json "$HOME/.claude/plugins/installed_plugins.json" && \
+        [ -f "$HOME/.claude/plugins/known_marketplaces.json" ] || echo '{}' > "$HOME/.claude/plugins/known_marketplaces.json" && \
+        jq --arg path "$HOME/.claude/plugins/marketplaces/thedotmack" --arg ts "$TS" \
+           '.thedotmack = {source:{source:"github",repo:"thedotmack/claude-mem"},installLocation:$path,lastUpdated:$ts}' \
+           "$HOME/.claude/plugins/known_marketplaces.json" > /tmp/mkt.json && \
+           mv /tmp/mkt.json "$HOME/.claude/plugins/known_marketplaces.json" && \
+        [ -f "$HOME/.claude/settings.json" ] || echo '{}' > "$HOME/.claude/settings.json" && \
+        jq --slurpfile cm "$HOME/.claude/plugins/marketplaces/thedotmack/plugin/hooks/hooks.json" \
+           '.hooks = (.hooks // {}) + ($cm[0].hooks // {}) | .enabledPlugins = (.enabledPlugins // {}) + {"claude-mem@thedotmack": true}' \
+           "$HOME/.claude/settings.json" > /tmp/settings.json && \
+           mv /tmp/settings.json "$HOME/.claude/settings.json" && \
+        echo "[vibrator] claude-mem manual install complete:" && \
+        echo "  installPath: $CM_DEST" && \
+        echo "  hooks: $(jq -r '.hooks | keys | join(\", \")' $HOME/.claude/settings.json)" ;; \
+      *) \
+        echo "[vibrator] Skipping claude-mem install (not in features)" ;; \
+    esac
+
 # ============================================================================
 # Stage 4: Final runtime
 # ============================================================================
@@ -378,6 +472,24 @@ ENV LC_ALL=C.UTF-8
 ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 ENV CLAUDE_CODE_UNDERCOVER=1
 ENV DISABLE_TELEMETRY=1
+
+# Variant metadata baked at build time. Surfaced in the welcome message
+# (zshrc) and available to in-container tools that want to introspect
+# what was installed. See docs/build-options.md for the full feature catalog.
+ARG VIBRATOR_PROFILE=default
+ARG VIBRATOR_FEATURES=""
+ARG VIBRATOR_VARIANT_FINGERPRINT=unknown
+# Redeclare CLAUDE_CLI_VERSION here so it can be read as ${VAR} in LABEL — ARGs
+# don't cross stage boundaries.
+ARG CLAUDE_CLI_VERSION=latest
+ENV VIBRATOR_PROFILE=$VIBRATOR_PROFILE
+ENV VIBRATOR_FEATURES_LIST=$VIBRATOR_FEATURES
+ENV VIBRATOR_VARIANT_FINGERPRINT=$VIBRATOR_VARIANT_FINGERPRINT
+ENV VIBRATOR_CLAUDE_VERSION=$CLAUDE_CLI_VERSION
+LABEL vibrator.profile=$VIBRATOR_PROFILE
+LABEL vibrator.features=$VIBRATOR_FEATURES
+LABEL vibrator.variant=$VIBRATOR_VARIANT_FINGERPRINT
+LABEL claude.version=$CLAUDE_CLI_VERSION
 
 RUN echo '@@ZSHRC_B64@@' | base64 -d > ~/.zshrc
 

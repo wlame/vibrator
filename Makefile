@@ -8,6 +8,11 @@ TPL_DIR    := templates
 OUTPUT     := $(BUILD_DIR)/vibrate.sh
 INTER_DIR  := $(BUILD_DIR)/.intermediate
 
+# Read the target Claude CLI version from the repo-root file. Embedded into
+# vibrate.sh and passed as a Docker build-arg so each image is tagged with
+# the Claude version it was built against (drives `vibrate --upgrade-claude`).
+CLAUDE_CLI_VERSION ?= $(shell cat CLAUDE_CLI_VERSION 2>/dev/null || echo "latest")
+
 # Cross-platform helpers
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -33,6 +38,9 @@ MODULES := \
 	$(SRC_DIR)/lib/container.sh \
 	$(SRC_DIR)/lib/plugins.sh \
 	$(SRC_DIR)/lib/dockerfile.sh \
+	$(SRC_DIR)/lib/claude_mem.sh \
+	$(SRC_DIR)/lib/claude_mem_bootstrap.sh \
+	$(SRC_DIR)/lib/menu.sh \
 	$(SRC_DIR)/main.sh
 
 # Template scripts to base64-encode and embed
@@ -98,8 +106,9 @@ $(OUTPUT): $(MODULES) $(TPL_FILES) Makefile
 		echo "# --- $$(basename $$mod) ---" >> $(OUTPUT); \
 		tail -n +2 "$$mod" | grep -v '^#!/' >> $(OUTPUT); \
 	done
-	@# Step 4: Replace version placeholder
+	@# Step 4: Replace version placeholders
 	@$(call sed_inplace,'s/%%VERSION%%/$(VERSION)/g',$(OUTPUT))
+	@$(call sed_inplace,'s/%%CLAUDE_CLI_VERSION%%/$(CLAUDE_CLI_VERSION)/g',$(OUTPUT))
 	@# Step 5: Replace template placeholders with base64 content
 	@$(call sed_inplace,"s|%%ENTRYPOINT_B64%%|$$(cat $(INTER_DIR)/entrypoint.sh.b64)|g",$(OUTPUT))
 	@$(call sed_inplace,"s|%%CLAUDE_EXEC_B64%%|$$(cat $(INTER_DIR)/claude-exec.sh.b64)|g",$(OUTPUT))

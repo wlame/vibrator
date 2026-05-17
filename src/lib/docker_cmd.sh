@@ -81,6 +81,11 @@ docker_cmd::build() {
     # Volume mounts
     docker_cmd::_add_volumes
 
+    # Bind-mount host Claude Code session data dirs so container-side
+    # sessions persist like a host-level CC run. Skipped on --no-session-persist
+    # and --generic. See README § "Session persistence" for rationale.
+    docker_cmd::_add_session_persist_volumes
+
     # Extra volumes (e.g., --aws)
     for vol in ${EXTRA_VOLUMES[@]+"${EXTRA_VOLUMES[@]}"}; do
         cmd+=(-v "$vol")
@@ -220,6 +225,54 @@ docker_cmd::_add_claude_mem_server_beta() {
     # the container talks pure HTTP to /v1/* with its project-scoped key.
 
     log::verbose "claude-mem: forwarding server-beta config ($url, key source: $source)"
+}
+
+# Bind-mount the five Claude Code session data subdirectories from the host
+# into the container so a session run inside vibrator writes to the SAME
+# paths a host-level `claude` invocation would. This is what makes
+# `claude --resume` (host-side) and Esc-Esc file-history rewind work
+# seamlessly across host/container — encoded-cwd directory naming agrees
+# because vibrator mounts the workspace at the same path on both sides.
+#
+# Persisted dirs:
+#   projects/      session transcripts (per-cwd, per-session JSONL)
+#   file-history/  pre-edit file snapshots (Esc-Esc undo)
+#   sessions/      session metadata (status, version, cwd)
+#   tasks/         /todos and TaskTool state
+#   paste-cache/   /paste content cache
+#
+# Skipped when:
+#   --generic                 (host CC integration is disabled entirely)
+#   --no-session-persist      (user wants sandbox isolation — container
+#                              cannot see or write to host session history)
+#
+# Robustness: each subdir is created with `mkdir -p` if missing — vibrator
+# supports users who pulled a prebuilt image without ever installing Claude
+# Code on the host. Permission failures are logged but never abort the run.
+docker_cmd::_add_session_persist_volumes() {
+    [[ "$GENERIC" == true ]]           && return 0
+    [[ "$SESSION_PERSIST" != "true" ]] && {
+        log::verbose "session-persist: disabled (--no-session-persist) — sessions stay in container"
+        return 0
+    }
+
+    local subdir host_path container_path mounted=0
+    local container_home="/home/$CFG_USERNAME/.claude"
+
+    for subdir in projects file-history sessions tasks paste-cache; do
+        host_path="$CLAUDE_CONFIG/$subdir"
+        container_path="$container_home/$subdir"
+        # Create the host dir if missing — never fail, just skip on errors.
+        if ! mkdir -p "$host_path" 2>/dev/null; then
+            log::verbose "session-persist: cannot create $host_path, skipping"
+            continue
+        fi
+        cmd+=(-v "$host_path:$container_path")
+        mounted=$((mounted + 1))
+    done
+
+    [[ $mounted -gt 0 ]] && \
+        log::verbose "session-persist: $mounted host data dirs mounted from $CLAUDE_CONFIG (use --no-session-persist to disable)"
 }
 
 docker_cmd::_add_volumes() {

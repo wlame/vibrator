@@ -107,6 +107,51 @@ catalog, profile presets, dependency rules (e.g. `serena` auto-pulls in
 
 ---
 
+## Session persistence
+
+By default, vibrator bind-mounts five host directories under `~/.claude/` into
+the container so Claude Code sessions written inside vibrator persist to the
+**same paths a host-level `claude` run would write to**:
+
+| Path | What's in it |
+|---|---|
+| `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` | the conversation transcript (incremental) |
+| `~/.claude/file-history/<session-id>/...`             | pre-edit file snapshots (Esc-Esc rewind) |
+| `~/.claude/sessions/<pid>.json`                       | session metadata (status, version, cwd) |
+| `~/.claude/tasks/<session-id>/...`                    | `/todos` + TaskTool state |
+| `~/.claude/paste-cache/`                              | `/paste` content cache |
+
+Because vibrator mounts the workspace at the **same path** inside the container
+as on the host, Claude Code's encoded-cwd directory name (e.g.
+`-Users-wlame-dev-drakkar`) agrees on both sides — `claude --resume` from your
+host shell sees sessions you produced inside the container, file-history rewind
+works across, and so on. If you've never installed Claude Code on the host,
+vibrator silently creates these directories the first time it runs (so
+prebuilt-image users without a local CC install just work).
+
+### Opt out: `--no-session-persist`
+
+Pass `--no-session-persist` when you want **isolation** instead of integration:
+
+```bash
+vibrate --no-session-persist                 # one-off sandbox run
+vibrate --no-session-persist --rm claude …   # ephemeral, no host residue
+```
+
+When set, none of the five directories are mounted. The container writes
+session data to its own filesystem, and that data vanishes when the
+container is removed. This is the right flag for:
+
+- **Auditing untrusted code** — the container can't read your other workspaces'
+  session histories (transcripts often quote source files, API responses, etc.)
+- **CI / scripted runs** — keep host `~/.claude` pristine
+- **Multi-tenant scenarios** — when several people share a workstation and you
+  don't want their CC histories mingling
+
+`--generic` also disables persistence (it disables all host-CC integration).
+
+---
+
 ## Integrations
 
 - **[claude-mem](./docs/integrations/claude-mem.md)** — persistent memory across sessions

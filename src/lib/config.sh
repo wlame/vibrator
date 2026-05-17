@@ -26,6 +26,9 @@ config::init() {
     GENERIC=false
     AGENT_TEAMS=false
     SIMPLE_BUILD=false       # legacy alias, set by --simple/--no-tools and --profile minimal
+    SESSION_PERSIST=true     # bind-mount ~/.claude/{projects,file-history,sessions,tasks,paste-cache}
+                             # so container-side CC sessions persist to the host like a native run.
+                             # Disable with --no-session-persist for sandbox/isolation use.
 
     # Build-time feature catalog. Each unit can be toggled with
     # --with-<name> / --no-<name>, or set in bulk via --profile <preset>.

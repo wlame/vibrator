@@ -26,6 +26,11 @@ Options:
   --mount-full-config      Mount entire ~/.claude directory (overrides selective mode)
   --ssh-gpg-agents         Enable SSH and GPG agent forwarding (disabled by default)
   --no-plugins             Skip Claude plugin installation
+  --no-session-persist     Don't bind-mount host ~/.claude session dirs (transcripts,
+                           file-history, todos, paste-cache). Sessions stay in the
+                           container and vanish on removal. Use for sandbox/isolation
+                           runs where you don't want the container to see — or write
+                           into — your host Claude Code session history.
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
   --aider                  Install aider AI coding assistant (~80MB, opt-in)
@@ -150,6 +155,7 @@ args::parse() {
             --username)           CFG_USERNAME="$2"; shift 2 ;;
             --aws)                args::_enable_aws; shift ;;
             --no-plugins)         INSTALL_PLUGINS=false; shift ;;
+            --no-session-persist) SESSION_PERSIST=false; shift ;;
             --mount-full-config)  MOUNT_FULL_CONFIG=true; shift ;;
             --memory)             MEMORY_LIMIT="$2"; shift 2 ;;
             --cpu)                CPU_LIMIT="$2"; shift 2 ;;

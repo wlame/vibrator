@@ -29,8 +29,40 @@ Options:
   --non-interactive        Disable interactive mode (no TTY)
   --privileged             Enable Docker privileged mode
   --aider                  Install aider AI coding assistant (~80MB, opt-in)
+                           (alias for --with-aider)
   --teams                  Enable Claude Code agent teams mode (experimental)
-  --simple, --no-tools     Build minimal image (Claude CLI + core tools only, ~50% smaller)
+  --simple, --no-tools     Build minimal image (alias for --profile minimal)
+
+Build feature profiles:
+  --profile NAME           Preset for which features to install. One of:
+                             minimal       Only dev-cli (~150MB)
+                             backend       No Playwright, no audit toolkit (~600MB)
+                             default       Everything except aider (~2GB) [default]
+                             kitchen-sink  Everything including aider
+  --with-FEATURE           Enable a specific build-time feature
+  --no-FEATURE             Disable a specific build-time feature
+  --explain                Print the resolved feature set and exit (dry-run)
+  --no-menu                Skip the interactive workspace picker (also: VIBRATOR_NO_MENU=1)
+  --upgrade-claude         Rebuild every vibrator image whose baked Claude CLI version
+                           differs from the current CLAUDE_CLI_VERSION (cache-friendly)
+  --claude-mem-setup       Print the claude-mem host stack setup instructions and exit
+  --claude-mem-status      Probe the host claude-mem stack and report wiring for cwd
+  --claude-mem-bootstrap   Mint a project-scoped key for this workspace (no container)
+
+Available features (toggle with --with-* / --no-*):
+  playwright       Chromium + Playwright MCP (~500MB)
+  audit-toolkit    trivy, syft, grype, semgrep, gitleaks, ... (~400MB, needs python)
+  python           Python 3.13 via uv (~100MB)
+  go               Go toolchain (~200MB)
+  gh               GitHub CLI
+  dev-cli          jq, yq, fzf, fd, ripgrep, tree, httpie, websocat, csvkit, delta, lazygit, glow
+  serena           Serena MCP runtime wiring (needs python)
+  claude-mem       claude-mem plugin bind-mount + server-beta env forwarding
+  codex            OpenAI Codex CLI (used by /planning:exec)
+  aider            aider AI pair programming (off by default)
+
+Dependencies are auto-resolved: --with-serena will also enable python if it
+was disabled. To opt out fully, pass both --no-python and --no-serena etc.
   --mount HOST:CONTAINER   Mount additional directory (can be repeated, e.g. /data:/data:ro)
   --dind, --docker         Enable Docker-in-Docker mode (mount socket, elevated privileges)
   --docker-socket PATH     Override Docker socket path (auto-detected by default)
@@ -95,9 +127,9 @@ args::parse() {
             --rm)                 REMOVE_AFTER=true; shift ;;
             --non-interactive)    INTERACTIVE=false; shift ;;
             --privileged)         PRIVILEGED=true; shift ;;
-            --aider)              AIDER=true; shift ;;
+            --aider)              AIDER=true; config::feature_enable aider; USER_SPECIFIED_FEATURES=true; shift ;;
             --teams)              AGENT_TEAMS=true; shift ;;
-            --simple|--no-tools)  SIMPLE_BUILD=true; shift ;;
+            --simple|--no-tools)  SIMPLE_BUILD=true; config::apply_profile minimal; USER_SPECIFIED_FEATURES=true; shift ;;
             --generic)            GENERIC=true; shift ;;
             --mount)              EXTRA_VOLUMES+=("$2"); shift 2 ;;
             --dind|--docker)      DOCKER_IN_DOCKER=true; shift ;;
@@ -122,6 +154,31 @@ args::parse() {
             --memory)             MEMORY_LIMIT="$2"; shift 2 ;;
             --cpu)                CPU_LIMIT="$2"; shift 2 ;;
             --version)            args::_show_version; exit 0 ;;
+            --profile)            config::apply_profile "$2"; USER_SPECIFIED_FEATURES=true; shift 2 ;;
+            --explain)            FLAG_EXPLAIN_FEATURES=true; shift ;;
+            --no-menu)            FLAG_NO_MENU=true; shift ;;
+            --upgrade-claude)     FLAG_UPGRADE_CLAUDE=true; shift ;;
+            --claude-mem-setup)     FLAG_CLAUDE_MEM_SETUP=true; shift ;;
+            --claude-mem-status)    FLAG_CLAUDE_MEM_STATUS=true; shift ;;
+            --claude-mem-bootstrap) FLAG_CLAUDE_MEM_BOOTSTRAP=true; shift ;;
+            # Feature toggles. Listed AFTER --no-plugins / --no-menu / --no-tools
+            # so those specific cases win before the wildcard match.
+            --with-*)
+                _feat="${1#--with-}"
+                config::is_known_feature "$_feat" \
+                    || log::die "Unknown feature: '$_feat' (valid: ${FEATURE_CATALOG[*]})"
+                config::feature_enable "$_feat"
+                [[ "$_feat" == "aider" ]] && AIDER=true  # mirror legacy flag
+                USER_SPECIFIED_FEATURES=true
+                shift ;;
+            --no-*)
+                _feat="${1#--no-}"
+                config::is_known_feature "$_feat" \
+                    || log::die "Unknown feature: '$_feat' (valid: ${FEATURE_CATALOG[*]})"
+                config::feature_disable "$_feat"
+                [[ "$_feat" == "aider" ]] && AIDER=false
+                USER_SPECIFIED_FEATURES=true
+                shift ;;
             --)                   shift; break ;;
             -*)                   log::die "Unknown option: $1" ;;
             *)                    break ;;
@@ -129,6 +186,15 @@ args::parse() {
     done
 
     REMAINING_ARGS=("$@")
+
+    # Resolve feature dependencies (e.g., enabling serena force-enables python).
+    config::validate_features
+
+    # --explain-features short-circuit: print resolved state and exit cleanly.
+    if [[ "${FLAG_EXPLAIN_FEATURES:-false}" == true ]]; then
+        config::print_features
+        exit 0
+    fi
 }
 
 args::_show_version() {

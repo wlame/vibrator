@@ -7,6 +7,10 @@ build/
 # Claude authentication token (NEVER commit this!)
 .claude-docker-token
 
+# Vibrator workspace pin — may contain a plaintext claude-mem API key
+# after auto-bootstrap. Per-workspace, never shared via VCS.
+.vb.env
+
 # website build artifacts
 web/
 

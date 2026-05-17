@@ -58,12 +58,46 @@ if [[ -o interactive ]]; then
   fi
 
   echo ""
-  if [ "$VIBRATOR_SIMPLE" = "1" ]; then
-    echo -e "\033[1;32mTools:\033[0m Vim, Git, jq (simple mode — install more with apt)"
+  # Variant + features (baked at build time via VIBRATOR_PROFILE /
+  # VIBRATOR_FEATURES_LIST). Falls back to a hint for images built before
+  # the feature-flag system landed.
+  if [ -n "$VIBRATOR_PROFILE" ]; then
+    _profile_line="$VIBRATOR_PROFILE"
+    [ -n "$VIBRATOR_VARIANT_FINGERPRINT" ] && _profile_line="$_profile_line \033[1;90m($VIBRATOR_VARIANT_FINGERPRINT)\033[0m"
+    echo -e "\033[1;32mProfile:\033[0m $_profile_line"
+    if [ -n "$VIBRATOR_FEATURES_LIST" ]; then
+      # paste -sd ', ' cycles through TWO delimiters (',' then ' '), producing
+      # "a,b c,d" instead of "a, b, c, d". Use awk for a clean join.
+      _features_csv=$(echo "$VIBRATOR_FEATURES_LIST" | awk '{
+        for(i=1;i<=NF;i++) printf "%s%s", $i, (i<NF?", ":"")
+      }')
+      echo -e "\033[1;32mFeatures:\033[0m $_features_csv"
+    fi
+    unset _profile_line _features_csv
   else
-    echo -e "\033[1;32mTools:\033[0m Go $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'), Python $(python3 --version 2>/dev/null | awk '{print $2}' || echo 'N/A'), Vim, Git, GitHub CLI"
+    echo -e "\033[1;90mFeatures:\033[0m (image predates feature-flag system — rebuild to populate)"
   fi
-  echo -e "\033[1;32mMCP Servers:\033[0m Context7, Serena"
+
+  # claude-mem status: only emit a line when the feature is part of this
+  # image. Three states based on what the entrypoint resolved at startup:
+  #   - configured + reachable   → green
+  #   - configured + unreachable → yellow (host stack down)
+  #   - enabled but unconfigured → yellow with setup hint
+  case " ${VIBRATOR_FEATURES_LIST:-} " in
+    *" claude-mem "*)
+      if [ -n "$CLAUDE_MEM_RUNTIME" ] && [ -n "$CLAUDE_MEM_SERVER_BETA_URL" ]; then
+        if curl -sf --connect-timeout 0.3 --max-time 0.5 "$CLAUDE_MEM_SERVER_BETA_URL/healthz" >/dev/null 2>&1; then
+          echo -e "\033[1;32mclaude-mem:\033[0m connected to $CLAUDE_MEM_SERVER_BETA_URL"
+        else
+          echo -e "\033[1;33mclaude-mem:\033[0m configured but unreachable at $CLAUDE_MEM_SERVER_BETA_URL"
+          echo -e "  \033[1;90mIs the docker-compose stack up on the host?\033[0m"
+        fi
+      else
+        echo -e "\033[1;33mclaude-mem:\033[0m enabled but not configured on host"
+        echo -e "  \033[1;90mRun \033[1mvibrate --claude-mem-setup\033[0;1;90m on host for instructions.\033[0m"
+      fi
+      ;;
+  esac
   if [ "$CLAUDE_CODE_UNDERCOVER" = "1" ]; then
     echo -e "\033[1;32mUndercover mode:\033[0m ON"
   fi

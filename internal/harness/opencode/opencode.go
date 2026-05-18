@@ -56,6 +56,11 @@ func (opencode) RequiredFeatures() []string {
 	return nil
 }
 
+// SupportsLLMProvider returns true — OpenCode is BYO-provider across
+// ~75+ providers (Anthropic, OpenAI, Gemini, Groq, OpenRouter,
+// DeepSeek, and any OpenAI-compatible endpoint).
+func (opencode) SupportsLLMProvider() bool { return true }
+
 func init() {
 	harness.Register(New())
 }

@@ -119,6 +119,13 @@ type Entry struct {
 	// package, or docs page. Required for traceability.
 	Source string `yaml:"source"`
 
+	// HostAliases is the list of identifiers the host-side detection
+	// (internal/hostprobe) may emit for this entry. Used when the host
+	// stores the plugin under a different name from our catalog ID — e.g.
+	// host has "playwright", our catalog has "playwright-mcp". Lookups
+	// match against both ID and HostAliases. Lowercase, exact match.
+	HostAliases []string `yaml:"host_aliases,omitempty"`
+
 	// Body is the markdown content after the frontmatter. Populated by the
 	// loader; never set in frontmatter.
 	Body string `yaml:"-"`

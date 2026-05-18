@@ -3,6 +3,7 @@ name: Playwright MCP
 kind: mcp
 default: false
 size_mb: 500
+host_aliases: [playwright]
 deps:
   features: [playwright]
 install: |

@@ -1,49 +1,135 @@
-# vibrator (Go rewrite, in progress)
+# vibrator
 
 A single-binary CLI that runs AI coding agents (Claude Code, Codex, OpenCode,
 Pi) in isolated Docker containers per workspace — with declarative profile
 and catalog configuration via a `.vb` file at the project root.
 
-> **Status:** rewrite-in-progress on branch `pivot`. The previous bash
-> implementation is preserved under [`previous-implementation/`](./previous-implementation)
-> for design reference.
+> **Status:** Go rewrite is feature-complete on branch `pivot`. The previous
+> bash implementation lives under
+> [`previous-implementation/`](./previous-implementation) for design
+> reference. Use [`vibrate migrate-pin`](#migrating-from-the-bash-version) to
+> convert old workspaces.
 
-## Quick start (when Phase 4 lands)
+## Quick start
 
 ```bash
-just build
-sudo install build/vibrate /usr/local/bin/
+# Install: builds the binary and places it on $PATH with a short `vb` alias
+just install                       # → /usr/local/bin (uses sudo if needed)
+# or:
+just install ~/.local/bin          # → user-local, no sudo
 
+# First run — wizard fills the gaps, image builds, container drops you in:
 cd ~/my-project
-vibrate    # wizard → image build → container drops you into a shell
+vibrate          # or `vb` — same thing
+
+# Subsequent runs reuse the container (jump in instantly):
+vibrate
+
+# Skip the wizard entirely:
+vibrate --no-wizard --harness=claude-code --profile=full --shell=zsh
+
+# To remove:
+just uninstall                     # symmetric — same arg as install
 ```
 
-After the first run you'll have a `.vb` file pinning your choices. Subsequent
-`vibrate` calls in the same workspace skip the wizard and jump straight in.
+The first run writes a `.vb` file capturing your choices. It's added to
+`.gitignore` automatically.
 
-## Phase 1: Foundation (done)
+## Commands
 
-- `go.mod` + cobra CLI scaffold under [`cmd/vibrate`](./cmd/vibrate) and
-  [`internal/cli`](./internal/cli)
-- [`internal/docker`](./internal/docker) — Client interface + CLI-backed impl +
-  in-memory mock
-- [`internal/runtime`](./internal/runtime) — auto-detect Docker socket across
-  Docker Desktop, OrbStack, Colima, Rancher Desktop, Podman, native
-- [`internal/workspace`](./internal/workspace) — variant fingerprint + image /
-  container naming
-- [`internal/config`](./internal/config) — `.vb` TOML loader/writer
-- CI: `.github/workflows/ci.yml` runs vet + race-tests + lint + build smoke
+| Command | Purpose |
+|---|---|
+| `vibrate` *(bare)* | Resolve `.vb` + flags, run wizard for unset fields, build/run/exec |
+| `vibrate run` | Explicit form of the bare invocation (same flags) |
+| `vibrate wizard` | Run the wizard standalone — preview without building |
+| `vibrate build` | Build the image without running a container |
+| `vibrate build-dockerfile` | Emit the generated Dockerfile to a file / stdout |
+| `vibrate catalog list <harness>` | List catalog entries available for a harness |
+| `vibrate catalog show <id>` | Show a catalog entry's frontmatter + body |
+| `vibrate hostprobe` | Show host-detected plugins + which catalog entries map |
+| `vibrate prereqs status` | Probe host stacks (claude-mem server etc.) |
+| `vibrate prereqs bootstrap <id>` | Run host-side setup (e.g., mint a claude-mem key) |
+| `vibrate variants list` | List managed images + containers for this host |
+| `vibrate variants prune` | Remove stopped containers / unused images |
+| `vibrate runtime detect` | Auto-detect Docker socket path |
+| `vibrate migrate-pin` | Convert old bash `.vb.env` → new TOML `.vb` |
+
+Common flags (apply to `vibrate` and `vibrate run`):
+
+```
+--harness=<id>          claude-code | codex | opencode | pi (required)
+--profile=<id>          minimal | backend | frontend | full  (default: full)
+--shell=<id>            bash | zsh | fish                    (default: zsh)
+--with=feature,...      Enable extra features beyond the profile
+--no=feature,...        Disable features from the profile
+--catalog=id,...        Catalog entry IDs to install per the chosen harness
+--no-wizard             Skip the wizard entirely; require all fields via flags or .vb
+--no-save               Don't write the wizard's result to .vb
+--rebuild               Force a fresh `docker build` even when an image exists
+```
+
+## Migrating from the bash version
+
+If you have a workspace with a bash-era `.vb.env`, run:
+
+```bash
+vibrate migrate-pin --dry-run    # preview the conversion
+vibrate migrate-pin              # write .vb, archive .vb.env to .vb.env.bak
+```
+
+The migrator maps known keys (HARNESS, PROFILE, WITH/NO, CLAUDE_MEM_SERVER_BETA_*)
+to the new TOML structure and preserves unknown keys under `[env]` so nothing
+is lost.
+
+## What's inside
+
+- **`cmd/vibrate`** — thin main that wires the cobra root command.
+- **`internal/cli`** — every subcommand lives in its own file (run, build,
+  build-dockerfile, catalog, wizard, hostprobe, prereqs, variants, runtime,
+  migrate).
+- **`internal/app`** — the orchestrator. Decision tree: load pin → flag
+  overrides → wizard → validate → save → resolve specs → prereq probes →
+  local-LLM startup → build/run/exec.
+- **`internal/wizard`** — charmbracelet/huh-based form chain with adaptive
+  gating (skips steps already supplied via flags).
+- **`internal/harness`** — `Harness` interface; one subpackage per built-in
+  (claudecode, codex, opencode, pi). Each declares its install snippet,
+  required features, auth env vars, and LLM env-var mapping.
+- **`internal/feature`** — base features (python, node, go, postgres-client,
+  playwright, ...) with a topological resolver.
+- **`internal/profile`** — minimal / backend / frontend / full bundles on top
+  of `internal/feature`.
+- **`internal/catalog`** — markdown + YAML frontmatter loader for the curated
+  per-harness inventory under [`catalog/`](./catalog).
+- **`internal/dockerfile`** — deterministic Dockerfile generator with
+  golden-file tests for representative specs.
+- **`internal/docker`** — Client interface over the `docker` CLI; production
+  + mock implementations.
+- **`internal/runtime`** — auto-detect across Docker Desktop, OrbStack,
+  Colima, Rancher Desktop, Podman, native.
+- **`internal/workspace`** — variant fingerprint + image/container naming.
+- **`internal/config`** — `.vb` TOML loader/writer with `Pin` struct.
+- **`internal/hostprobe`** — scan host for installed plugins (used by the
+  wizard to pre-check catalog entries).
+- **`internal/prereq`** — host-side prereq types (HTTP / command / file
+  probes) plus the claude-mem postgres bootstrap.
+- **`internal/localprovider`** — Ollama / LM Studio lifecycle (enumerate
+  models, ensure-running before container launch).
+- **`internal/migrate`** — bash `.vb.env` → TOML `.vb` converter.
 
 ## Architectural decisions
 
 | Decision | Choice |
 |---|---|
-| Docker integration | Shell out to `docker` CLI |
-| `.vb` format | TOML |
+| Docker integration | Shell out to `docker` CLI (no SDK dep) |
+| `.vb` format | TOML (BurntSushi/toml) |
 | Catalog format | Markdown + YAML frontmatter, one file per item |
-| Harness extensibility | Built-in Go interface |
-| TUI | charmbracelet/huh — wizard fills CLI-flag gaps only |
-| Profiles | minimal / backend / frontend / full |
+| Harness extensibility | Built-in Go interface; PR to add a new one |
+| Wizard library | charmbracelet/huh — gated step-by-step |
+| Profiles | minimal / backend / frontend / full (default: full) |
+| Variant identity | SHA-256 prefix over the spec's canonical form |
+| Container reuse | Single-path workspace mount, label-driven discovery |
+| Release | goreleaser to GitHub Releases (binaries + checksums) |
 
 ---
 
@@ -99,8 +185,12 @@ just test-cover     # tests + write coverage.out
 just build          # produce ./build/vibrate
 just lint           # go vet (+ golangci-lint if installed)
 just integration    # real-docker tests (skipped unless INTEGRATION=1)
+just install        # build + place binary on $PATH with `vb` alias
+just uninstall      # remove the installed binary + alias
 just tidy           # go mod tidy
-just clean          # remove ./build/
+just clean          # remove ./build/ and ./dist/
+
+just release-snapshot         # local goreleaser dry-run → ./dist/
 
 VERSION=0.2.0 just build      # release build with embedded version
 INTEGRATION=1 just integration  # actually run integration tests
@@ -109,6 +199,24 @@ just ci             # what CI runs: lint + test + build
 just run runtime detect       # build then run the binary with args
 just versions       # print just / go / vibrator versions for bug reports
 ```
+
+### Releasing
+
+Releases are driven by tag pushes:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` then runs goreleaser, which builds
+binaries for `linux × {amd64, arm64}` and `darwin × {amd64, arm64}`,
+publishes them to a (draft) GitHub Release alongside `checksums.txt`,
+and auto-generates a changelog from the commit history since the
+previous tag.
+
+Verify locally first with `just release-snapshot` — same pipeline, but
+nothing is tagged or pushed.
 
 ### Useful `just` flags
 

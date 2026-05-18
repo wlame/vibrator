@@ -52,6 +52,18 @@ type Harness interface {
 	// the user's resolved feature set so a harness's deps are always
 	// satisfied regardless of profile/--no settings.
 	RequiredFeatures() []string
+
+	// SupportsLLMProvider reports whether the wizard should show the LLM
+	// provider/model selection step for this harness.
+	//
+	// Return false for harnesses locked to a single provider (e.g., Claude
+	// Code is Anthropic-only; the existing AuthEnvVars forwarding suffices).
+	// Return true for provider-agnostic harnesses (Codex, OpenCode, Pi).
+	//
+	// When true, the wizard will populate `pin.LLM` with the user's choice;
+	// the launch orchestrator (Phase 4e) reads it to derive container env
+	// vars and to manage local-provider lifecycle.
+	SupportsLLMProvider() bool
 }
 
 // Registry holds every built-in harness, ordered for display in the wizard.

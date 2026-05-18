@@ -3,6 +3,7 @@ name: GitHub MCP
 kind: mcp
 default: false
 size_mb: 25
+host_aliases: [github]
 deps:
   features: [go]
 auth:

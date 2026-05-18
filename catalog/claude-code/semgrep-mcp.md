@@ -3,6 +3,7 @@ name: Semgrep MCP
 kind: mcp
 default: false
 size_mb: 80
+host_aliases: [semgrep]
 deps:
   features: [python, audit-toolkit]
 install: |

@@ -37,6 +37,11 @@ func (codex) RequiredFeatures() []string {
 	return []string{"node"}
 }
 
+// SupportsLLMProvider returns true — Codex defaults to OpenAI but can be
+// pointed at any OpenAI-compatible endpoint (local Ollama, LM Studio,
+// Azure OpenAI, etc.) via OPENAI_BASE_URL.
+func (codex) SupportsLLMProvider() bool { return true }
+
 func init() {
 	harness.Register(New())
 }

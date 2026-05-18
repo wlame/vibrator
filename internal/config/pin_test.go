@@ -127,6 +127,57 @@ func TestLoad_InvalidTOML(t *testing.T) {
 	}
 }
 
+func TestPin_RoundtripLLMSpec(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+
+	// Cloud provider with env-var auth (Approach C path 1).
+	cloudPin := &Pin{
+		Harness: "codex",
+		LLM: &LLMSpec{
+			Provider: "openai",
+			Model:    "gpt-4o",
+			Auth:     &LLMAuth{Env: "OPENAI_API_KEY"},
+		},
+	}
+	if err := Save(path, cloudPin); err != nil {
+		t.Fatalf("Save cloud: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load cloud: %v", err)
+	}
+	if got.LLM == nil || got.LLM.Provider != "openai" || got.LLM.Model != "gpt-4o" {
+		t.Errorf("cloud roundtrip lost data: %#v", got.LLM)
+	}
+	if got.LLM.Auth == nil || got.LLM.Auth.Env != "OPENAI_API_KEY" || got.LLM.Auth.Value != "" {
+		t.Errorf("cloud auth roundtrip wrong: %#v", got.LLM.Auth)
+	}
+
+	// Local provider (no auth — Ollama doesn't need a key).
+	localPin := &Pin{
+		Harness: "pi",
+		LLM: &LLMSpec{
+			Provider: "ollama",
+			Model:    "qwen3:32b",
+			BaseURL:  "http://host.docker.internal:11434",
+		},
+	}
+	if err := Save(path, localPin); err != nil {
+		t.Fatalf("Save local: %v", err)
+	}
+	got, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load local: %v", err)
+	}
+	if got.LLM.Auth != nil {
+		t.Errorf("local provider should have nil Auth, got %#v", got.LLM.Auth)
+	}
+	if got.LLM.BaseURL == "" {
+		t.Errorf("BaseURL should round-trip for local provider")
+	}
+}
+
 func TestIsEmpty(t *testing.T) {
 	if !(&Pin{}).IsEmpty() {
 		t.Errorf("zero pin should be empty")
@@ -136,6 +187,9 @@ func TestIsEmpty(t *testing.T) {
 	}
 	if (&Pin{Catalog: []string{"x"}}).IsEmpty() {
 		t.Errorf("pin with catalog entry should not be empty")
+	}
+	if (&Pin{LLM: &LLMSpec{Provider: "ollama", Model: "qwen3"}}).IsEmpty() {
+		t.Errorf("pin with LLM should not be empty")
 	}
 }
 

@@ -49,6 +49,11 @@ type Pin struct {
 	No      []string `toml:"no,omitempty"`
 	Catalog []string `toml:"catalog,omitempty"`
 
+	// LLM is the chosen LLM provider + model + auth shape. nil for harnesses
+	// that don't need it (Claude Code is Anthropic-only and uses the existing
+	// AuthEnvVars forwarding). See LLMSpec for the per-field semantics.
+	LLM *LLMSpec `toml:"llm,omitempty"`
+
 	// Prereqs[prereq_id] = arbitrary key/value pairs (api_key, team_id, ...).
 	// Schema is loose by design — each prereq's bootstrap step decides what
 	// it persists. Map iteration order is randomized; we sort keys on save
@@ -62,12 +67,63 @@ type Pin struct {
 	Env map[string]string `toml:"env,omitempty"`
 }
 
+// LLMSpec captures the user's LLM-provider choice for harnesses that
+// support multiple providers (Codex, OpenCode, Pi). Persisted under the
+// `[llm]` table in `.vb`.
+//
+// Provider values:
+//   - "anthropic"      — Anthropic cloud (Claude models)
+//   - "openai"         — OpenAI cloud (GPT models)
+//   - "ollama"         — local Ollama server (host.docker.internal:11434 by default)
+//   - "lmstudio"       — local LM Studio server (host.docker.internal:1234 by default)
+//   - "openai-compat"  — any OpenAI-compatible HTTP endpoint (user-supplied URL)
+//
+// For local providers (`ollama`, `lmstudio`), Auth is nil — no key required.
+// For cloud and `openai-compat`, Auth carries either an env var name
+// (Approach C path 1) or a literal value (Approach C path 2).
+type LLMSpec struct {
+	// Provider is the canonical provider id (see list above).
+	Provider string `toml:"provider"`
+
+	// Model is the model identifier in the provider's namespace.
+	// Examples: "gpt-4o", "claude-3-5-sonnet-20241022", "qwen3:32b".
+	Model string `toml:"model"`
+
+	// BaseURL is the endpoint to talk to. Empty = use the provider's
+	// canonical default (e.g., https://api.openai.com for "openai",
+	// http://host.docker.internal:11434 for "ollama").
+	BaseURL string `toml:"base_url,omitempty"`
+
+	// Auth is the credential plan. nil = no credential needed
+	// (local providers).
+	Auth *LLMAuth `toml:"auth,omitempty"`
+}
+
+// LLMAuth carries credentials for cloud providers. Exactly one of Env
+// or Value should be set; both empty is a configuration bug.
+//
+// SECURITY: when Value is set, the pin file holds a plaintext API key.
+// The pin is saved with mode 0600 and the workspace's .gitignore is
+// updated to cover it. The host env-var path (Env) is preferred — it
+// keeps the secret in the user's shell, never in repo-adjacent files.
+type LLMAuth struct {
+	// Env is the name (not value) of a host environment variable
+	// carrying the API key. The orchestrator forwards $Env into the
+	// container at `docker run` time. Examples: "OPENAI_API_KEY".
+	Env string `toml:"env,omitempty"`
+
+	// Value is a literal API key pasted into the wizard. Mutually
+	// exclusive with Env. Stored plaintext in `.vb` (0600 + gitignored).
+	Value string `toml:"value,omitempty"`
+}
+
 // IsEmpty reports whether the pin carries any data worth saving.
 // Used to avoid writing an empty file when the user opts out of pinning
 // mid-wizard.
 func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
 		len(p.With) == 0 && len(p.No) == 0 && len(p.Catalog) == 0 &&
+		p.LLM == nil &&
 		len(p.Prereqs) == 0 && len(p.Env) == 0
 }
 
@@ -101,7 +157,9 @@ func Save(path string, p *Pin) error {
 	b.WriteString("# Plaintext prereq tokens may live in [prereqs.*] subtables — keep gitignored.\n\n")
 
 	// Scalars + simple lists first. We use the encoder for these because it
-	// already handles quoting and edge cases (apostrophes etc.).
+	// already handles quoting and edge cases (apostrophes etc.). LLM is
+	// included here so the encoder emits [llm] and [llm.auth] subtables
+	// in deterministic field order — no manual assembly needed.
 	scalars := struct {
 		Harness string   `toml:"harness,omitempty"`
 		Profile string   `toml:"profile,omitempty"`
@@ -109,6 +167,7 @@ func Save(path string, p *Pin) error {
 		With    []string `toml:"with,omitempty"`
 		No      []string `toml:"no,omitempty"`
 		Catalog []string `toml:"catalog,omitempty"`
+		LLM     *LLMSpec `toml:"llm,omitempty"`
 	}{
 		Harness: p.Harness,
 		Profile: p.Profile,
@@ -116,6 +175,7 @@ func Save(path string, p *Pin) error {
 		With:    p.With,
 		No:      p.No,
 		Catalog: p.Catalog,
+		LLM:     p.LLM,
 	}
 	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {
 		return fmt.Errorf("encode pin scalars: %w", err)

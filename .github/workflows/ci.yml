@@ -19,11 +19,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: go vet
-        run: go vet ./...
+      - name: Install just
+        uses: extractions/setup-just@v3
 
-      - name: go test (race)
-        run: go test -race -timeout=60s ./...
+      - name: just vet
+        run: just vet
+
+      - name: just test
+        run: just test
 
   lint:
     name: Lint
@@ -41,8 +44,6 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          # Don't fail CI on lint issues yet — we're early in the rewrite.
-          # Flip this to false once the codebase stabilises.
           args: --timeout=5m
 
   build:
@@ -58,8 +59,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install just
+        uses: extractions/setup-just@v3
+
       - name: Build
-        run: make build VERSION=ci-${{ github.sha }}
+        env:
+          VERSION: ci-${{ github.sha }}
+        run: just build
 
       - name: Smoke test — version flag
         run: |

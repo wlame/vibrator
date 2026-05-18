@@ -1,18 +1,25 @@
+# Claude Code / Serena working dirs
 .claude/
 .serena/
 
-# Build artifacts
-build/
+# Go build artifacts
+/build/
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
 
-# Claude authentication token (NEVER commit this!)
-.claude-docker-token
-
-# Vibrator workspace pin — may contain a plaintext claude-mem API key
-# after auto-bootstrap. Per-workspace, never shared via VCS.
+# Workspace pin (new format) — contains plaintext claude-mem API key after bootstrap
+.vb
 .vb.env
 
-# website build artifacts
-web/
+# Legacy bash build artifacts under previous-implementation/
+previous-implementation/build/
 
+# OS / editor noise
 .DS_Store
 core
+*.swp
+.idea/
+.vscode/

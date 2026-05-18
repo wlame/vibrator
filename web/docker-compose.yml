@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: vibrate-traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/acme.json:/acme.json
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.vibrate.sh`)"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.traefik.middlewares=traefik-https-redirect"
+      - "traefik.http.routers.traefik-secure.entrypoints=https"
+      - "traefik.http.routers.traefik-secure.rule=Host(`traefik.vibrate.sh`)"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+
+  web:
+    image: nginx:alpine
+    container_name: vibrate-web
+    restart: unless-stopped
+    volumes:
+      - ./static:/usr/share/nginx/html:ro
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vibrate.entrypoints=http"
+      - "traefik.http.routers.vibrate.rule=Host(`vibrate.sh`)"
+      - "traefik.http.middlewares.vibrate-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.vibrate.middlewares=vibrate-https-redirect"
+      - "traefik.http.routers.vibrate-secure.entrypoints=https"
+      - "traefik.http.routers.vibrate-secure.rule=Host(`vibrate.sh`)"
+      - "traefik.http.routers.vibrate-secure.tls=true"
+      - "traefik.http.routers.vibrate-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.vibrate-secure.service=vibrate"
+      - "traefik.http.services.vibrate.loadbalancer.server.port=80"
+
+networks:
+  web:
+    external: false

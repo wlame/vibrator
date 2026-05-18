@@ -81,6 +81,7 @@ type RunSpec struct {
 	ShmSize      string            // --shm-size (e.g. "2g")
 	SecurityOpts []string          // --security-opt entries
 	CapAdd       []string          // --cap-add (e.g. SYS_ADMIN for dind)
+	AddHosts     []string          // --add-host entries (e.g. "host.docker.internal:host-gateway")
 	Volumes      []Volume          // -v repeated
 	Env          []EnvVar          // -e repeated
 	Labels       map[string]string // --label repeated
@@ -307,6 +308,9 @@ func buildRunArgs(spec RunSpec) []string {
 	}
 	for _, c := range spec.CapAdd {
 		args = append(args, "--cap-add", c)
+	}
+	for _, h := range spec.AddHosts {
+		args = append(args, "--add-host", h)
 	}
 	if spec.ContainerName != "" {
 		args = append(args, "--name", spec.ContainerName)

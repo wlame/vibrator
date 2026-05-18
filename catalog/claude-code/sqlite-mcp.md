@@ -3,6 +3,7 @@ name: SQLite MCP
 kind: mcp
 default: false
 size_mb: 10
+host_aliases: [sqlite]
 deps:
   features: [python]
 install: |

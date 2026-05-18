@@ -41,6 +41,11 @@ func (pi) RequiredFeatures() []string {
 	return []string{"node"}
 }
 
+// SupportsLLMProvider returns true — Pi is provider-agnostic via
+// OpenAI-compatible endpoints; users routinely point it at local
+// Ollama or remote OpenAI/Anthropic via custom base URLs.
+func (pi) SupportsLLMProvider() bool { return true }
+
 func init() {
 	harness.Register(New())
 }

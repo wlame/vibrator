@@ -3,6 +3,7 @@ name: Filesystem MCP
 kind: mcp
 default: false
 size_mb: 5
+host_aliases: [filesystem]
 deps:
   features: [node]
 install: |

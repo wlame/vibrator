@@ -3,6 +3,7 @@ name: PostgreSQL MCP (read-only)
 kind: mcp
 default: false
 size_mb: 15
+host_aliases: [postgres]
 deps:
   features: [node, postgres-client]
 auth:

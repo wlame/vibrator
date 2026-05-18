@@ -49,6 +49,12 @@ func (claudeCode) RequiredFeatures() []string {
 	return nil
 }
 
+// SupportsLLMProvider returns false — Claude Code is Anthropic-only.
+// Authentication is handled by AuthEnvVars (CLAUDE_CODE_OAUTH_TOKEN /
+// ANTHROPIC_API_KEY); there's no provider/model decision for the wizard
+// to surface.
+func (claudeCode) SupportsLLMProvider() bool { return false }
+
 func init() {
 	harness.Register(New())
 }

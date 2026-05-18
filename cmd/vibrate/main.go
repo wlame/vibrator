@@ -10,6 +10,14 @@ import (
 	"os"
 
 	"github.com/wlame/vibrator/internal/cli"
+
+	// Side-effect import: registers every built-in harness with the global
+	// harness registry. Without this, `vibrate catalog ...`,
+	// `vibrate build-dockerfile`, etc. wouldn't know about claude-code,
+	// codex, opencode, or pi. Keep this as the only consumer of harness/all
+	// — internal packages should import only the specific harnesses they
+	// need.
+	_ "github.com/wlame/vibrator/internal/harness/all"
 )
 
 func main() {

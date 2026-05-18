@@ -1,0 +1,96 @@
+# goreleaser configuration for the vibrate binary.
+#
+# Builds cross-platform binaries for Linux + macOS on amd64 + arm64,
+# attaches them to a GitHub Release, and publishes a checksum manifest.
+# Run via `goreleaser release` in CI (see .github/workflows/release.yml)
+# or `goreleaser --snapshot --clean` locally for a dry-run.
+#
+# Version baked into the binary at build time via -ldflags. The same
+# variable (`internal/cli.Version`) is consulted by the justfile so
+# `just build` and `goreleaser build` produce binaries that report
+# matching versions.
+
+version: 2
+
+project_name: vibrate
+
+# --- Pre-checks -----------------------------------------------------------
+
+before:
+  hooks:
+    # Mod tidy is cheap and catches stale go.sum issues before the build.
+    - go mod tidy
+    # Run the full test suite. We want releases to be green.
+    - go test ./...
+
+# --- Build matrix ---------------------------------------------------------
+
+builds:
+  - id: vibrate
+    main: ./cmd/vibrate
+    binary: vibrate
+    # Single binary; no plugins or shared libs.
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # Strip the symbol table + DWARF, then inject the version.
+    ldflags:
+      - -s -w
+      - -X github.com/wlame/vibrator/internal/cli.Version={{.Version}}
+    # Reproducible builds: use the commit timestamp so two runs of the
+    # same tag produce byte-identical output.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# --- Archives -------------------------------------------------------------
+
+archives:
+  - id: vibrate
+    # Format: vibrate_<version>_<os>_<arch>.tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    # Bundle the README + license + catalog source as reference material
+    # (the binary embeds these at build time, but having them in the
+    # archive helps users browse without unpacking the binary).
+    files:
+      - README.md
+      - LICENSE*
+      - catalog/**/*
+
+# --- Checksums ------------------------------------------------------------
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# --- Snapshot builds (local dry-run) --------------------------------------
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+# --- Changelog ------------------------------------------------------------
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    # Keep the changelog focused: drop trivial commits and chore noise.
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+# --- Release notes --------------------------------------------------------
+
+release:
+  # Auto-draft so we can review before publishing. CI flips this to
+  # `false` once we trust the pipeline.
+  draft: true
+  prerelease: auto

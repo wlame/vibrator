@@ -1,0 +1,169 @@
+package docker
+
+import (
+	"context"
+	"sync"
+)
+
+// Mock is an in-memory Client implementation for unit tests.
+//
+// It records every call's name and arguments so tests can assert that
+// callers invoked the right operation with the right shape. Return values
+// (Info error, ImageExists bool, ContainerStatus string) are stubbed by
+// setting the corresponding ...Result fields before exercising the SUT.
+//
+// Mock is safe for concurrent use.
+type Mock struct {
+	mu sync.Mutex
+
+	// Calls records every method invocation in order. Each entry is the
+	// docker arg vector that would have been passed to the real CLI, so
+	// assertions can compare against expected command lines without
+	// depending on Go struct field ordering.
+	Calls [][]string
+
+	// --- Stubbed return values ---
+
+	// InfoErr is returned by Info().
+	InfoErr error
+
+	// BuildErr is returned by Build().
+	BuildErr error
+
+	// RunErr is returned by Run().
+	RunErr error
+
+	// ExecErr is returned by Exec().
+	ExecErr error
+
+	// StartErr is returned by Start().
+	StartErr error
+
+	// Images is the set of image tags that ImageExists should report as
+	// present. nil = empty.
+	Images map[string]bool
+
+	// Containers maps container name to its reported docker status string
+	// (e.g., "running", "exited"). Missing entries → ("", nil) — meaning
+	// "container does not exist", matching the real CLI semantics.
+	Containers map[string]string
+}
+
+// NewMock returns a Mock with empty stubs. Use this in tests when you want
+// a clean baseline; mutate fields directly to customize.
+func NewMock() *Mock {
+	return &Mock{
+		Images:     make(map[string]bool),
+		Containers: make(map[string]string),
+	}
+}
+
+// recordCall captures a call. Argv mimics what the real CLIClient would
+// have passed to `docker`, which makes test assertions match user expectations.
+func (m *Mock) recordCall(argv ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Defensive copy so callers can't mutate retroactively.
+	cp := make([]string, len(argv))
+	copy(cp, argv)
+	m.Calls = append(m.Calls, cp)
+}
+
+// CallsFor returns just the calls whose first arg matches verb (e.g., "build",
+// "run", "exec"). Convenience for assertions.
+func (m *Mock) CallsFor(verb string) [][]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out [][]string
+	for _, c := range m.Calls {
+		if len(c) > 0 && c[0] == verb {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// Reset clears recorded calls and stubbed state. Useful between subtests.
+func (m *Mock) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Calls = nil
+	m.InfoErr = nil
+	m.BuildErr = nil
+	m.RunErr = nil
+	m.ExecErr = nil
+	m.StartErr = nil
+	m.Images = make(map[string]bool)
+	m.Containers = make(map[string]string)
+}
+
+// --- Client implementation ---
+
+func (m *Mock) Info(ctx context.Context) error {
+	m.recordCall("info")
+	return m.InfoErr
+}
+
+func (m *Mock) Build(ctx context.Context, spec BuildSpec) error {
+	// Mirror the real arg construction so tests can compare easily.
+	argv := []string{"build"}
+	for _, k := range sortedMapKeys(spec.BuildArgs) {
+		argv = append(argv, "--build-arg", k+"="+spec.BuildArgs[k])
+	}
+	if spec.NoCache {
+		argv = append(argv, "--no-cache")
+	}
+	argv = append(argv, "-t", spec.Tag)
+	if spec.DockerfilePath != "" {
+		argv = append(argv, "-f", spec.DockerfilePath, spec.ContextDir)
+	} else if len(spec.DockerfileBytes) > 0 {
+		argv = append(argv, "-f", "-", spec.ContextDir)
+	} else {
+		argv = append(argv, spec.ContextDir)
+	}
+	m.recordCall(argv...)
+	return m.BuildErr
+}
+
+func (m *Mock) Run(ctx context.Context, spec RunSpec) error {
+	argv := buildRunArgs(spec)
+	m.recordCall(argv...)
+	return m.RunErr
+}
+
+func (m *Mock) Exec(ctx context.Context, spec ExecSpec) error {
+	argv := []string{"exec"}
+	if spec.Interactive {
+		argv = append(argv, "-it")
+	}
+	for _, e := range spec.Env {
+		argv = append(argv, "-e", e.Name+"="+e.Value)
+	}
+	argv = append(argv, spec.Container)
+	argv = append(argv, spec.Cmd...)
+	m.recordCall(argv...)
+	return m.ExecErr
+}
+
+func (m *Mock) Start(ctx context.Context, nameOrID string) error {
+	m.recordCall("start", nameOrID)
+	return m.StartErr
+}
+
+func (m *Mock) ImageExists(ctx context.Context, image string) (bool, error) {
+	m.recordCall("image", "inspect", "--format", "{{.Id}}", image)
+	return m.Images[image], nil
+}
+
+func (m *Mock) ContainerStatus(ctx context.Context, name string) (string, error) {
+	m.recordCall("container", "inspect", "--format", "{{.State.Status}}", name)
+	return m.Containers[name], nil
+}
+
+// Static compile-time check that Mock satisfies the Client interface.
+// If we change the Client signature, the build breaks here before tests do.
+var _ Client = (*Mock)(nil)
+
+// Same for CLIClient (kept here rather than in docker.go so adding new
+// methods to Client surfaces both broken implementations on the same line).
+var _ Client = (*CLIClient)(nil)

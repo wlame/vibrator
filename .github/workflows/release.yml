@@ -1,0 +1,51 @@
+name: Release
+
+# Triggered when a version tag is pushed (e.g., v0.2.0). Tag the
+# release branch with `git tag vX.Y.Z && git push origin vX.Y.Z`;
+# goreleaser does the rest.
+#
+# The workflow:
+#   - sets up Go (from go.mod)
+#   - runs goreleaser to build cross-platform binaries
+#   - publishes them as a (draft) GitHub Release with checksums
+#
+# We don't auto-publish — the draft gives a chance to review the
+# generated changelog and binary set before flipping to public.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  # goreleaser needs write access to releases (binaries, notes).
+  contents: write
+  # If we later add GHCR image publishing, also: packages: write
+
+jobs:
+  goreleaser:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # goreleaser uses git history for the auto-changelog.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Default token has releases:write via the workflow permission
+          # above. No separate PAT needed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

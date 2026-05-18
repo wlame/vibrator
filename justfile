@@ -88,12 +88,66 @@ integration:
 tidy:
     {{go}} mod tidy
 
+# Install the binary system-wide with a `vb` short alias.
+#
+# Usage:
+#   just install                  # → /usr/local/bin (uses sudo)
+#   just install ~/.local/bin     # → user-local, no sudo
+#
+# If `dest` is writable by the current user (e.g., ~/.local/bin),
+# sudo is skipped automatically. Otherwise the install + symlink
+# steps go through sudo.
+install dest="/usr/local/bin": build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DEST="{{dest}}"
+    # Expand a leading ~ since the shell here is invoked with -u and
+    # tilde expansion happens at unquoted-arg parse time — values
+    # forwarded as variables don't get expanded.
+    DEST="${DEST/#\~/$HOME}"
+    mkdir -p "$DEST" 2>/dev/null || true
+    if [[ -w "$DEST" ]]; then
+      SUDO=""
+    else
+      SUDO="sudo"
+      echo "→ Destination $DEST is not user-writable; using sudo"
+    fi
+    $SUDO install {{binary}} "$DEST/"
+    $SUDO ln -sf "$DEST/vibrate" "$DEST/vb"
+    echo "✓ Installed: $DEST/vibrate (alias: vb)"
+
+# Remove the installed binary + alias from `dest`.
+uninstall dest="/usr/local/bin":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DEST="{{dest}}"
+    DEST="${DEST/#\~/$HOME}"
+    if [[ -w "$DEST" ]]; then
+      SUDO=""
+    else
+      SUDO="sudo"
+    fi
+    $SUDO rm -f "$DEST/vibrate" "$DEST/vb"
+    echo "✓ Removed: $DEST/vibrate and $DEST/vb"
+
 # Composite check — what CI runs on every PR
 ci: lint test build
 
+# Run goreleaser in snapshot mode — builds cross-platform binaries to ./dist/
+# without tagging or publishing. Requires `goreleaser` on PATH.
+# Install: https://goreleaser.com/install/
+release-snapshot:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v goreleaser >/dev/null 2>&1; then
+      echo "goreleaser not installed — see https://goreleaser.com/install/"
+      exit 1
+    fi
+    goreleaser release --snapshot --clean
+
 # Remove build artifacts
 clean:
-    rm -rf {{bin_dir}} coverage.out
+    rm -rf {{bin_dir}} coverage.out dist/
 
 # Build then run the binary with arbitrary args, e.g.:
 #   just run runtime detect

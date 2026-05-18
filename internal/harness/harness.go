@@ -64,6 +64,23 @@ type Harness interface {
 	// the launch orchestrator (Phase 4e) reads it to derive container env
 	// vars and to manage local-provider lifecycle.
 	SupportsLLMProvider() bool
+
+	// LLMEnvVars maps an LLM provider configuration into the container
+	// environment variables this harness expects.
+	//
+	// Inputs are the resolved LLM choice from `pin.LLM`:
+	//   - provider: canonical id ("openai", "anthropic", "ollama",
+	//     "lmstudio", "openai-compat")
+	//   - model:    model name as the provider expects it
+	//   - baseURL:  endpoint URL (empty for provider defaults)
+	//   - apiKey:   resolved key (orchestrator extracts from .vb's
+	//     llm.auth.value OR $llm.auth.env on the host)
+	//
+	// Returns a map of env var name → value the orchestrator will
+	// pass into `docker run`. Harnesses that don't support LLM
+	// configuration (claude-code) return an empty map; the existing
+	// AuthEnvVars surface still does its job.
+	LLMEnvVars(provider, model, baseURL, apiKey string) map[string]string
 }
 
 // Registry holds every built-in harness, ordered for display in the wizard.

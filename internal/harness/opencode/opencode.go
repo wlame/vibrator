@@ -61,6 +61,47 @@ func (opencode) RequiredFeatures() []string {
 // DeepSeek, and any OpenAI-compatible endpoint).
 func (opencode) SupportsLLMProvider() bool { return true }
 
+// LLMEnvVars maps the LLM choice into OpenCode's provider env vars.
+// OpenCode looks at provider-specific env vars (ANTHROPIC_API_KEY,
+// OPENAI_API_KEY, etc.); it doesn't have a single unified pair like
+// Codex's OPENAI_API_KEY+OPENAI_BASE_URL. The mapping below mirrors
+// OpenCode's documented conventions as of May 2026.
+//
+// For local providers, OpenCode uses its custom-provider config in
+// ~/.config/opencode/opencode.json (NOT env vars). For v0.1 we set
+// the OpenAI-compat pair as a hint — power users still need the
+// matching opencode.json snippet if they need provider-specific
+// behavior. Future work: bind-mount a generated opencode.json fragment.
+func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
+	env := map[string]string{}
+	switch provider {
+	case "":
+		return env
+	case "openai", "openai-compat":
+		if apiKey != "" {
+			env["OPENAI_API_KEY"] = apiKey
+		}
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL
+		}
+	case "anthropic":
+		if apiKey != "" {
+			env["ANTHROPIC_API_KEY"] = apiKey
+		}
+	case "ollama":
+		env["OPENAI_API_KEY"] = "ollama"
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL + "/v1"
+		}
+	case "lmstudio":
+		env["OPENAI_API_KEY"] = "lm-studio"
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL + "/v1"
+		}
+	}
+	return env
+}
+
 func init() {
 	harness.Register(New())
 }

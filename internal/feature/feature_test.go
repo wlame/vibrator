@@ -51,6 +51,43 @@ func TestRegistry_HasNoDuplicates(t *testing.T) {
 	}
 }
 
+func TestRegistry_AllHaveDockerfile(t *testing.T) {
+	// Every feature must carry a non-empty Dockerfile fragment, otherwise
+	// the generator emits an empty stage when that feature is enabled.
+	for _, f := range Registry {
+		if strings.TrimSpace(f.Dockerfile) == "" {
+			t.Errorf("feature %q has empty Dockerfile fragment", f.ID)
+		}
+	}
+}
+
+func TestResolve_EnabledIsRegistryOrder(t *testing.T) {
+	// Resolve must emit Enabled in Registry order so deps always precede
+	// dependents in the generated Dockerfile (playwright → node means node
+	// must be in Enabled before playwright).
+	got, err := Resolve(nil, []string{"playwright"}, nil)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	// playwright depends on node. Find each index.
+	nodeIdx, pwIdx := -1, -1
+	for i, id := range got.Enabled {
+		if id == "node" {
+			nodeIdx = i
+		}
+		if id == "playwright" {
+			pwIdx = i
+		}
+	}
+	if nodeIdx < 0 || pwIdx < 0 {
+		t.Fatalf("missing node or playwright in Enabled: %v", got.Enabled)
+	}
+	if nodeIdx > pwIdx {
+		t.Errorf("node (idx %d) should precede playwright (idx %d) in Enabled: %v",
+			nodeIdx, pwIdx, got.Enabled)
+	}
+}
+
 func TestRegistry_DepsAreKnown(t *testing.T) {
 	// Every Deps entry must point at a real feature, otherwise Resolve
 	// produces silent bugs (the dep would always be missing).
@@ -72,7 +109,9 @@ func TestResolve_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	want := []string{"gh", "go", "python"}
+	// Enabled is sorted by Registry order so deps always precede dependents
+	// in the generated Dockerfile.
+	want := []string{"python", "go", "gh"}
 	if !reflect.DeepEqual(got.Enabled, want) {
 		t.Errorf("Enabled = %v, want %v", got.Enabled, want)
 	}

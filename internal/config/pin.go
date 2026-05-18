@@ -1,0 +1,261 @@
+// Package config loads and saves the `.vb` per-workspace pin file (TOML).
+//
+// The pin file records:
+//   - the harness, profile, and shell the user picked (so future `vibrate` runs
+//     in this workspace can skip the wizard entirely)
+//   - delta feature toggles on top of the profile (with/no lists)
+//   - per-harness catalog selections
+//   - cached prerequisite tokens (e.g., claude-mem project-scoped API key)
+//     that were minted on first run by host-side bootstrap and shouldn't be
+//     re-minted on subsequent invocations
+//   - optional environment variable overrides forwarded into the container
+//
+// `.vb` is found by walking up from $PWD to either the git root (when the
+// workspace is inside a git repo) or the filesystem root. The first hit wins.
+//
+// SECURITY: the pin file holds plaintext credentials when prereqs have been
+// bootstrapped. Mode is set to 0600 on write. Callers should ensure `.vb` is
+// gitignored — AppendToGitignore() exists for that.
+package config
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/BurntSushi/toml"
+)
+
+// PinFileName is the workspace-scoped pin file Vibrator looks for.
+const PinFileName = ".vb"
+
+// Pin is the in-memory representation of the TOML pin file. Field tags drive
+// both the encoder and the decoder, so renaming a Go field without changing
+// the tag is a backward-compatible change (and vice versa).
+type Pin struct {
+	Harness string `toml:"harness,omitempty"`
+	Profile string `toml:"profile,omitempty"`
+	Shell   string `toml:"shell,omitempty"`
+
+	// With and No are deltas relative to the chosen profile's feature bundle.
+	// Resolving them happens in internal/feature, not here.
+	With    []string `toml:"with,omitempty"`
+	No      []string `toml:"no,omitempty"`
+	Catalog []string `toml:"catalog,omitempty"`
+
+	// Prereqs[prereq_id] = arbitrary key/value pairs (api_key, team_id, ...).
+	// Schema is loose by design — each prereq's bootstrap step decides what
+	// it persists. Map iteration order is randomized; we sort keys on save
+	// for stable file diffs.
+	Prereqs map[string]map[string]string `toml:"prereqs,omitempty"`
+
+	// Env is a host->container environment variable forwarding map. Values
+	// of the form "$NAME" are treated as references to the host env and
+	// resolved at container-run time, NOT at pin-load time. Plain values
+	// are forwarded as-is.
+	Env map[string]string `toml:"env,omitempty"`
+}
+
+// IsEmpty reports whether the pin carries any data worth saving.
+// Used to avoid writing an empty file when the user opts out of pinning
+// mid-wizard.
+func (p Pin) IsEmpty() bool {
+	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
+		len(p.With) == 0 && len(p.No) == 0 && len(p.Catalog) == 0 &&
+		len(p.Prereqs) == 0 && len(p.Env) == 0
+}
+
+// Load reads a .vb file from path and decodes it into a Pin.
+// Returns os.ErrNotExist if the file isn't there — callers commonly probe
+// without caring whether it exists, so we surface a distinguishable error.
+func Load(path string) (*Pin, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var p Pin
+	if _, err := toml.Decode(string(data), &p); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	return &p, nil
+}
+
+// Save writes a Pin to path as TOML with mode 0600.
+//
+// Map keys (Prereqs, Env) are emitted in sorted order so the file produces
+// stable diffs across reorderings. This is done by walking the maps in
+// sorted order and constructing the TOML by hand for those sections;
+// scalar/list fields use the encoder.
+//
+// The default BurntSushi encoder doesn't expose a map-sort hook, hence the
+// custom assembly. Trivial — TOML is small and we control the schema.
+func Save(path string, p *Pin) error {
+	var b strings.Builder
+	b.WriteString("# vibrator workspace pin (`.vb`) — auto-managed by `vibrate`.\n")
+	b.WriteString("# Plaintext prereq tokens may live in [prereqs.*] subtables — keep gitignored.\n\n")
+
+	// Scalars + simple lists first. We use the encoder for these because it
+	// already handles quoting and edge cases (apostrophes etc.).
+	scalars := struct {
+		Harness string   `toml:"harness,omitempty"`
+		Profile string   `toml:"profile,omitempty"`
+		Shell   string   `toml:"shell,omitempty"`
+		With    []string `toml:"with,omitempty"`
+		No      []string `toml:"no,omitempty"`
+		Catalog []string `toml:"catalog,omitempty"`
+	}{
+		Harness: p.Harness,
+		Profile: p.Profile,
+		Shell:   p.Shell,
+		With:    p.With,
+		No:      p.No,
+		Catalog: p.Catalog,
+	}
+	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {
+		return fmt.Errorf("encode pin scalars: %w", err)
+	}
+
+	// Prereqs subtables in sorted order.
+	if len(p.Prereqs) > 0 {
+		keys := sortedKeys(p.Prereqs)
+		for _, prereqID := range keys {
+			b.WriteString("\n[prereqs.")
+			b.WriteString(prereqID)
+			b.WriteString("]\n")
+			innerKeys := sortedKeys(p.Prereqs[prereqID])
+			for _, k := range innerKeys {
+				fmt.Fprintf(&b, "%s = %q\n", k, p.Prereqs[prereqID][k])
+			}
+		}
+	}
+
+	// Env table in sorted order.
+	if len(p.Env) > 0 {
+		b.WriteString("\n[env]\n")
+		for _, k := range sortedKeys(p.Env) {
+			fmt.Fprintf(&b, "%s = %q\n", k, p.Env[k])
+		}
+	}
+
+	// 0600 — the file may hold plaintext API keys after bootstrap.
+	return os.WriteFile(path, []byte(b.String()), 0o600)
+}
+
+// FindPin walks from startDir upward, looking for a .vb file. Stops at the
+// git repo root if one is in the chain, otherwise the filesystem root.
+// Returns the path to the file, or "" + os.ErrNotExist if none found.
+//
+// Returning "" with an ErrNotExist error rather than just an empty string
+// makes the API predictable: callers can use errors.Is(err, os.ErrNotExist).
+func FindPin(startDir string) (string, error) {
+	abs, err := filepath.Abs(startDir)
+	if err != nil {
+		return "", err
+	}
+	gitRoot := detectGitRoot(abs) // may be "" if not in a repo
+
+	dir := abs
+	for {
+		candidate := filepath.Join(dir, PinFileName)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, nil
+		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+
+		// Stop at git root, if known.
+		if gitRoot != "" && dir == gitRoot {
+			break
+		}
+		// Stop at filesystem root.
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", os.ErrNotExist
+}
+
+// AppendToGitignore appends ".vb" to the workspace's .gitignore if and only if:
+//   - .gitignore exists at workspaceDir (we don't create one — that would be
+//     intrusive for projects that deliberately track everything)
+//   - .vb isn't already covered by an exact-line match
+//
+// Idempotent. Does NOT stage or commit anything.
+func AppendToGitignore(workspaceDir string) (changed bool, err error) {
+	gi := filepath.Join(workspaceDir, ".gitignore")
+	info, err := os.Stat(gi)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil // not an error, just nothing to do
+		}
+		return false, err
+	}
+	if info.IsDir() {
+		return false, fmt.Errorf(".gitignore at %s is a directory", workspaceDir)
+	}
+
+	content, err := os.ReadFile(gi)
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == ".vb" {
+			return false, nil
+		}
+	}
+
+	// Ensure we don't glue to the previous line.
+	f, err := os.OpenFile(gi, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	prefix := ""
+	if len(content) > 0 && !strings.HasSuffix(string(content), "\n") {
+		prefix = "\n"
+	}
+	if _, err := io.WriteString(f,
+		prefix+"\n# vibrator workspace pin — may contain plaintext prereq tokens\n.vb\n",
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// detectGitRoot returns the absolute path of the git repository containing
+// dir, or "" if dir is not inside any git repo or git is unavailable. We
+// shell out to `git rev-parse --show-toplevel` rather than walking for
+// `.git` directories — that's the canonical way and handles git worktrees,
+// submodules, and GIT_DIR overrides.
+func detectGitRoot(dir string) string {
+	if _, err := exec.LookPath("git"); err != nil {
+		return ""
+	}
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// sortedKeys returns the keys of m in lexicographic order. Generic over
+// map value type. Pure helper for stable TOML emission.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}

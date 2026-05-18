@@ -1,191 +1,63 @@
-# Vibrator
+# vibrator (Go rewrite, in progress)
 
-Run Claude Code in YOLO mode inside Docker containers — automatic runtime detection, pre-configured MCP servers, security restrictions baked in.
+A single-binary CLI that runs AI coding agents (Claude Code, Codex, OpenCode,
+Pi) in isolated Docker containers per workspace — with declarative profile
+and catalog configuration via a `.vb` file at the project root.
 
-[![Tests](https://img.shields.io/badge/tests-52%2F52-brightgreen)](./tests)
-[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+> **Status:** rewrite-in-progress on branch `pivot`. The previous bash
+> implementation is preserved under [`previous-implementation/`](./previous-implementation)
+> for design reference. See
+> [docs/plans](https://github.com/wlame/vibrator) for the current plan.
 
----
-
-## Install
+## Quick start (when Phase 4 lands)
 
 ```bash
-git clone https://github.com/wlame/vibrator.git
-cd vibrator
 make build
-cp build/vibrate.sh /usr/local/bin/vibrate
-```
+sudo install build/vibrate /usr/local/bin/
 
-Or download the latest `vibrate.sh` from releases and put it in your PATH.
-
----
-
-## Quick Start
-
-```bash
 cd ~/my-project
-vibrate
+vibrate    # wizard → image build → container drops you into a shell
 ```
 
-That's it. Vibrator auto-detects your Docker runtime (Docker Desktop, OrbStack, Colima, Podman, etc.), builds the image on first run, and drops you into an interactive shell with Claude Code ready to go.
+After the first run you'll have a `.vb` file pinning your choices. Subsequent
+`vibrate` calls in the same workspace skip the wizard and jump straight in.
 
----
+## Phase 1: Foundation (done)
 
-## Authentication
+- `go.mod` + cobra CLI scaffold under [`cmd/vibrate`](./cmd/vibrate) and
+  [`internal/cli`](./internal/cli)
+- [`internal/docker`](./internal/docker) — Client interface + CLI-backed impl +
+  in-memory mock
+- [`internal/runtime`](./internal/runtime) — auto-detect Docker socket across
+  Docker Desktop, OrbStack, Colima, Rancher Desktop, Podman, native
+- [`internal/workspace`](./internal/workspace) — variant fingerprint + image /
+  container naming
+- [`internal/config`](./internal/config) — `.vb` TOML loader/writer
+- CI: `.github/workflows/ci.yml` runs `go vet`, `go test -race`, build, smoke
 
-### Recommended: OAuth token (long-lived)
+## Architectural decisions
 
-1. On the **host**, generate a token:
-   ```bash
-   claude setup-token
-   ```
-2. Save it:
-   ```bash
-   echo "eyJhbGc..." > ~/.claude-docker-token
-   ```
-   Vibrator picks this up automatically on every run.
+See `docs/plans/i-want-to-pivod-functional-tower.md` (in `~/.claude/plans/` on
+the author's machine; will move into-repo at `docs/plans/` later).
 
-> **Note:** Using a pre-set OAuth token (`CLAUDE_CODE_OAUTH_TOKEN` or `~/.claude-docker-token`) does **not** grant access to the 1M context window, even if your Claude plan includes it. The extended context is tied to browser-based OAuth login.
->
-> To use 1M context inside the container, skip the token file and log in interactively:
-> ```bash
-> unset CLAUDE_CODE_OAUTH_TOKEN
-> vibrate
-> # then inside the container:
-> claude auth login
-> ```
-
-### Alternative: Anthropic API key
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-... vibrate
-```
-
----
-
-## Common Options
-
-```bash
-vibrate                          # Interactive shell (current directory)
-vibrate --workspace /path        # Custom workspace
-vibrate --build                  # Build image and exit
-vibrate --rebuild                # Force rebuild from scratch
-vibrate --dind                   # Docker-in-Docker (elevated privileges)
-vibrate --ssh-gpg-agents         # Forward SSH/GPG agents (opt-in)
-vibrate --verbose                # Show Docker commands and runtime info
-vibrate --export-dockerfile FILE # Dump generated Dockerfile
-```
-
-### Environment variables
-
-```bash
-VIBRATOR_IMAGE          # Override Docker image
-VIBRATOR_VERBOSE=1      # Verbose output
-VIBRATOR_DOCKER_SOCKET  # Override Docker socket
-CLAUDE_CODE_OAUTH_TOKEN # OAuth token (preferred auth)
-ANTHROPIC_API_KEY       # API key (legacy auth)
-```
-
----
-
-## Build options
-
-The image ships with everything by default (~2 GB). You can slim it via profiles
-and individual feature toggles:
-
-```bash
-vibrate --profile minimal             # ~150 MB, just dev-cli
-vibrate --profile backend             # ~600 MB, no Playwright / no audit toolkit
-vibrate --no-audit-toolkit            # default minus the security scanners
-vibrate --profile backend --with-playwright
-vibrate --explain                     # preview what would be installed (dry-run)
-```
-
-See **[docs/build-options.md](./docs/build-options.md)** for the full feature
-catalog, profile presets, dependency rules (e.g. `serena` auto-pulls in
-`python`), and worked examples.
-
----
-
-## Session persistence
-
-By default, vibrator bind-mounts five host directories under `~/.claude/` into
-the container so Claude Code sessions written inside vibrator persist to the
-**same paths a host-level `claude` run would write to**:
-
-| Path | What's in it |
+| Decision | Choice |
 |---|---|
-| `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` | the conversation transcript (incremental) |
-| `~/.claude/file-history/<session-id>/...`             | pre-edit file snapshots (Esc-Esc rewind) |
-| `~/.claude/sessions/<pid>.json`                       | session metadata (status, version, cwd) |
-| `~/.claude/tasks/<session-id>/...`                    | `/todos` + TaskTool state |
-| `~/.claude/paste-cache/`                              | `/paste` content cache |
+| Docker integration | Shell out to `docker` CLI |
+| `.vb` format | TOML |
+| Catalog format | Markdown + YAML frontmatter, one file per item |
+| Harness extensibility | Built-in Go interface |
+| TUI | charmbracelet/huh — wizard fills CLI-flag gaps only |
+| Profiles | minimal / backend / frontend / full |
 
-Because vibrator mounts the workspace at the **same path** inside the container
-as on the host, Claude Code's encoded-cwd directory name (e.g.
-`-Users-wlame-dev-drakkar`) agrees on both sides — `claude --resume` from your
-host shell sees sessions you produced inside the container, file-history rewind
-works across, and so on. If you've never installed Claude Code on the host,
-vibrator silently creates these directories the first time it runs (so
-prebuilt-image users without a local CC install just work).
-
-### Opt out: `--no-session-persist`
-
-Pass `--no-session-persist` when you want **isolation** instead of integration:
+## Development
 
 ```bash
-vibrate --no-session-persist                 # one-off sandbox run
-vibrate --no-session-persist --rm claude …   # ephemeral, no host residue
+make test          # unit tests (no docker needed)
+make lint          # go vet + golangci-lint (if installed)
+make build         # writes ./build/vibrate
+make integration   # real-docker tests (requires INTEGRATION=1)
 ```
-
-When set, none of the five directories are mounted. The container writes
-session data to its own filesystem, and that data vanishes when the
-container is removed. This is the right flag for:
-
-- **Auditing untrusted code** — the container can't read your other workspaces'
-  session histories (transcripts often quote source files, API responses, etc.)
-- **CI / scripted runs** — keep host `~/.claude` pristine
-- **Multi-tenant scenarios** — when several people share a workstation and you
-  don't want their CC histories mingling
-
-`--generic` also disables persistence (it disables all host-CC integration).
-
----
-
-## Integrations
-
-- **[claude-mem](./docs/integrations/claude-mem.md)** — persistent memory across sessions
-  via a host-side docker-compose stack. No `bun`/`node` on host required; multiple
-  vibrator containers share the same memory store.
-
----
-
-## Without Claude Code on the Host
-
-```bash
-# Pull pre-built image (~2GB, skips 10+ min build)
-vibrate --pull
-
-# Or build locally
-vibrate --generic --build
-```
-
-Authenticate inside the container with `claude auth login`.
-
----
-
-## Building from Source
-
-```bash
-make build             # Build vibrate.sh
-make build VERSION=1.2 # With specific version
-make validate          # Build + run all tests (52 tests)
-make lint              # shellcheck source files
-make clean             # Remove build artifacts
-```
-
----
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT — see [LICENSE](./LICENSE).

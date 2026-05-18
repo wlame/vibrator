@@ -12,12 +12,18 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"strings"
 )
+
+// jsonStdUnmarshal is a typed alias to encoding/json's Unmarshal so the
+// tiny wrapper in parseDockerImageJSON/parseDockerContainerJSON doesn't
+// need to import encoding/json itself.
+var jsonStdUnmarshal = json.Unmarshal
 
 // EnvVar is a host-environment value forwarded into the container.
 type EnvVar struct {
@@ -132,7 +138,60 @@ type Client interface {
 	// when the container doesn't exist. Callers should distinguish via the
 	// empty-string return.
 	ContainerStatus(ctx context.Context, name string) (string, error)
+
+	// ListImages returns vibrator-managed images filtered by label. The
+	// labelFilter is a "key=value" string passed to `--filter label=...`.
+	// Used by `vibrate variants list` and by the launch orchestrator for
+	// multi-variant detection.
+	ListImages(ctx context.Context, labelFilter string) ([]ImageInfo, error)
+
+	// ListContainers returns containers filtered by label. Like
+	// ListImages, labelFilter is "key=value". Includes stopped containers.
+	ListContainers(ctx context.Context, labelFilter string) ([]ContainerInfo, error)
+
+	// Remove deletes an image or container by name/ID. kind selects
+	// `docker image rm` vs `docker rm` (or `rm -f` when force=true).
+	Remove(ctx context.Context, kind RemoveKind, nameOrID string, force bool) error
 }
+
+// ImageInfo is a minimal summary of a docker image, returned by
+// ListImages.
+type ImageInfo struct {
+	// Tag is the human-readable tag, e.g. "vb-claude-code-full-abc12345:latest".
+	Tag string
+
+	// ID is the docker image ID (sha256 prefix). Used for force-removal
+	// when tag matching is ambiguous.
+	ID string
+
+	// Labels are the image labels (parsed from `--format` JSON output).
+	Labels map[string]string
+
+	// CreatedAt is the image creation time string, as docker reports it
+	// ("2 hours ago", "3 days ago"). Not parsed — used as-is in listings.
+	CreatedAt string
+
+	// SizeHuman is the docker-reported size (e.g. "1.2GB").
+	SizeHuman string
+}
+
+// ContainerInfo is a minimal summary of a docker container.
+type ContainerInfo struct {
+	Name     string
+	ID       string
+	Image    string
+	Status   string // "running", "exited", etc.
+	Labels   map[string]string
+	CreatedAt string
+}
+
+// RemoveKind selects between container and image removal.
+type RemoveKind string
+
+const (
+	RemoveImage     RemoveKind = "image"
+	RemoveContainer RemoveKind = "container"
+)
 
 // CLIClient is the production Client backed by `os/exec`. Construct with
 // NewCLIClient(); the zero value is intentionally unusable so we can extend
@@ -267,6 +326,153 @@ func (c *CLIClient) Exec(ctx context.Context, spec ExecSpec) error {
 	cmd.Stdout = spec.Stdout
 	cmd.Stderr = spec.Stderr
 	return cmd.Run()
+}
+
+// ListImages shells out to `docker images --filter label=<labelFilter>
+// --format <json>` and parses the JSON-per-line output. Empty result
+// when no images match — caller decides whether that's an error.
+func (c *CLIClient) ListImages(ctx context.Context, labelFilter string) ([]ImageInfo, error) {
+	args := []string{"images"}
+	if labelFilter != "" {
+		args = append(args, "--filter", "label="+labelFilter)
+	}
+	args = append(args, "--format", "{{json .}}")
+
+	out, err := exec.CommandContext(ctx, c.DockerPath, args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("docker images: %w", err)
+	}
+	return parseDockerImageJSON(out, c, ctx)
+}
+
+// ListContainers shells out to `docker ps -a --filter label=...
+// --format json`. Includes stopped/exited containers.
+func (c *CLIClient) ListContainers(ctx context.Context, labelFilter string) ([]ContainerInfo, error) {
+	args := []string{"ps", "-a"}
+	if labelFilter != "" {
+		args = append(args, "--filter", "label="+labelFilter)
+	}
+	args = append(args, "--format", "{{json .}}")
+
+	out, err := exec.CommandContext(ctx, c.DockerPath, args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("docker ps: %w", err)
+	}
+	return parseDockerContainerJSON(out, c, ctx)
+}
+
+// Remove deletes a container or image. When force=true, also kills
+// running containers / forces image removal even when referenced.
+func (c *CLIClient) Remove(ctx context.Context, kind RemoveKind, nameOrID string, force bool) error {
+	var args []string
+	switch kind {
+	case RemoveImage:
+		args = []string{"image", "rm"}
+	case RemoveContainer:
+		args = []string{"rm"}
+	default:
+		return fmt.Errorf("docker Remove: unknown kind %q", kind)
+	}
+	if force {
+		args = append(args, "-f")
+	}
+	args = append(args, nameOrID)
+	cmd := exec.CommandContext(ctx, c.DockerPath, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("docker %s rm %s: %w (output: %s)",
+			kind, nameOrID, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// parseDockerImageJSON parses the `--format {{json .}}` newline-
+// delimited output. We fetch the labels separately via `docker image
+// inspect` (the listing format doesn't include the full label map).
+func parseDockerImageJSON(raw []byte, c *CLIClient, ctx context.Context) ([]ImageInfo, error) {
+	type listed struct {
+		Repository, Tag, ID, CreatedSince, Size string
+	}
+	var out []ImageInfo
+	for _, line := range splitNonEmptyLines(raw) {
+		var l listed
+		if err := jsonUnmarshal(line, &l); err != nil {
+			return nil, fmt.Errorf("parse images JSON: %w", err)
+		}
+		info := ImageInfo{
+			Tag:       l.Repository + ":" + l.Tag,
+			ID:        l.ID,
+			CreatedAt: l.CreatedSince,
+			SizeHuman: l.Size,
+		}
+		// Pull labels via inspect — best-effort; failures don't abort
+		// the listing.
+		if labels, err := inspectLabels(ctx, c, "image", l.ID); err == nil {
+			info.Labels = labels
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// parseDockerContainerJSON parses `docker ps -a --format {{json .}}`.
+func parseDockerContainerJSON(raw []byte, c *CLIClient, ctx context.Context) ([]ContainerInfo, error) {
+	type listed struct {
+		Names, ID, Image, Status, CreatedAt string
+	}
+	var out []ContainerInfo
+	for _, line := range splitNonEmptyLines(raw) {
+		var l listed
+		if err := jsonUnmarshal(line, &l); err != nil {
+			return nil, fmt.Errorf("parse ps JSON: %w", err)
+		}
+		info := ContainerInfo{
+			Name:      l.Names,
+			ID:        l.ID,
+			Image:     l.Image,
+			Status:    l.Status,
+			CreatedAt: l.CreatedAt,
+		}
+		if labels, err := inspectLabels(ctx, c, "container", l.ID); err == nil {
+			info.Labels = labels
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// inspectLabels runs `docker <kind> inspect --format {{json .Config.Labels}}`
+// and returns the parsed label map. Used to enrich the bare listing
+// output with our `vibrator.*` labels.
+func inspectLabels(ctx context.Context, c *CLIClient, kind, id string) (map[string]string, error) {
+	cmd := exec.CommandContext(ctx, c.DockerPath, kind, "inspect",
+		"--format", "{{json .Config.Labels}}", id)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var labels map[string]string
+	if err := jsonUnmarshal(strings.TrimSpace(string(out)), &labels); err != nil {
+		return nil, err
+	}
+	return labels, nil
+}
+
+// splitNonEmptyLines splits raw into non-empty trimmed lines.
+func splitNonEmptyLines(raw []byte) []string {
+	var out []string
+	for _, l := range strings.Split(string(raw), "\n") {
+		t := strings.TrimSpace(l)
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// jsonUnmarshal is a tiny wrapper to avoid pulling the import into the
+// public API surface; the body uses encoding/json directly.
+func jsonUnmarshal(s string, dst any) error {
+	return jsonStdUnmarshal([]byte(s), dst)
 }
 
 // Start starts a stopped container.

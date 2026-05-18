@@ -46,6 +46,36 @@ func (pi) RequiredFeatures() []string {
 // Ollama or remote OpenAI/Anthropic via custom base URLs.
 func (pi) SupportsLLMProvider() bool { return true }
 
+// LLMEnvVars maps the LLM choice into Pi's OpenAI-compatible env vars.
+// Pi reads OPENAI_API_KEY + OPENAI_BASE_URL (plus a few provider-
+// specific shortcuts for direct endpoints — kept as authEnvVars).
+// Same shape as Codex; differences are deferred until Pi diverges.
+func (pi) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
+	env := map[string]string{}
+	switch provider {
+	case "":
+		return env
+	case "ollama":
+		env["OPENAI_API_KEY"] = "ollama"
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL + "/v1"
+		}
+	case "lmstudio":
+		env["OPENAI_API_KEY"] = "lm-studio"
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL + "/v1"
+		}
+	default:
+		if apiKey != "" {
+			env["OPENAI_API_KEY"] = apiKey
+		}
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL
+		}
+	}
+	return env
+}
+
 func init() {
 	harness.Register(New())
 }

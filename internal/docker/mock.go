@@ -47,6 +47,13 @@ type Mock struct {
 	// (e.g., "running", "exited"). Missing entries → ("", nil) — meaning
 	// "container does not exist", matching the real CLI semantics.
 	Containers map[string]string
+
+	// RunHandler, if non-nil, is called by Run() before returning RunErr.
+	// It has full access to the RunSpec — including Stdin/Stdout — so tests
+	// can simulate processes that consume input and produce output (e.g.,
+	// the claude-mem psql one-shot). Errors returned by the handler
+	// supersede RunErr.
+	RunHandler func(ctx context.Context, spec RunSpec) error
 }
 
 // NewMock returns a Mock with empty stubs. Use this in tests when you want
@@ -128,6 +135,9 @@ func (m *Mock) Build(ctx context.Context, spec BuildSpec) error {
 func (m *Mock) Run(ctx context.Context, spec RunSpec) error {
 	argv := buildRunArgs(spec)
 	m.recordCall(argv...)
+	if m.RunHandler != nil {
+		return m.RunHandler(ctx, spec)
+	}
 	return m.RunErr
 }
 

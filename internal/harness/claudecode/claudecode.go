@@ -55,6 +55,9 @@ func (claudeCode) RequiredFeatures() []string {
 // to surface.
 func (claudeCode) SupportsLLMProvider() bool { return false }
 
+// LLMEnvVars returns nil — see SupportsLLMProvider.
+func (claudeCode) LLMEnvVars(_, _, _, _ string) map[string]string { return nil }
+
 func init() {
 	harness.Register(New())
 }

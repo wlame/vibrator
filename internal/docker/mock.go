@@ -54,6 +54,13 @@ type Mock struct {
 	// the claude-mem psql one-shot). Errors returned by the handler
 	// supersede RunErr.
 	RunHandler func(ctx context.Context, spec RunSpec) error
+
+	// Listed stubs for List* responses, keyed by labelFilter.
+	ListedImages     map[string][]ImageInfo
+	ListedContainers map[string][]ContainerInfo
+
+	// RemoveErr is returned by Remove().
+	RemoveErr error
 }
 
 // NewMock returns a Mock with empty stubs. Use this in tests when you want
@@ -168,6 +175,26 @@ func (m *Mock) ImageExists(ctx context.Context, image string) (bool, error) {
 func (m *Mock) ContainerStatus(ctx context.Context, name string) (string, error) {
 	m.recordCall("container", "inspect", "--format", "{{.State.Status}}", name)
 	return m.Containers[name], nil
+}
+
+func (m *Mock) ListImages(ctx context.Context, labelFilter string) ([]ImageInfo, error) {
+	m.recordCall("images", "--filter", "label="+labelFilter)
+	return m.ListedImages[labelFilter], nil
+}
+
+func (m *Mock) ListContainers(ctx context.Context, labelFilter string) ([]ContainerInfo, error) {
+	m.recordCall("ps", "-a", "--filter", "label="+labelFilter)
+	return m.ListedContainers[labelFilter], nil
+}
+
+func (m *Mock) Remove(ctx context.Context, kind RemoveKind, nameOrID string, force bool) error {
+	argv := []string{string(kind), "rm"}
+	if force {
+		argv = append(argv, "-f")
+	}
+	argv = append(argv, nameOrID)
+	m.recordCall(argv...)
+	return m.RemoveErr
 }
 
 // Static compile-time check that Mock satisfies the Client interface.

@@ -42,6 +42,42 @@ func (codex) RequiredFeatures() []string {
 // Azure OpenAI, etc.) via OPENAI_BASE_URL.
 func (codex) SupportsLLMProvider() bool { return true }
 
+// LLMEnvVars maps the LLM choice into Codex's OPENAI_API_KEY +
+// OPENAI_BASE_URL convention. Codex speaks OpenAI's HTTP API, so all
+// providers (including Anthropic, Ollama, LM Studio) are reached via
+// the same env-var shape — the user is responsible for ensuring the
+// chosen endpoint actually exposes a compatible surface.
+//
+// Local providers (ollama, lmstudio) accept any non-empty key string;
+// we send the provider id literal ("ollama" / "lm-studio") so it shows
+// up usefully in upstream logs.
+func (codex) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
+	env := map[string]string{}
+	switch provider {
+	case "":
+		return env
+	case "ollama":
+		env["OPENAI_API_KEY"] = "ollama"
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL + "/v1"
+		}
+	case "lmstudio":
+		env["OPENAI_API_KEY"] = "lm-studio"
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL + "/v1"
+		}
+	default:
+		// openai, anthropic, openai-compat — all expect a real key.
+		if apiKey != "" {
+			env["OPENAI_API_KEY"] = apiKey
+		}
+		if baseURL != "" {
+			env["OPENAI_BASE_URL"] = baseURL
+		}
+	}
+	return env
+}
+
 func init() {
 	harness.Register(New())
 }

@@ -41,6 +41,23 @@ RUN mkdir -p /opt/vibrator
 COPY scripts/welcome.sh /opt/vibrator/welcome.sh
 RUN chmod 0755 /opt/vibrator/welcome.sh
 
+# --- entrypoint script (wired via ENTRYPOINT in the runtime stage) ---
+# Runs once on 'docker run' to merge host Claude config/rules/settings
+# into the container (see scripts/entrypoint.sh for the full sequence).
+# Lands in /opt/vibrator/ alongside welcome.sh so all vibrator-owned
+# scripts share a stable, predictable location.
+COPY scripts/entrypoint.sh /opt/vibrator/entrypoint.sh
+RUN chmod 0755 /opt/vibrator/entrypoint.sh
+
+# --- claude-exec wrapper (CMD on docker run + Cmd on docker exec) -----
+# Re-runs the Serena MCP probe on every shell entry so a host-side
+# server start/stop is picked up without rebuilding the container.
+# Installed at /usr/local/bin/claude-exec for a stable absolute path
+# the launch code can reference. See scripts/claude-exec.sh for what
+# it does on each invocation.
+COPY scripts/claude-exec.sh /usr/local/bin/claude-exec
+RUN chmod 0755 /usr/local/bin/claude-exec
+
 # Mirror rc files into /root/ so root sub-invocations (debugging via
 # 'docker exec -u root') get the same prompt + banner, and so zsh
 # build-stage commands don't trip zsh-newuser-install.
@@ -53,6 +70,14 @@ ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLORTERM=truecolor
 
 # uv tools install into /usr/local/bin so every user finds them on PATH.
 ENV UV_TOOL_BIN_DIR=/usr/local/bin
+
+# uv-managed Python interpreters land in /opt/uv-python (world-readable)
+# instead of the default $HOME/.local/share/uv/python — which would be
+# /root/.local/share/uv/python during root-stage installs, unreachable
+# to the unprivileged user (mode 0700 on /root). See
+# https://github.com/astral-sh/uv/issues/13309 for the upstream bug;
+# this ENV plus the mkdir in the python feature dodges it cleanly.
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
 
 # ripgrep — multi-arch binary release. Always-on.
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -80,7 +105,15 @@ FROM base AS features
 RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh \
       | UV_INSTALL_DIR=/usr/local/bin sh \
  && uv --version
-RUN uv python install 3.13 \
+# Pre-create UV_PYTHON_INSTALL_DIR with 0755 so the unprivileged user
+# (created in Stage 2 end) can traverse it to reach the python binary.
+# Without this, `uv python find 3.13` returns a path under /root/...
+# even though UV_PYTHON_INSTALL_DIR is set — uv reads the ENV but cache
+# discovery walks through /root/.cache/uv as a fallback. Mkdir + chmod
+# forces the install dir to exist and be world-readable before install.
+RUN mkdir -p /opt/uv-python \
+ && chmod 0755 /opt/uv-python \
+ && uv python install 3.13 \
  && ln -sf "$(uv python find 3.13)" /usr/local/bin/python3.13 \
  && update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.13 100 \
  && python3 --version
@@ -146,6 +179,25 @@ WORKDIR /home/${USERNAME}
 # If you add a new "install dir" ENV to Stage 1 (base) or Stage 2
 # (features), add a matching override here. Failure mode: an extension
 # install in Stage 4 hits "Permission denied" on a /usr/local/* path.
+#
+# ----------------------------------------------------------------------------
+# RELATED INVARIANT — install paths whose RESOLUTION requires root traversal
+# ----------------------------------------------------------------------------
+# Distinct from the above: an install can land in a "world-readable" path
+# whose RESOLUTION at runtime walks through /root (mode 0700, unreadable
+# to the user). Symlinks LOOK fine via 'ls -la' but exec returns EACCES.
+#
+# Example: 'uv python install' (without UV_PYTHON_INSTALL_DIR set)
+# writes the interpreter to /root/.local/share/uv/python/... in the root
+# stage. The symlink at /usr/local/bin/python3 then resolves through
+# /root/, killing exec for unprivileged users — see
+# https://github.com/astral-sh/uv/issues/13309.
+#
+# Fix pattern: redirect the install dir to a world-readable path BEFORE
+# the install runs. For uv-managed Python this is
+# UV_PYTHON_INSTALL_DIR=/opt/uv-python (set in Stage 1). For any future
+# tool that defaults to $HOME/... when run as root, set the install dir
+# to /opt/<tool>/ and chmod 0755 it.
 
 # npm — global installs to ~/.npm-global (created by npm on first use).
 ENV NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global
@@ -221,4 +273,6 @@ LABEL vibrator.shell="fish"
 LABEL vibrator.features="python,node,ralphex"
 LABEL vibrator.extensions="context7,sequential-thinking"
 
-CMD ["/bin/fish"]
+
+ENTRYPOINT ["/opt/vibrator/entrypoint.sh"]
+CMD ["/usr/local/bin/claude-exec", "/bin/fish"]

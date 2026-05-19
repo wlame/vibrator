@@ -75,6 +75,14 @@ type Options struct {
 	// exists. Same as `--no-cache` at the docker level.
 	Rebuild bool
 
+	// DinD enables Docker-in-Docker: the host's docker socket is
+	// bind-mounted into the container and the container user is added
+	// to the docker group so they can `docker` against the host daemon
+	// without sudo. Opt-in because mounting the socket grants the
+	// container ~root-equivalent on the host (it can run any docker
+	// command, including --privileged ones).
+	DinD bool
+
 	// VibratorVersion is the version string baked into the generated
 	// Dockerfile header. Passed through from the CLI layer.
 	VibratorVersion string
@@ -534,11 +542,12 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 	}
 
 	wsSpec := workspace.Spec{
-		Harness:  h.ID(),
-		Profile:  profileID,
-		Shell:    shell,
-		Features: resolved.Enabled,
-		Extensions:  pin.Extensions,
+		Harness:    h.ID(),
+		Profile:    profileID,
+		Shell:      shell,
+		Features:   resolved.Enabled,
+		Extensions: pin.Extensions,
+		Username:   defaultUsername(opts),
 	}
 	return dfSpec, wsSpec, nil
 }

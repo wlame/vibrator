@@ -121,6 +121,31 @@ func TestImageName(t *testing.T) {
 	}
 }
 
+func TestImageName_IncludesUsernameWhenSet(t *testing.T) {
+	// F4: image tag must carry the username so two users on the same
+	// host (or two `--username` overrides) don't trample one another's
+	// images. The image's USER stage bakes in the host UID, so sharing
+	// is incorrect by design.
+	spec := Spec{Harness: "claude-code", Profile: "backend", Username: "alice"}
+	got := ImageName(spec, "a1b2c3d4")
+	want := "vb-claude-code-backend-alice-a1b2c3d4:latest"
+	if got != want {
+		t.Errorf("ImageName = %q, want %q", got, want)
+	}
+}
+
+func TestFingerprint_DifferentUsersDiffer(t *testing.T) {
+	// F4 enforcement at the fingerprint level (belt + suspenders with
+	// the tag segment): two specs identical except for Username MUST
+	// produce different fingerprints — otherwise image caches would
+	// collide on disk even if tags differ.
+	a := Fingerprint(Spec{Harness: "claude-code", Shell: "zsh", Username: "alice"})
+	b := Fingerprint(Spec{Harness: "claude-code", Shell: "zsh", Username: "bob"})
+	if a == b {
+		t.Errorf("alice and bob produced identical fingerprint %s — Username must affect canonical", a)
+	}
+}
+
 func TestContainerName_StablePerWorkspace(t *testing.T) {
 	got1 := ContainerName("/home/wlame/dev/vibrator", "abc12345")
 	got2 := ContainerName("/home/wlame/dev/vibrator", "abc12345")

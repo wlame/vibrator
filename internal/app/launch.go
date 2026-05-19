@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/wlame/vibrator/internal/extensions"
@@ -80,6 +82,12 @@ func runContainer(ctx context.Context, dc docker.Client,
 	envVars = append([]docker.EnvVar{
 		{Name: "WORKSPACE_PATH", Value: wsDir},
 	}, envVars...)
+	// claude-mem prereq → CLAUDE_MEM_* envs. Forwarded only when the
+	// prereq has actually been bootstrapped for this workspace (the pin
+	// carries the minted key + ids) AND the host has an admin config
+	// (which carries the server URL + runtime mode). Without both, the
+	// entrypoint's claude-mem block stays dormant.
+	envVars = append(envVars, buildClaudeMemEnv(pin)...)
 
 	labels := map[string]string{
 		"vibrator.managed":   "true",
@@ -88,18 +96,73 @@ func runContainer(ctx context.Context, dc docker.Client,
 		"vibrator.path":      wsDir,
 	}
 
+	// Workspace mount at the same absolute path on both sides — the
+	// foundational mount that makes paths in error messages, stack
+	// traces, and `pwd` match the user's host muscle memory.
+	volumes := []docker.Volume{
+		{Host: wsDir, Container: wsDir},
+	}
+	// Host claude config / settings / rules / session state. The
+	// container-side entrypoint script reads these to seed the in-
+	// container ~/.claude/ on first run.
+	if pin.Harness == "claude-code" {
+		volumes = append(volumes, buildClaudeHostMounts(defaultUsername(opts), opts.Stderr)...)
+	}
+	// D6 + D7: optional/conditional mounts. Both auto-detect — no CLI
+	// flag needed — and silently no-op when prerequisites are absent.
+	volumes = append(volumes, buildOptionalMounts(defaultUsername(opts), pin, wsHash, opts.Stderr)...)
+	// D9: GPG agent socket forwarding. Auto-detected via gpgconf — the
+	// user opts in by configuring `extra-socket` in their gpg-agent.conf
+	// (no extra-socket = no mount). Container-side C5 in entrypoint.sh
+	// symlinks /gpg-agent-extra to wherever gpg expects.
+	if v, ok := buildGPGAgentMount(); ok {
+		volumes = append(volumes, v)
+	}
+
+	// D8: Docker-in-Docker. Opt-in via --dind because mounting the
+	// host's docker socket is a security-sensitive choice (effectively
+	// equivalent to host root once you can `docker run --privileged`).
+	// When enabled, mount the auto-detected socket and pass the host
+	// docker group's GID via --group-add so the unprivileged user can
+	// actually use the socket without sudo.
+	var dockerGroupAdd []string
+	if opts.DinD {
+		if v, gid, ok := buildDockerSocketMount(opts.Stderr); ok {
+			volumes = append(volumes, v)
+			if gid != "" {
+				dockerGroupAdd = append(dockerGroupAdd, gid)
+			}
+		} else {
+			fmt.Fprintf(opts.Stderr,
+				"vibrate: warning: --dind requested but no docker socket found on host; continuing without DinD\n")
+		}
+	}
+
 	fmt.Fprintf(opts.Stderr, "→ Creating container %s ...\n", containerName)
 
 	return dc.Run(ctx, docker.RunSpec{
 		Image:         imageTag,
 		ContainerName: containerName,
 		Hostname:      workspace.Hostname(wsDir),
+		GroupAdd:      dockerGroupAdd,
 		Interactive:   true,
-		Volumes: []docker.Volume{
-			{Host: wsDir, Container: wsDir},
-		},
-		Env:    envVars,
-		Labels: labels,
+		// F1: --init wires tini as PID 1 inside the container. Without
+		// it, processes left behind by the user's shell (orphan node
+		// servers, dead playwright children, MCP servers killed mid-
+		// stream) accumulate as zombies — visible as <defunct> entries
+		// in ps and a slow leak of process-table slots. tini reaps them
+		// and forwards signals (Ctrl-C reaches the foreground shell
+		// rather than being eaten by docker's default PID-1 shim).
+		Init: true,
+		// F2: docker's default /dev/shm is 64MB. Playwright / Chromium
+		// crashes mid-run when shared memory fills up (the symptom is
+		// a cryptic "Target.attachToBrowserTarget failed" on the first
+		// page that allocates ~50MB of canvas). 2GB matches the bash
+		// impl and is comfortably above any single-page workload.
+		ShmSize:     "2g",
+		Volumes:     volumes,
+		Env:         envVars,
+		Labels:      labels,
 		// host network keeps host.docker.internal cheap and lets
 		// in-container tools reach host services without --add-host.
 		// We use bridge instead of host to keep Linux/macOS behavior
@@ -139,11 +202,403 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 		Env: []docker.EnvVar{
 			{Name: "WORKSPACE_PATH", Value: wsDir},
 		},
-		Cmd:    []string{"/bin/" + shell},
+		// Wrap the shell with claude-exec so the live Serena MCP probe
+		// (C6) re-runs on every entry. claude-exec exec's its $@ at
+		// the end, so the shell becomes the wrapper's replacement
+		// process — signals route correctly, no extra PID layer.
+		Cmd:    []string{"/usr/local/bin/claude-exec", "/bin/" + shell},
 		Stdin:  opts.Stdin,
 		Stdout: opts.Stdout,
 		Stderr: opts.Stderr,
 	})
+}
+
+// claudeSessionPersistDirs are the per-CC subdirectories that hold
+// in-progress conversations, file history, etc. Bind-mounting them
+// means a container-side claude session shows up in the host's claude
+// history list (and vice versa) — the same "session continuity" the
+// bash impl gave users by default.
+//
+// Trade-off: shared mutable state. Concurrent host + container claude
+// runs could race on the same JSON files. The bash impl shipped this
+// default-on for ~12 months without major complaints, so we follow.
+var claudeSessionPersistDirs = []string{
+	"projects",
+	"file-history",
+	"sessions",
+	"tasks",
+	"paste-cache",
+}
+
+// buildClaudeHostMounts produces the volume list that wires host
+// ~/.claude state into the container. All mounts are conditional on
+// the host source existing — a fresh host with no claude install
+// gets no extra mounts and the entrypoint gracefully no-ops.
+//
+// Session-persist dirs (D5) are auto-created on the host if missing
+// so the container can write to them on first run (matching the bash
+// impl's `mkdir -p` before mount).
+//
+// `containerUser` is the unprivileged user the image was built for;
+// container paths land under /home/<user>/.claude/...
+func buildClaudeHostMounts(containerUser string, stderr io.Writer) []docker.Volume {
+	var out []docker.Volume
+
+	hostHome, err := os.UserHomeDir()
+	if err != nil || hostHome == "" {
+		return out
+	}
+	containerHome := "/home/" + containerUser
+	containerClaude := containerHome + "/.claude"
+	hostClaude := filepath.Join(hostHome, ".claude")
+
+	// D1: ~/.claude.json → ~/.claude.host.json:ro
+	// Entrypoint extracts OAuth + onboarding fields from this. Read-only
+	// because the container should NEVER modify the host's master config.
+	if exists(filepath.Join(hostHome, ".claude.json")) {
+		out = append(out, docker.Volume{
+			Host:      filepath.Join(hostHome, ".claude.json"),
+			Container: containerHome + "/.claude.host.json",
+			ReadOnly:  true,
+		})
+	}
+
+	// D2: ~/.claude/settings.json → ~/.claude/settings.host.json:ro
+	// Entrypoint copies this with macOS-path rewrite and re-merges
+	// baked plugin hooks. Read-only for the same reason as D1.
+	if exists(filepath.Join(hostClaude, "settings.json")) {
+		out = append(out, docker.Volume{
+			Host:      filepath.Join(hostClaude, "settings.json"),
+			Container: containerClaude + "/settings.host.json",
+			ReadOnly:  true,
+		})
+	}
+
+	// D3: ~/.claude/rules → ~/.claude/rules-host:ro
+	// Entrypoint copies *.md from rules-host into the container's rules
+	// dir on every entry, so editing rules on host takes effect next run.
+	if isDir(filepath.Join(hostClaude, "rules")) {
+		out = append(out, docker.Volume{
+			Host:      filepath.Join(hostClaude, "rules"),
+			Container: containerClaude + "/rules-host",
+			ReadOnly:  true,
+		})
+	}
+
+	// D4: ~/.claude/hooks → ~/.claude/hooks (rw)
+	// Hook scripts the user wrote on host. Writable so the user can
+	// edit hooks inside the container and changes persist back to host.
+	if isDir(filepath.Join(hostClaude, "hooks")) {
+		out = append(out, docker.Volume{
+			Host:      filepath.Join(hostClaude, "hooks"),
+			Container: containerClaude + "/hooks",
+			ReadOnly:  false,
+		})
+	}
+
+	// D5: session persistence dirs (rw).
+	// Auto-create on host if missing so first-time `vibrate` users
+	// still get their container session persisted somewhere.
+	for _, name := range claudeSessionPersistDirs {
+		hostPath := filepath.Join(hostClaude, name)
+		if !isDir(hostPath) {
+			if err := os.MkdirAll(hostPath, 0o755); err != nil {
+				// Non-fatal — log and skip this mount. A failed mkdir
+				// here usually means host perms are weird, not a
+				// vibrator bug; user can `mkdir -p` themselves.
+				fmt.Fprintf(stderr, "vibrate: warning: couldn't create %s for session persistence: %v\n",
+					hostPath, err)
+				continue
+			}
+		}
+		out = append(out, docker.Volume{
+			Host:      hostPath,
+			Container: containerClaude + "/" + name,
+			ReadOnly:  false,
+		})
+	}
+
+	return out
+}
+
+// buildOptionalMounts produces volumes that aren't tied to the claude
+// state directory but are still useful when the corresponding host
+// resource exists or the workspace's extensions ask for them:
+//
+//   - D6 (~/.aws → ~/.aws:ro): auto-mounts when the host has AWS
+//     credentials. Read-only so a buggy container can't corrupt them.
+//   - D7 (claude-mem per-workspace cache): only mounted when the
+//     workspace's extensions include claude-mem. The cache lives at
+//     ~/.cache/vibrator/claude-mem/<wsHash> on the host so each
+//     workspace gets its own state — different workspaces don't share
+//     vector embeddings, summaries, or temp files.
+//
+// Both are silent no-ops when their preconditions aren't met (no
+// pin.Extensions claude-mem, no ~/.aws on host). `wsHash` scopes the
+// claude-mem cache per workspace.
+func buildOptionalMounts(containerUser string, pin config.Pin, wsHash string, stderr io.Writer) []docker.Volume {
+	var out []docker.Volume
+
+	hostHome, err := os.UserHomeDir()
+	if err != nil || hostHome == "" {
+		return out
+	}
+	containerHome := "/home/" + containerUser
+
+	// D6: AWS credentials passthrough. Read-only — the container
+	// inherits host creds but can't rotate or wipe them.
+	if hostAws := filepath.Join(hostHome, ".aws"); isDir(hostAws) {
+		out = append(out, docker.Volume{
+			Host:      hostAws,
+			Container: containerHome + "/.aws",
+			ReadOnly:  true,
+		})
+	}
+
+	// D7: claude-mem per-workspace cache. Only when claude-mem is
+	// actually selected for this workspace.
+	if hasExtension(pin.Extensions, "claude-mem") {
+		// ~/.cache/vibrator/claude-mem/<wsHash> on the host. Living
+		// under ~/.cache (XDG base spec) means a `rm -rf ~/.cache` by
+		// the user wipes vibrator state along with everything else —
+		// the right behavior for a cache directory.
+		hostCache := filepath.Join(hostHome, ".cache", "vibrator", "claude-mem", wsHash)
+		if !isDir(hostCache) {
+			if err := os.MkdirAll(hostCache, 0o755); err != nil {
+				fmt.Fprintf(stderr, "vibrate: warning: couldn't create %s for claude-mem cache: %v\n",
+					hostCache, err)
+				return out
+			}
+		}
+		out = append(out, docker.Volume{
+			Host:      hostCache,
+			Container: containerHome + "/.claude-mem/cache",
+			ReadOnly:  false,
+		})
+	}
+
+	return out
+}
+
+// hasExtension reports whether `id` is in the workspace's extensions
+// list. Membership check — extensions IDs are case-sensitive and the
+// list is small enough that a linear scan is fine.
+func hasExtension(extensions []string, id string) bool {
+	for _, e := range extensions {
+		if e == id {
+			return true
+		}
+	}
+	return false
+}
+
+// socketGroupGID returns the owning group GID of a unix socket file,
+// formatted as a decimal string for `--group-add`. Returns "" on any
+// failure (stat error, unsupported syscall.Stat_t cast, etc.) — the
+// caller treats empty as "couldn't determine, skip group-add".
+//
+// Implemented as a `syscall.Stat_t` cast which is darwin/linux only
+// (the only platforms vibrator supports — Windows would need a
+// different approach but isn't on the roadmap).
+func socketGroupGID(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%d", st.Gid)
+}
+
+// dockerSocketCandidates lists host paths to probe for a docker socket,
+// in priority order. Earlier entries win. Covers the common
+// Mac/Linux/desktop-VM setups; users with exotic configs can override
+// via $DOCKER_HOST (handled first in buildDockerSocketMount).
+//
+//	Docker Desktop:   ~/.docker/run/docker.sock
+//	OrbStack:         ~/.orbstack/run/docker.sock
+//	Colima default:   ~/.colima/default/docker.sock
+//	Rancher Desktop:  ~/.rd/docker.sock
+//	Native Linux:     /var/run/docker.sock
+//
+// All are unix domain sockets; we stat the path to confirm it really
+// IS a socket before mounting.
+var dockerSocketCandidates = []string{
+	"~/.docker/run/docker.sock",
+	"~/.orbstack/run/docker.sock",
+	"~/.colima/default/docker.sock",
+	"~/.rd/docker.sock",
+	"/var/run/docker.sock",
+}
+
+// buildDockerSocketMount discovers the host docker socket and returns
+// a (mount, group GID, true) when one is reachable. The container side
+// is always `/var/run/docker.sock` — that's what every docker CLI
+// looks for by default, so the user doesn't need to set DOCKER_HOST
+// inside the container.
+//
+// Returns ("", "", false) when no socket is found. Side-effect-free.
+//
+// The group GID lets the launch code add the container user to a
+// group with the same GID as the socket's owning group on the host —
+// the standard "let the unprivileged user talk to docker without
+// sudo" pattern. Empty string means "couldn't determine, skip the
+// group-add" (the user falls back to `sudo docker ...`).
+func buildDockerSocketMount(stderr io.Writer) (docker.Volume, string, bool) {
+	candidates := []string{}
+	// $DOCKER_HOST takes top priority. Format is `unix:///path/to/sock`
+	// so strip the prefix when present.
+	if dh := os.Getenv("DOCKER_HOST"); strings.HasPrefix(dh, "unix://") {
+		candidates = append(candidates, strings.TrimPrefix(dh, "unix://"))
+	}
+	home, _ := os.UserHomeDir()
+	for _, c := range dockerSocketCandidates {
+		// Expand leading "~/" — Go's filepath functions don't do shell
+		// expansion automatically, so we handle it here for the
+		// `~/.docker/run/docker.sock` style entries.
+		if strings.HasPrefix(c, "~/") && home != "" {
+			c = filepath.Join(home, c[2:])
+		}
+		candidates = append(candidates, c)
+	}
+
+	for _, path := range candidates {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		// Confirm it's actually a socket, not a regular file or
+		// directory that happens to share the name.
+		if info.Mode()&os.ModeSocket == 0 {
+			continue
+		}
+		// Resolve the GID. On Linux this is the docker group; on
+		// macOS Docker Desktop the socket is owned by the user's
+		// staff group (the container daemon runs in a VM but the
+		// socket is just a forwarded pipe). Either way, granting the
+		// container user that GID lets it `read+write` the socket.
+		gid := socketGroupGID(path)
+		if gid == "" {
+			fmt.Fprintf(stderr,
+				"vibrate: --dind: found socket %s but couldn't determine its group GID; container user may need `sudo` for docker commands\n",
+				path)
+		}
+		return docker.Volume{
+			Host:      path,
+			Container: "/var/run/docker.sock",
+			ReadOnly:  false,
+		}, gid, true
+	}
+	return docker.Volume{}, "", false
+}
+
+// buildGPGAgentMount probes the host for a forwardable gpg-agent socket
+// and returns the bind mount when one is available.
+//
+// "Forwardable" here means the user has configured `extra-socket` in
+// `~/.gnupg/gpg-agent.conf` — that's gpg's standard mechanism for
+// exposing a socket safe to pass into a container or remote session.
+// The path is reported by `gpgconf --list-dirs agent-extra-socket`.
+//
+// The CONTAINER side gets the socket at `/gpg-agent-extra` (matches the
+// bash impl's convention). The entrypoint script (step C5) symlinks
+// from there to wherever gpg-inside-container expects its socket — so
+// `git commit -S`, `gpg --sign`, etc. all "just work" with the host
+// key without that key ever leaving the host.
+//
+// Returns (_, false) when gpgconf isn't installed, when the user hasn't
+// configured an extra-socket, or when the socket isn't actually present
+// (gpg-agent not running). All three are normal "no GPG forwarding"
+// states — never an error.
+func buildGPGAgentMount() (docker.Volume, bool) {
+	gpgconf, err := exec.LookPath("gpgconf")
+	if err != nil {
+		return docker.Volume{}, false
+	}
+	out, err := exec.Command(gpgconf, "--list-dirs", "agent-extra-socket").Output()
+	if err != nil {
+		return docker.Volume{}, false
+	}
+	socket := strings.TrimSpace(string(out))
+	if socket == "" {
+		return docker.Volume{}, false
+	}
+	// Stat to confirm the socket exists and IS a socket (gpgconf
+	// reports the expected path even when the agent isn't running, so
+	// we can't trust the output alone).
+	info, err := os.Stat(socket)
+	if err != nil || info.Mode()&os.ModeSocket == 0 {
+		return docker.Volume{}, false
+	}
+	return docker.Volume{
+		Host:      socket,
+		Container: "/gpg-agent-extra",
+		ReadOnly:  false,
+	}, true
+}
+
+// exists is a small file-presence helper. Treats every error as
+// "doesn't exist" — for mount-construction, missing-vs-permission-
+// denied is the same decision: skip.
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// isDir reports whether path is a directory. Same error semantics as
+// exists — any stat failure means "skip this mount".
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// buildClaudeMemEnv produces the CLAUDE_MEM_* env vars that the
+// container-side entrypoint (templates/scripts/entrypoint.sh step 8)
+// uses to bootstrap claude-mem's runtime settings file and probe
+// /healthz + /v1/events for auth status.
+//
+// Returns nil (no envs) when either the admin config is missing OR the
+// pin has no cached bootstrap result — both are required because the
+// admin config supplies the server URL while the bootstrap supplies the
+// per-workspace API key. Without both we'd half-configure the plugin
+// and confuse the user with cryptic 401s.
+//
+// The admin config's ServerURL is forwarded VERBATIM; it's already
+// expected to be in container-shape (host.docker.internal:<port>) per
+// the contract in prereq.ClaudeMemAdminConfig docs.
+func buildClaudeMemEnv(pin config.Pin) []docker.EnvVar {
+	cached, ok := pin.Prereqs[prereq.ClaudeMemPrereqID]
+	if !ok || len(cached) == 0 {
+		return nil
+	}
+	cfg, err := prereq.LoadClaudeMemAdminConfig()
+	if err != nil || cfg == nil {
+		return nil
+	}
+	if cfg.ServerURL == "" {
+		return nil
+	}
+
+	envs := []docker.EnvVar{
+		{Name: "CLAUDE_MEM_RUNTIME", Value: cfg.Runtime},
+		{Name: "CLAUDE_MEM_SERVER_BETA_URL", Value: cfg.ServerURL},
+	}
+	// The bootstrap result keys match the field names the entrypoint
+	// expects in env-var form (api_key → CLAUDE_MEM_SERVER_BETA_API_KEY,
+	// etc.). We map them here rather than asking the entrypoint to do
+	// case conversion in shell.
+	if v := cached["api_key"]; v != "" {
+		envs = append(envs, docker.EnvVar{Name: "CLAUDE_MEM_SERVER_BETA_API_KEY", Value: v})
+	}
+	if v := cached["team_id"]; v != "" {
+		envs = append(envs, docker.EnvVar{Name: "CLAUDE_MEM_SERVER_BETA_TEAM_ID", Value: v})
+	}
+	if v := cached["project_id"]; v != "" {
+		envs = append(envs, docker.EnvVar{Name: "CLAUDE_MEM_SERVER_BETA_PROJECT_ID", Value: v})
+	}
+	return envs
 }
 
 // claudeOAuthTokenFile is the conventional host path the bash impl

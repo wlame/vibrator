@@ -23,6 +23,7 @@ type runFlags struct {
 	noWizard   bool
 	noSave     bool
 	rebuild    bool
+	dind       bool
 }
 
 var runFlagsState runFlags
@@ -63,6 +64,7 @@ func buildAppOptions(cmd *cobra.Command) app.Options {
 		NoWizard:        runFlagsState.noWizard,
 		NoSave:          runFlagsState.noSave,
 		Rebuild:         runFlagsState.rebuild,
+		DinD:            runFlagsState.dind,
 		VibratorVersion: Version,
 		Stdout:          cmd.OutOrStdout(),
 		Stderr:          cmd.ErrOrStderr(),
@@ -97,6 +99,9 @@ func init() {
 		"Don't write the wizard's result to .vb.")
 	runCmd.Flags().BoolVar(&runFlagsState.rebuild, "rebuild", false,
 		"Force a fresh `docker build` even when a matching image exists.")
+	runCmd.Flags().BoolVar(&runFlagsState.dind, "dind", false,
+		"Mount the host's Docker socket so `docker` inside the container drives the host daemon. "+
+			"Requires the container to have the `docker` CLI installed (no built-in feature yet — install via a custom Dockerfile fragment).")
 
 	rootCmd.AddCommand(runCmd)
 

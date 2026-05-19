@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,6 +38,12 @@ type Spec struct {
 	Shell    string   // "bash" | "zsh" | "fish"
 	Features []string // resolved final feature list (after profile + with + no)
 	Extensions  []string // resolved extensions selections (per-harness IDs)
+
+	// Username is the unprivileged user baked into the image. Affects
+	// fingerprint AND appears as a visible segment in the image tag, so
+	// multi-user hosts don't share images (the image's USER stage hard-
+	// codes the user's UID/GID — sharing across UIDs is incorrect).
+	Username string
 }
 
 // Fingerprint returns an 8-character hex prefix of SHA-256 over the spec's
@@ -56,19 +63,31 @@ func Fingerprint(spec Spec) string {
 }
 
 // ImageName returns the docker image tag for the given spec + fingerprint.
-// Format: `vb-<harness>-<profile>-<fp8>:latest`.
+// Format: `vb-<harness>-<profile>-<user>-<fp8>:latest` when a username is
+// set; `vb-<harness>-<profile>-<fp8>:latest` otherwise (back-compat for
+// callers that don't yet pass Username).
 //
-// Harness and profile are sanitized to safe tag chars; fingerprint is hex
-// so always safe. The :latest suffix is intentional — image versioning is
-// per-workspace by fingerprint, not by floating tag.
+// Harness, profile, and username are sanitized to safe tag chars;
+// fingerprint is hex so always safe. The :latest suffix is intentional —
+// image versioning is per-workspace by fingerprint, not by floating tag.
+//
+// Username is included to prevent multi-user-host image collisions: the
+// image's USER stage hard-codes a specific UID/GID, so two users
+// sharing an image tag would end up with one rebuilding over the other's
+// (when their UIDs differ) — surprising and wasteful. Different users
+// get distinct image tags by construction.
 func ImageName(spec Spec, fingerprint string) string {
 	harness := sanitizeTagSegment(spec.Harness)
 	profile := sanitizeTagSegment(spec.Profile)
+	user := sanitizeTagSegment(spec.Username)
 	if harness == "" {
 		harness = "unknown"
 	}
 	if profile == "" {
 		profile = "default"
+	}
+	if user != "" {
+		return fmt.Sprintf("vb-%s-%s-%s-%s:latest", harness, profile, user, fingerprint)
 	}
 	return fmt.Sprintf("vb-%s-%s-%s:latest", harness, profile, fingerprint)
 }
@@ -106,9 +125,14 @@ func Hostname(workspacePath string) string {
 // workspace path and fingerprint.
 // Format: `vb-<sanitized-basename>-<wsHash8>-<fp8>`.
 //
-// wsHash8 is the SHA-256 prefix of the absolute workspace path; it
-// disambiguates workspaces with the same basename (e.g., ~/work/foo and
-// ~/play/foo). Without it the two would alias on the same container name.
+// wsHash8 is a hash of the absolute workspace path AND (when uid > 0)
+// the host UID; that combination disambiguates workspaces with the
+// same basename (e.g., ~/work/foo vs ~/play/foo) AND prevents
+// multi-user collisions (alice's ~/dev/foo and bob's ~/dev/foo are
+// distinct containers, not one stolen across UIDs). Without it the
+// host UID, today's container ownership semantics would let a second
+// user's `vibrate` reuse the first user's container — which would
+// leak files cross-user and surface the wrong USER inside.
 func ContainerName(workspacePath, fingerprint string) string {
 	abs := workspacePath
 	if a, err := filepath.Abs(workspacePath); err == nil {
@@ -118,7 +142,10 @@ func ContainerName(workspacePath, fingerprint string) string {
 	if basename == "" {
 		basename = "ws"
 	}
-	wsHash := hashHex(abs, 8)
+	// Mix host UID into the hash. os.Getuid() is cheap and process-
+	// scoped; using it here rather than threading uid through the call
+	// chain keeps the signature unchanged.
+	wsHash := hashHex(fmt.Sprintf("%s|uid=%d", abs, os.Getuid()), 8)
 	return fmt.Sprintf("vb-%s-%s-%s", basename, wsHash, fingerprint)
 }
 
@@ -126,6 +153,10 @@ func ContainerName(workspacePath, fingerprint string) string {
 // Fields appear in fixed order; lists are sorted; case-insensitive fields
 // are lower-cased. Anything that doesn't affect on-disk image content is
 // excluded — currently that's just Profile.
+//
+// Username IS included because the image's USER stage embeds the host
+// UID/GID, so an image built for alice (uid 501) is materially different
+// from one built for bob (uid 502) even with identical features.
 func canonicalSpec(spec Spec) string {
 	features := append([]string(nil), spec.Features...)
 	sort.Strings(features)
@@ -135,18 +166,21 @@ func canonicalSpec(spec Spec) string {
 	// Lowercase the small enums so e.g. "Zsh" and "zsh" produce the same hash.
 	harness := strings.ToLower(strings.TrimSpace(spec.Harness))
 	shell := strings.ToLower(strings.TrimSpace(spec.Shell))
+	user := strings.ToLower(strings.TrimSpace(spec.Username))
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "harness=%s;", harness)
 	fmt.Fprintf(&b, "shell=%s;", shell)
 	fmt.Fprintf(&b, "features=%s;", strings.Join(features, ","))
-	fmt.Fprintf(&b, "extensions=%s", strings.Join(extensions, ","))
+	fmt.Fprintf(&b, "extensions=%s;", strings.Join(extensions, ","))
+	fmt.Fprintf(&b, "user=%s", user)
 	return b.String()
 }
 
 func isEmptySpec(spec Spec) bool {
 	return strings.TrimSpace(spec.Harness) == "" &&
 		strings.TrimSpace(spec.Shell) == "" &&
+		strings.TrimSpace(spec.Username) == "" &&
 		len(spec.Features) == 0 &&
 		len(spec.Extensions) == 0
 }

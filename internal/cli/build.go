@@ -9,9 +9,10 @@ import (
 	"github.com/spf13/cobra"
 
 	vibrator "github.com/wlame/vibrator"
+	"github.com/wlame/vibrator/internal/app"
 	"github.com/wlame/vibrator/internal/catalog"
-	"github.com/wlame/vibrator/internal/dockerfile"
 	"github.com/wlame/vibrator/internal/docker"
+	"github.com/wlame/vibrator/internal/dockerfile"
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/profile"
@@ -38,9 +39,8 @@ type buildFlags struct {
 
 // flag defaults — match the wizard's "if the user picks nothing" answers.
 const (
-	defaultProfile  = profile.IDFull
-	defaultShell    = "zsh"
-	defaultUsername = "vibrate"
+	defaultProfile = profile.IDFull
+	defaultShell   = "zsh"
 )
 
 var (
@@ -96,8 +96,8 @@ func registerBuildFlags(cmd *cobra.Command, flags *buildFlags, buildOnly bool) {
 		"Features to disable on top of the profile (repeatable, comma-separated).")
 	cmd.Flags().StringSliceVar(&flags.catalogIDs, "catalog", nil,
 		"Catalog entry IDs to install (comma-separated; from the chosen harness).")
-	cmd.Flags().StringVar(&flags.username, "username", defaultUsername,
-		"Unprivileged user created inside the container.")
+	cmd.Flags().StringVar(&flags.username, "username", app.HostUsername(),
+		"Unprivileged user created inside the container. Defaults to the host user's name (sanitized for Linux useradd).")
 	cmd.Flags().IntVar(&flags.hostUID, "host-uid", os.Getuid(),
 		"Host UID baked as ARG so mounted file permissions match the caller.")
 	cmd.Flags().IntVar(&flags.hostGID, "host-gid", os.Getgid(),

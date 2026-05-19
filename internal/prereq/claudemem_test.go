@@ -78,6 +78,35 @@ func TestRewriteForOneshot(t *testing.T) {
 	}
 }
 
+func TestRewriteForHostProbe(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		// HTTP URL with port — the common claude-mem server case
+		{"http://host.docker.internal:37877", "http://127.0.0.1:37877"},
+		// HTTP URL with port and path
+		{"http://host.docker.internal:37877/healthz", "http://127.0.0.1:37877/healthz"},
+		// Already 127.0.0.1 — left alone
+		{"http://127.0.0.1:37877", "http://127.0.0.1:37877"},
+		// localhost — left alone (not our concern; this rewriter only
+		// handles the inverse direction)
+		{"http://localhost:37877", "http://localhost:37877"},
+		// Unrelated host — left alone
+		{"http://api.example.com:443/v1", "http://api.example.com:443/v1"},
+		// With userinfo (uncommon for HTTP, but the regex supports it)
+		{"http://u:p@host.docker.internal:8080/", "http://u:p@127.0.0.1:8080/"},
+		// postgres-style DSN — also rewritten (the regex is scheme-agnostic)
+		{"postgres://u:p@host.docker.internal:5432/db", "postgres://u:p@127.0.0.1:5432/db"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := rewriteForHostProbe(tc.in); got != tc.want {
+				t.Errorf("rewriteForHostProbe(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 // --- ClaudeMemPrereq factory ----------------------------------------------
 
 func TestClaudeMemPrereq_WithoutConfig_ReturnsFailingVerifier(t *testing.T) {

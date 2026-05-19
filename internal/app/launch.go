@@ -94,16 +94,23 @@ func runContainer(ctx context.Context, dc docker.Client,
 		// We use bridge instead of host to keep Linux/macOS behavior
 		// uniform; --add-host below patches in host.docker.internal.
 		AddHosts: []string{"host.docker.internal:host-gateway"},
-		Stdin:    opts.Stdin,
-		Stdout:   opts.Stdout,
-		Stderr:   opts.Stderr,
+		// Land in the workspace, not the user's $HOME — the workspace
+		// is mounted at the same absolute path on both sides, so this
+		// mirrors what `cd <project>` on the host would put you in.
+		WorkingDir: wsDir,
+		Stdin:      opts.Stdin,
+		Stdout:     opts.Stdout,
+		Stderr:     opts.Stderr,
 	})
 }
 
 // execIntoContainer runs an interactive shell inside an already-running
-// (or just-started) container.
+// (or just-started) container. wsDir is the workspace path on the host
+// (also the path inside the container, since vibrator mounts at the
+// same absolute path) — used to set --workdir so re-entries land in
+// the project, not the user's $HOME.
 func execIntoContainer(ctx context.Context, dc docker.Client,
-	containerName string, pin config.Pin, opts Options,
+	containerName, wsDir string, pin config.Pin, opts Options,
 ) error {
 	shell := pin.Shell
 	if shell == "" {
@@ -112,6 +119,7 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 	return dc.Exec(ctx, docker.ExecSpec{
 		Container:   containerName,
 		Interactive: true,
+		WorkingDir:  wsDir,
 		Cmd:         []string{"/bin/" + shell},
 		Stdin:       opts.Stdin,
 		Stdout:      opts.Stdout,

@@ -159,7 +159,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	b.WriteString(` && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
 
-ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLORTERM=truecolor
+`)
+
+	// zsh fires `zsh-newuser-install` interactively when invoked with no
+	// startup files in $HOME. Catalog install scripts run as root in
+	// Stage 4, and some of them indirectly invoke the user's preferred
+	// shell — which blocks the build forever waiting on stdin. Seed two
+	// empty rc files: one for root (build-time), one in /etc/skel so
+	// `useradd -m` in Stage 5 propagates it into the unprivileged user's
+	// home (runtime). Just an empty file is enough to satisfy zsh's
+	// "first run" check — users can layer their own dotfiles on top via
+	// bind mounts or wizard config.
+	if spec.Shell == "zsh" {
+		b.WriteString(`# Suppress zsh-newuser-install for build (root) and runtime (skel-copied).
+RUN : > /root/.zshrc \
+ && install -D -m 0644 /root/.zshrc /etc/skel/.zshrc
+
+`)
+	}
+	b.WriteString(`ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLORTERM=truecolor
 
 # uv tools install into /usr/local/bin so every user finds them on PATH.
 ENV UV_TOOL_BIN_DIR=/usr/local/bin
@@ -181,7 +199,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends fd-find fzf \
 `)
 }
 
-// writeFeaturesStage emits Stage 2: per-feature Dockerfile fragments.
+// writeFeaturesStage emits Stage 2: per-feature Dockerfile fragments,
+// then creates the unprivileged user and switches to them. Subsequent
+// stages (harness, catalog) run as that user so binaries land in
+// /home/$USERNAME (readable) instead of /root (mode 0700, unreachable).
+//
 // Features come in dep order from feature.Resolve (deps first).
 func writeFeaturesStage(b *bytes.Buffer, spec Spec) {
 	b.WriteString(`# ============================================================================
@@ -192,13 +214,56 @@ FROM base AS features
 `)
 	if len(spec.Features) == 0 {
 		b.WriteString("# (no features enabled — minimal profile)\n\n")
-		return
+	} else {
+		for _, f := range spec.Features {
+			fmt.Fprintf(b, "# --- feature: %s (%s) ---\n", f.ID, f.Name)
+			writeFragment(b, f.Dockerfile)
+			b.WriteString("\n")
+		}
 	}
-	for _, f := range spec.Features {
-		fmt.Fprintf(b, "# --- feature: %s (%s) ---\n", f.ID, f.Name)
-		writeFragment(b, f.Dockerfile)
-		b.WriteString("\n")
+
+	// User creation lives at the END of features so that:
+	//   - All apt/multi-stage-COPY work runs as root (required)
+	//   - Stages 3+ (harness, catalog) run as the unprivileged user, so
+	//     `claude.ai/install.sh` lands in /home/$USERNAME/.local/bin,
+	//     `claude plugin install …` writes to /home/$USERNAME/.claude/,
+	//     and there's no /root/-mode-0700 traversal issue when the user
+	//     later uses these.
+	writeUserCreation(b, spec)
+}
+
+// writeUserCreation emits the user/group setup plus the USER + WORKDIR
+// switch. Extracted so the call site is obvious and tests can pin its
+// position in the Dockerfile.
+func writeUserCreation(b *bytes.Buffer, spec Spec) {
+	username := spec.Username
+	if username == "" {
+		username = "vibrate"
 	}
+
+	b.WriteString("# --- user creation + USER switch -------------------------------------------\n")
+	b.WriteString("# Build args supply the host's UID/GID so file permissions on bind-mounted\n")
+	b.WriteString("# workspace paths match the caller (set by internal/docker at build time).\n")
+	fmt.Fprintf(b, "ARG USERNAME=%s\n", username)
+	fmt.Fprintf(b, "ARG HOST_UID=%d\n", spec.HostUID)
+	fmt.Fprintf(b, "ARG HOST_GID=%d\n", spec.HostGID)
+
+	b.WriteString(`
+# Replace any existing user/group at the target UID/GID (Ubuntu ships an
+# "ubuntu" user at 1000 which usually clashes with the host's first user).
+RUN set -eux; \
+    if EXISTING_USER=$(getent passwd ${HOST_UID} | cut -d: -f1); [ -n "$EXISTING_USER" ]; then userdel -r "$EXISTING_USER" 2>/dev/null || true; fi; \
+    if EXISTING_GROUP=$(getent group ${HOST_GID} | cut -d: -f1); [ -n "$EXISTING_GROUP" ]; then groupdel "$EXISTING_GROUP" 2>/dev/null || true; fi; \
+`)
+	fmt.Fprintf(b, "    groupadd -g ${HOST_GID} ${USERNAME} && \\\n")
+	fmt.Fprintf(b, "    useradd -m -s /bin/%s -u ${HOST_UID} -g ${HOST_GID} ${USERNAME} && \\\n", spec.Shell)
+	b.WriteString(`    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
+
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}
+
+`)
 }
 
 // writeHarnessStage emits Stage 3: harness install.
@@ -264,42 +329,16 @@ func writeCatalogInstall(b *bytes.Buffer, install string) {
 	b.WriteString("\nEOF\n")
 }
 
-// writeRuntimeStage emits Stage 5: user creation, labels, env, CMD.
-// Vibrator-spec ARGs (USERNAME, HOST_UID, HOST_GID) are passed via
-// `docker build --build-arg ...` in internal/docker so the same generated
-// Dockerfile works for different hosts.
+// writeRuntimeStage emits Stage 5: labels, env, CMD. User creation
+// happens earlier (end of Stage 2) so harness + catalog can install
+// as that user. This stage just stamps metadata + sets the default
+// command.
 func writeRuntimeStage(b *bytes.Buffer, spec Spec) {
-	username := spec.Username
-	if username == "" {
-		username = "vibrate"
-	}
-
 	b.WriteString(`# ============================================================================
-# Stage 5 — runtime: unprivileged user, labels, default command
+# Stage 5 — runtime: labels, default command
+# (User creation + USER switch already happened at end of Stage 2.)
 # ============================================================================
 FROM catalog AS runtime
-
-# Build args supply the host's UID/GID so file permissions on bind-mounted
-# workspace paths match the caller (set by internal/docker at build time).
-`)
-	fmt.Fprintf(b, "ARG USERNAME=%s\n", username)
-	fmt.Fprintf(b, "ARG HOST_UID=%d\n", spec.HostUID)
-	fmt.Fprintf(b, "ARG HOST_GID=%d\n", spec.HostGID)
-
-	b.WriteString(`
-# Replace any existing user/group at the target UID/GID (Ubuntu ships an
-# "ubuntu" user at 1000 which usually clashes with the host's first user).
-RUN set -eux; \
-    if EXISTING_USER=$(getent passwd ${HOST_UID} | cut -d: -f1); [ -n "$EXISTING_USER" ]; then userdel -r "$EXISTING_USER" 2>/dev/null || true; fi; \
-    if EXISTING_GROUP=$(getent group ${HOST_GID} | cut -d: -f1); [ -n "$EXISTING_GROUP" ]; then groupdel "$EXISTING_GROUP" 2>/dev/null || true; fi; \
-`)
-	fmt.Fprintf(b, "    groupadd -g ${HOST_GID} ${USERNAME} && \\\n")
-	fmt.Fprintf(b, "    useradd -m -s /bin/%s -u ${HOST_UID} -g ${HOST_GID} ${USERNAME} && \\\n", spec.Shell)
-	b.WriteString(`    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
-
-USER ${USERNAME}
-WORKDIR /home/${USERNAME}
 
 `)
 

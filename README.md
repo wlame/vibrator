@@ -2,7 +2,7 @@
 
 A single-binary CLI that runs AI coding agents (Claude Code, Codex, OpenCode,
 Pi) in isolated Docker containers per workspace — with declarative profile
-and catalog configuration via a `.vb` file at the project root.
+and extension configuration via a `.vb` file at the project root.
 
 > **Status:** Go rewrite is feature-complete on branch `pivot`. The previous
 > bash implementation lives under
@@ -45,9 +45,9 @@ The first run writes a `.vb` file capturing your choices. It's added to
 | `vibrate wizard` | Run the wizard standalone — preview without building |
 | `vibrate build` | Build the image without running a container |
 | `vibrate build-dockerfile` | Emit the generated Dockerfile to a file / stdout |
-| `vibrate catalog list <harness>` | List catalog entries available for a harness |
-| `vibrate catalog show <id>` | Show a catalog entry's frontmatter + body |
-| `vibrate hostprobe` | Show host-detected plugins + which catalog entries map |
+| `vibrate extensions list <harness>` | List extension entries available for a harness |
+| `vibrate extensions show <id>` | Show a extension entry's frontmatter + body |
+| `vibrate hostprobe` | Show host-detected plugins + which extension entries map |
 | `vibrate prereqs status` | Probe host stacks (claude-mem server etc.) |
 | `vibrate prereqs bootstrap <id>` | Run host-side setup (e.g., mint a claude-mem key) |
 | `vibrate variants list` | List managed images + containers for this host |
@@ -63,7 +63,7 @@ Common flags (apply to `vibrate` and `vibrate run`):
 --shell=<id>            bash | zsh | fish                    (default: zsh)
 --with=feature,...      Enable extra features beyond the profile
 --no=feature,...        Disable features from the profile
---catalog=id,...        Catalog entry IDs to install per the chosen harness
+--extensions=id,...        Extension IDs to install per the chosen harness
 --no-wizard             Skip the wizard entirely; require all fields via flags or .vb
 --no-save               Don't write the wizard's result to .vb
 --rebuild               Force a fresh `docker build` even when an image exists
@@ -86,7 +86,7 @@ is lost.
 
 - **`cmd/vibrate`** — thin main that wires the cobra root command.
 - **`internal/cli`** — every subcommand lives in its own file (run, build,
-  build-dockerfile, catalog, wizard, hostprobe, prereqs, variants, runtime,
+  build-dockerfile, extensions, wizard, hostprobe, prereqs, variants, runtime,
   migrate).
 - **`internal/app`** — the orchestrator. Decision tree: load pin → flag
   overrides → wizard → validate → save → resolve specs → prereq probes →
@@ -100,8 +100,8 @@ is lost.
   playwright, ...) with a topological resolver.
 - **`internal/profile`** — minimal / backend / frontend / full bundles on top
   of `internal/feature`.
-- **`internal/catalog`** — markdown + YAML frontmatter loader for the curated
-  per-harness inventory under [`catalog/`](./catalog).
+- **`internal/extensions`** — markdown + YAML frontmatter loader for the curated
+  per-harness inventory under [`extensions/`](./extensions).
 - **`internal/dockerfile`** — deterministic Dockerfile generator with
   golden-file tests for representative specs.
 - **`internal/docker`** — Client interface over the `docker` CLI; production
@@ -111,7 +111,7 @@ is lost.
 - **`internal/workspace`** — variant fingerprint + image/container naming.
 - **`internal/config`** — `.vb` TOML loader/writer with `Pin` struct.
 - **`internal/hostprobe`** — scan host for installed plugins (used by the
-  wizard to pre-check catalog entries).
+  wizard to pre-check extension entries).
 - **`internal/prereq`** — host-side prereq types (HTTP / command / file
   probes) plus the claude-mem postgres bootstrap.
 - **`internal/localprovider`** — Ollama / LM Studio lifecycle (enumerate
@@ -124,7 +124,7 @@ is lost.
 |---|---|
 | Docker integration | Shell out to `docker` CLI (no SDK dep) |
 | `.vb` format | TOML (BurntSushi/toml) |
-| Catalog format | Markdown + YAML frontmatter, one file per item |
+| Extensions format | Markdown + YAML frontmatter, one file per item |
 | Harness extensibility | Built-in Go interface; PR to add a new one |
 | Wizard library | charmbracelet/huh — gated step-by-step |
 | Profiles | minimal / backend / frontend / full (default: full) |

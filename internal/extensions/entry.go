@@ -1,16 +1,16 @@
-// Package catalog loads the curated per-harness inventory of plugins, MCP
+// Package extensions loads the curated per-harness inventory of plugins, MCP
 // servers, skills, subagents, and tools from a markdown-with-YAML-frontmatter
 // representation.
 //
-// Each entry is one file under catalog/<harness>/<id>.md. The frontmatter
+// Each entry is one file under extensions/<harness>/<id>.md. The frontmatter
 // (between the first two `---` lines) supplies metadata; the markdown body
 // is the user-facing prose docs (host setup, verification, troubleshooting).
 //
 // Loaders accept an fs.FS so unit tests can run against fstest.MapFS, and
-// production code can hand in an embed.FS rooted at the module's catalog/.
-package catalog
+// production code can hand in an embed.FS rooted at the module's extensions/.
+package extensions
 
-// Kind classifies what a catalog entry installs. The five kinds are the
+// Kind classifies what an extension installs. The five kinds are the
 // concepts most users will be familiar with from Claude Code's terminology;
 // other harnesses are mapped onto the same set even when their native
 // terminology differs (Codex calls these "plugins", OpenCode calls them
@@ -32,7 +32,7 @@ const (
 	KindSubagent Kind = "subagent"
 
 	// KindTool is a CLI / language-runtime tool that the harness optionally
-	// uses — used when a catalog entry is really "install this CLI" rather
+	// uses — used when an extension is really "install this CLI" rather
 	// than a harness-native concept.
 	KindTool Kind = "tool"
 )
@@ -57,9 +57,9 @@ type Deps struct {
 	// image (e.g., "node" so the MCP server's npx can find a runtime).
 	Features []string `yaml:"features,omitempty"`
 
-	// Catalog is a list of other entry IDs (within the same harness) the
+	// Extensions is a list of other entry IDs (within the same harness) the
 	// entry needs. Used sparingly — most entries should be independent.
-	Catalog []string `yaml:"catalog,omitempty"`
+	Extensions []string `yaml:"extensions,omitempty"`
 }
 
 // AuthSpec describes how a tool authenticates against an external service.
@@ -70,7 +70,7 @@ type AuthSpec struct {
 	Env string `yaml:"env"`
 }
 
-// Entry is one fully-loaded catalog item. Frontmatter fields populate the
+// Entry is one fully-loaded extensions item. Frontmatter fields populate the
 // metadata; the markdown body (everything after the second `---`) lands in
 // Body verbatim.
 //
@@ -86,7 +86,7 @@ type Entry struct {
 	// the loader returns an error otherwise.
 	ID string `yaml:"id,omitempty"`
 
-	// Name is the display label used in the wizard and `catalog list`.
+	// Name is the display label used in the wizard and `extensions list`.
 	Name string `yaml:"name"`
 
 	// Kind is one of: plugin, skill, mcp, subagent, tool. Required.
@@ -100,7 +100,7 @@ type Entry struct {
 	// Best-effort, informational only.
 	SizeMB int `yaml:"size_mb,omitempty"`
 
-	// Deps lists features + other catalog entries this one needs.
+	// Deps lists features + other extension entries this one needs.
 	Deps Deps `yaml:"deps,omitempty"`
 
 	// Prereq is the ID of a prereq from internal/prereq (Phase 4) that must
@@ -121,8 +121,8 @@ type Entry struct {
 
 	// HostAliases is the list of identifiers the host-side detection
 	// (internal/hostprobe) may emit for this entry. Used when the host
-	// stores the plugin under a different name from our catalog ID — e.g.
-	// host has "playwright", our catalog has "playwright-mcp". Lookups
+	// stores the plugin under a different name from our extensions ID — e.g.
+	// host has "playwright", our extensions has "playwright-mcp". Lookups
 	// match against both ID and HostAliases. Lowercase, exact match.
 	HostAliases []string `yaml:"host_aliases,omitempty"`
 

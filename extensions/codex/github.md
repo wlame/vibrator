@@ -8,7 +8,7 @@ auth:
 install: |
   # Codex plugins are installed by writing to ~/.codex/config.toml at image-
   # bake time. The Phase 3 harness Install will template the [plugins.github]
-  # subtable here based on this catalog entry.
+  # subtable here based on this extension.
   codex plugins install github
 source: https://developers.openai.com/codex/plugins
 ---

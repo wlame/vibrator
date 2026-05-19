@@ -5,7 +5,7 @@
 # Profile:  minimal
 # Shell:    bash
 # Features: (none)
-# Catalog:  (none)
+# Extensions:  (none)
 #
 # Reproduce this Dockerfile with:
 #   vibrate build-dockerfile --harness=claude-code --profile=minimal --shell=bash
@@ -29,6 +29,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       bash \
  && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
+
+# --- shell rc files (copied into new-user homes via /etc/skel) ---
+COPY shells/bashrc /etc/skel/.bashrc
+COPY shells/zshrc /etc/skel/.zshrc
+RUN mkdir -p /etc/skel/.config/fish
+COPY shells/config.fish /etc/skel/.config/fish/config.fish
+
+# --- shell-agnostic welcome banner (sourced from each rc file) ---
+RUN mkdir -p /opt/vibrator
+COPY scripts/welcome.sh /opt/vibrator/welcome.sh
+RUN chmod 0755 /opt/vibrator/welcome.sh
+
+# Mirror rc files into /root/ so root sub-invocations (debugging via
+# 'docker exec -u root') get the same prompt + banner, and so zsh
+# build-stage commands don't trip zsh-newuser-install.
+RUN cp /etc/skel/.bashrc /root/.bashrc \
+ && cp /etc/skel/.zshrc /root/.zshrc \
+ && mkdir -p /root/.config/fish \
+ && cp /etc/skel/.config/fish/config.fish /root/.config/fish/config.fish
 
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLORTERM=truecolor
 
@@ -77,6 +96,49 @@ USER ${USERNAME}
 WORKDIR /home/${USERNAME}
 
 # ============================================================================
+# INVARIANT — install-destination ENVs at the privilege boundary
+# ============================================================================
+# The USER switch above is a privilege boundary. ENVs set in Stages 1-2
+# (as root) PERSIST into Stages 3-5 (as the unprivileged user). Any ENV
+# that directs a tool to install into a system path (e.g.
+# UV_TOOL_BIN_DIR=/usr/local/bin) becomes a guaranteed EACCES once an
+# extension in Stage 4 invokes that tool — because the user can't write
+# to system paths.
+#
+# Every ENV that controls "where do binaries land" MUST be overridden
+# here to point at a user-writable location. Common offenders:
+#   - NPM_CONFIG_PREFIX     (npm install -g)
+#   - UV_TOOL_BIN_DIR       (uv tool install)
+#   - GOBIN                 (go install)  — not currently set; document
+#   - CARGO_HOME            (cargo install) — not currently set; document
+#   - GEM_HOME / GEM_PATH   (gem install) — not currently set; document
+#   - PIP_TARGET            (pip install --target) — not currently set
+#
+# If you add a new "install dir" ENV to Stage 1 (base) or Stage 2
+# (features), add a matching override here. Failure mode: an extension
+# install in Stage 4 hits "Permission denied" on a /usr/local/* path.
+
+# npm — global installs to ~/.npm-global (created by npm on first use).
+ENV NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global
+
+# uv — tool symlinks to ~/.local/bin (overriding the /usr/local/bin set
+# in Stage 1 which is correct only for the root-stage uv tool installs
+# in features like audit-toolkit).
+ENV UV_TOOL_BIN_DIR=/home/${USERNAME}/.local/bin
+
+# Final image-wide PATH. Order:
+#   1. user-local npm globals (mcp-server-*)
+#   2. user-local uv tool symlinks + claude.ai install ($HOME/.local/bin)
+#   3. /usr/local/go/bin (no-op if go feature wasn't selected — a
+#      non-existent PATH entry is silently ignored by exec lookups)
+#   4. system defaults
+# We re-emit the whole PATH rather than $PATH-prepending because
+# Docker's ENV var substitution only sees prior ENVs from THIS
+# Dockerfile, and the base PATH lives in the ubuntu:24.04 image's
+# default — invisible to the substitution.
+ENV PATH=/home/${USERNAME}/.npm-global/bin:/home/${USERNAME}/.local/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# ============================================================================
 # Stage 3 — harness install
 # ============================================================================
 FROM features AS harness
@@ -87,21 +149,27 @@ RUN curl -fsSL --retry 3 --retry-delay 5 https://claude.ai/install.sh | bash \
  && claude --version
 
 # ============================================================================
-# Stage 4 — catalog entries
+# Stage 4 — extensions
 # ============================================================================
-FROM harness AS catalog
+FROM harness AS extensions
 
-# (no catalog entries selected)
+# (no extensions selected)
 
 # ============================================================================
 # Stage 5 — runtime: labels, default command
 # (User creation + USER switch already happened at end of Stage 2.)
 # ============================================================================
-FROM catalog AS runtime
+FROM extensions AS runtime
 
 # Auth env vars expected by this harness (forwarded by `docker run -e`):
 ENV CLAUDE_CODE_OAUTH_TOKEN=""
 ENV ANTHROPIC_API_KEY=""
+
+# Variant metadata — readable from inside the container.
+ENV VIBRATOR_PROFILE="minimal"
+ENV VIBRATOR_FEATURES_LIST="(none)"
+ENV VIBRATOR_EXTENSIONS_LIST="(none)"
+ENV VIBRATOR_VERSION="test-1.0"
 
 # Labels — used by `vibrate variants list` and upgrade workflows.
 LABEL vibrator.version="test-1.0"
@@ -109,6 +177,6 @@ LABEL vibrator.harness="claude-code"
 LABEL vibrator.profile="minimal"
 LABEL vibrator.shell="bash"
 LABEL vibrator.features="(none)"
-LABEL vibrator.catalog="(none)"
+LABEL vibrator.extensions="(none)"
 
 CMD ["/bin/bash"]

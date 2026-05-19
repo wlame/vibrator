@@ -40,11 +40,11 @@ func EquivalentCommand(p config.Pin) string {
 	if len(p.No) > 0 {
 		fmt.Fprintf(&b, " --no=%s", strings.Join(p.No, ","))
 	}
-	if len(p.Catalog) > 0 {
-		// Sort catalog for stable output regardless of wizard insertion order.
-		sorted := append([]string{}, p.Catalog...)
+	if len(p.Extensions) > 0 {
+		// Sort extensions for stable output regardless of wizard insertion order.
+		sorted := append([]string{}, p.Extensions...)
 		sort.Strings(sorted)
-		fmt.Fprintf(&b, " --catalog=%s", strings.Join(sorted, ","))
+		fmt.Fprintf(&b, " --extensions=%s", strings.Join(sorted, ","))
 	}
 
 	var pastedKeyNote bool
@@ -80,7 +80,7 @@ func EquivalentCommand(p config.Pin) string {
 // non-empty so callers don't have to special-case missing fields.
 //
 // Fields print in the same order the wizard collected them: harness,
-// profile, shell, llm, catalog. Lengths are clamped to keep the output
+// profile, shell, llm, extensions. Lengths are clamped to keep the output
 // terminal-friendly.
 func Summary(p config.Pin, workspaceDir string) string {
 	var b strings.Builder
@@ -113,10 +113,10 @@ func Summary(p config.Pin, workspaceDir string) string {
 		}
 	}
 
-	if len(p.Catalog) > 0 {
-		sorted := append([]string{}, p.Catalog...)
+	if len(p.Extensions) > 0 {
+		sorted := append([]string{}, p.Extensions...)
 		sort.Strings(sorted)
-		fmt.Fprintf(&b, "Catalog:   %s\n", strings.Join(sorted, ", "))
+		fmt.Fprintf(&b, "Extensions:   %s\n", strings.Join(sorted, ", "))
 	}
 	return b.String()
 }

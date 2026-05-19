@@ -1,4 +1,4 @@
-package catalog
+package extensions
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"testing/fstest"
 )
 
-// newFS returns an fstest.MapFS rooted such that catalog/<harness>/<id>.md
+// newFS returns an fstest.MapFS rooted such that extensions/<harness>/<id>.md
 // is at the path given. Convenience for tests.
 func newFS(files map[string]string) fstest.MapFS {
 	m := make(fstest.MapFS, len(files))
@@ -31,9 +31,9 @@ func validEntryYAML(name, kind, source string) string {
 
 func TestLoadAll_HappyPath(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/claude-mem.md": validEntryYAML("claude-mem", "plugin", "https://github.com/thedotmack/claude-mem"),
-		"catalog/claude-code/context7.md":   validEntryYAML("context7", "mcp", "https://github.com/upstash/context7"),
-		"catalog/codex/github.md":           validEntryYAML("GitHub", "plugin", "https://platform.openai.com/codex/plugins/github"),
+		"extensions/claude-code/claude-mem.md": validEntryYAML("claude-mem", "plugin", "https://github.com/thedotmack/claude-mem"),
+		"extensions/claude-code/context7.md":   validEntryYAML("context7", "mcp", "https://github.com/upstash/context7"),
+		"extensions/codex/github.md":           validEntryYAML("GitHub", "plugin", "https://platform.openai.com/codex/plugins/github"),
 	})
 
 	got, err := LoadAll(fsys)
@@ -67,14 +67,14 @@ func TestLoadAll_HappyPath(t *testing.T) {
 
 func TestLoadAll_RichFrontmatter(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/claude-mem.md": `---
+		"extensions/claude-code/claude-mem.md": `---
 name: claude-mem
 kind: plugin
 default: true
 size_mb: 5
 deps:
   features: [node, postgres-client]
-  catalog: []
+  extensions: []
 prereq: claude-mem-server-beta
 install: |
   npx -y claude-mem install --yes
@@ -118,7 +118,7 @@ Run the docker-compose stack...
 
 func TestLoadAll_MissingFrontmatter(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/no-frontmatter.md": "# No frontmatter\nJust a markdown file.\n",
+		"extensions/claude-code/no-frontmatter.md": "# No frontmatter\nJust a markdown file.\n",
 	})
 	_, err := LoadAll(fsys)
 	if err == nil {
@@ -131,7 +131,7 @@ func TestLoadAll_MissingFrontmatter(t *testing.T) {
 
 func TestLoadAll_UnclosedFrontmatter(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/unclosed.md": "---\nname: bad\nkind: plugin\n(no closing ---)",
+		"extensions/claude-code/unclosed.md": "---\nname: bad\nkind: plugin\n(no closing ---)",
 	})
 	_, err := LoadAll(fsys)
 	if err == nil {
@@ -168,7 +168,7 @@ func TestLoadAll_MissingRequiredFields(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fsys := newFS(map[string]string{"catalog/claude-code/x.md": tc.yaml})
+			fsys := newFS(map[string]string{"extensions/claude-code/x.md": tc.yaml})
 			_, err := LoadAll(fsys)
 			if err == nil {
 				t.Fatalf("expected error")
@@ -182,7 +182,7 @@ func TestLoadAll_MissingRequiredFields(t *testing.T) {
 
 func TestLoadAll_IDMismatchBetweenFilenameAndFrontmatter(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/foo.md": `---
+		"extensions/claude-code/foo.md": `---
 id: bar
 name: Foo
 kind: plugin
@@ -203,7 +203,7 @@ func TestLoadAll_IDFromFrontmatterAgreesWithFilename(t *testing.T) {
 	// Belt-and-braces: declaring id: in frontmatter is allowed iff it
 	// matches the filename. This should load cleanly.
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/foo.md": `---
+		"extensions/claude-code/foo.md": `---
 id: foo
 name: Foo
 kind: plugin
@@ -223,9 +223,9 @@ body
 
 func TestLoadAll_IgnoresNonMarkdown(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/x.md":     validEntryYAML("X", "plugin", "https://x"),
-		"catalog/claude-code/.gitkeep": "",
-		"catalog/claude-code/notes.txt": "scratch",
+		"extensions/claude-code/x.md":     validEntryYAML("X", "plugin", "https://x"),
+		"extensions/claude-code/.gitkeep": "",
+		"extensions/claude-code/notes.txt": "scratch",
 	})
 	got, err := LoadAll(fsys)
 	if err != nil {
@@ -238,15 +238,15 @@ func TestLoadAll_IgnoresNonMarkdown(t *testing.T) {
 
 func TestLoadAll_IgnoresReadmeMd(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/README.md": "# Notes about this harness\n",
-		"catalog/claude-code/foo.md":    validEntryYAML("Foo", "plugin", "https://x"),
+		"extensions/claude-code/README.md": "# Notes about this harness\n",
+		"extensions/claude-code/foo.md":    validEntryYAML("Foo", "plugin", "https://x"),
 	})
 	got, err := LoadAll(fsys)
 	if err != nil {
 		t.Fatalf("LoadAll: %v", err)
 	}
 	if _, hasReadme := got["claude-code/README"]; hasReadme {
-		t.Errorf("README.md should not be a catalog entry")
+		t.Errorf("README.md should not be an extension")
 	}
 	if _, hasFoo := got["claude-code/foo"]; !hasFoo {
 		t.Errorf("foo should be loaded")
@@ -256,20 +256,20 @@ func TestLoadAll_IgnoresReadmeMd(t *testing.T) {
 func TestLoadAll_EmptyFS(t *testing.T) {
 	fsys := newFS(nil)
 	got, err := LoadAll(fsys)
-	if err != nil && !errors.Is(err, errors.New("no catalog")) {
+	if err != nil && !errors.Is(err, errors.New("no extensions")) {
 		// Empty FS is fine — just produces empty results. fs.Sub on a
-		// non-existent "catalog" subdir produces no walk targets, no error.
+		// non-existent "extensions" subdir produces no walk targets, no error.
 	}
 	_ = got
-	// We don't error on an empty/missing catalog; the loader is lenient.
+	// We don't error on an empty/missing extensions; the loader is lenient.
 }
 
 func TestLoadForHarness(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/aa.md": validEntryYAML("aa", "plugin", "https://a"),
-		"catalog/claude-code/zz.md": validEntryYAML("zz", "mcp", "https://z"),
-		"catalog/claude-code/mm.md": validEntryYAML("mm", "skill", "https://m"),
-		"catalog/codex/github.md":   validEntryYAML("github", "plugin", "https://g"),
+		"extensions/claude-code/aa.md": validEntryYAML("aa", "plugin", "https://a"),
+		"extensions/claude-code/zz.md": validEntryYAML("zz", "mcp", "https://z"),
+		"extensions/claude-code/mm.md": validEntryYAML("mm", "skill", "https://m"),
+		"extensions/codex/github.md":   validEntryYAML("github", "plugin", "https://g"),
 	})
 
 	got, err := LoadForHarness(fsys, "claude-code")
@@ -290,7 +290,7 @@ func TestLoadForHarness(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/claude-mem.md": validEntryYAML("claude-mem", "plugin", "https://x"),
+		"extensions/claude-code/claude-mem.md": validEntryYAML("claude-mem", "plugin", "https://x"),
 	})
 	got, err := Get(fsys, "claude-code", "claude-mem")
 	if err != nil {
@@ -307,9 +307,9 @@ func TestGet(t *testing.T) {
 
 func TestHarnesses(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"catalog/claude-code/a.md": validEntryYAML("a", "plugin", "https://x"),
-		"catalog/codex/b.md":       validEntryYAML("b", "plugin", "https://x"),
-		"catalog/opencode/c.md":    validEntryYAML("c", "plugin", "https://x"),
+		"extensions/claude-code/a.md": validEntryYAML("a", "plugin", "https://x"),
+		"extensions/codex/b.md":       validEntryYAML("b", "plugin", "https://x"),
+		"extensions/opencode/c.md":    validEntryYAML("c", "plugin", "https://x"),
 	})
 	got, err := Harnesses(fsys)
 	if err != nil {

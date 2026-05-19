@@ -1,6 +1,6 @@
 // Package profile defines the named feature bundles users pick from in the
 // wizard: minimal, backend, frontend, full. A profile is just a starting
-// feature set — `--with X` and `--no Y` deltas (and catalog entries with deps)
+// feature set — `--with X` and `--no Y` deltas (and extension entries with deps)
 // are layered on top by internal/feature.Resolve.
 //
 // Profiles don't carry implementation details. The Dockerfile generator

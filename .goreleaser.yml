@@ -54,13 +54,13 @@ archives:
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     formats: [tar.gz]
-    # Bundle the README + license + catalog source as reference material
-    # (the binary embeds these at build time, but having them in the
-    # archive helps users browse without unpacking the binary).
+    # Bundle the README + license + extensions source as reference
+    # material (the binary embeds these at build time, but having them
+    # in the archive helps users browse without unpacking the binary).
     files:
       - README.md
       - LICENSE*
-      - catalog/**/*
+      - extensions/**/*
 
 # --- Checksums ------------------------------------------------------------
 

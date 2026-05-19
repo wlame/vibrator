@@ -11,16 +11,16 @@ func TestFingerprint_StableAcrossOrder(t *testing.T) {
 		Harness:  "claude-code",
 		Shell:    "zsh",
 		Features: []string{"python", "go", "node"},
-		Catalog:  []string{"claude-mem", "context7"},
+		Extensions:  []string{"claude-mem", "context7"},
 	}
 	b := Spec{
 		Harness:  "claude-code",
 		Shell:    "zsh",
 		Features: []string{"node", "python", "go"}, // reordered
-		Catalog:  []string{"context7", "claude-mem"},
+		Extensions:  []string{"context7", "claude-mem"},
 	}
 	if Fingerprint(a) != Fingerprint(b) {
-		t.Errorf("reordered features/catalog produced different fingerprints: %s vs %s",
+		t.Errorf("reordered features/extensions produced different fingerprints: %s vs %s",
 			Fingerprint(a), Fingerprint(b))
 	}
 }
@@ -36,7 +36,7 @@ func TestFingerprint_DifferentInputsDiffer(t *testing.T) {
 		{"shell change", func(s Spec) Spec { s.Shell = "fish"; return s }},
 		{"feature added", func(s Spec) Spec { s.Features = append(s.Features, "go"); return s }},
 		{"feature removed", func(s Spec) Spec { s.Features = nil; return s }},
-		{"catalog added", func(s Spec) Spec { s.Catalog = []string{"claude-mem"}; return s }},
+		{"extensions added", func(s Spec) Spec { s.Extensions = []string{"claude-mem"}; return s }},
 	}
 	baseFp := Fingerprint(base)
 	for _, tc := range cases {
@@ -160,6 +160,54 @@ func TestContainerName_NeverEmptyBasename(t *testing.T) {
 	}
 }
 
+func TestHostname_PrefixedAndSanitized(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		// Common case — plain workspace name passes through lowercased.
+		{"/Users/wlame/dev/vibrator", "vibrate-vibrator"},
+		{"/home/alice/projects/foo-bar", "vibrate-foo-bar"},
+
+		// Underscores in the basename are NOT RFC 1123-legal in hostnames
+		// (even though some resolvers accept them) — replaced with '-'.
+		{"/home/u/my_project", "vibrate-my-project"},
+
+		// Spaces and parens get sanitized to '-'.
+		{"/tmp/My Project", "vibrate-my-project"},
+		{"/tmp/repo (work)", "vibrate-repo--work"},
+
+		// Numeric-only basename is legal (RFC 1123 allows digits).
+		{"/tmp/2026", "vibrate-2026"},
+
+		// Empty/root basename falls back to "workspace".
+		{"/", "vibrate-workspace"},
+		{"", "vibrate-workspace"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			got := Hostname(tc.path)
+			if got != tc.want {
+				t.Errorf("Hostname(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+			if len(got) > 63 {
+				t.Errorf("Hostname(%q) = %q is %d chars, must be ≤ 63 (RFC 1123 label)",
+					tc.path, got, len(got))
+			}
+		})
+	}
+}
+
+func TestHostname_TruncationStripsTrailingHyphen(t *testing.T) {
+	// 80 hyphens — sanitization preserves them as valid follow-chars,
+	// but a 63-char truncation could leave a trailing one. Strip it.
+	long := "/tmp/" + strings.Repeat("a-", 40)
+	got := Hostname(long)
+	if strings.HasSuffix(got, "-") {
+		t.Errorf("Hostname result ends with '-': %q", got)
+	}
+}
+
 func TestSanitizeTagSegment(t *testing.T) {
 	cases := []struct {
 		in, want string
@@ -185,7 +233,7 @@ func TestImageName_FormatExample(t *testing.T) {
 		Profile:  "backend",
 		Shell:    "zsh",
 		Features: []string{"python", "go", "node"},
-		Catalog:  []string{"claude-mem", "context7"},
+		Extensions:  []string{"claude-mem", "context7"},
 	}
 	fp := Fingerprint(spec)
 	img := ImageName(spec, fp)

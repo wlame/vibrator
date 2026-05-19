@@ -8,61 +8,61 @@ import (
 	"github.com/spf13/cobra"
 
 	vibrator "github.com/wlame/vibrator"
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 )
 
-// catalogCmd surfaces the curated catalog of tools/plugins/skills per harness.
-// Catalog entries live in catalog/<harness>/<id>.md and are loaded from an
+// extensionsCmd surfaces the curated extensions of tools/plugins/skills per harness.
+// Extensions entries live in extensions/<harness>/<id>.md and are loaded from an
 // embed.FS at compile time.
-var catalogCmd = &cobra.Command{
-	Use:   "catalog",
-	Short: "List and inspect catalog entries (plugins, MCP servers, skills) per harness",
+var extensionsCmd = &cobra.Command{
+	Use:   "extensions",
+	Short: "List and inspect extension entries (plugins, MCP servers, skills) per harness",
 }
 
-// catalogListCmd lists either harnesses (no args) or entries within a harness.
-var catalogListCmd = &cobra.Command{
+// extensionsListCmd lists either harnesses (no args) or entries within a harness.
+var extensionsListCmd = &cobra.Command{
 	Use:   "list [HARNESS]",
-	Short: "List catalog harnesses, or entries within one harness",
+	Short: "List harnesses, or entries within one harness",
 	Long: `Without arguments, lists known harnesses (claude-code, codex, opencode, pi).
-With a harness argument, lists the catalog entries for that harness.`,
+With a harness argument, lists the extension entries for that harness.`,
 	Args: cobra.MaximumNArgs(1),
-	RunE: runCatalogList,
+	RunE: runExtensionsList,
 }
 
-// catalogShowCmd prints one entry's frontmatter + prose body.
-var catalogShowCmd = &cobra.Command{
+// extensionsShowCmd prints one entry's frontmatter + prose body.
+var extensionsShowCmd = &cobra.Command{
 	Use:   "show ID",
-	Short: "Print a catalog entry's metadata + prose body",
+	Short: "Print an extension's metadata + prose body",
 	Long: `Print the frontmatter metadata + markdown body for one entry.
 
 Accepts either "<harness>/<id>" (unambiguous) or just "<id>" (looked up
 across all harnesses; errors if multiple harnesses contain the id).`,
 	Args: cobra.ExactArgs(1),
-	RunE: runCatalogShow,
+	RunE: runExtensionsShow,
 }
 
 func init() {
-	catalogCmd.AddCommand(catalogListCmd)
-	catalogCmd.AddCommand(catalogShowCmd)
-	rootCmd.AddCommand(catalogCmd)
+	extensionsCmd.AddCommand(extensionsListCmd)
+	extensionsCmd.AddCommand(extensionsShowCmd)
+	rootCmd.AddCommand(extensionsCmd)
 }
 
-func runCatalogList(cmd *cobra.Command, args []string) error {
+func runExtensionsList(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return printHarnesses(cmd)
 	}
 	return printEntries(cmd, args[0])
 }
 
-// printHarnesses lists every harness that has at least one catalog entry,
+// printHarnesses lists every harness that has at least one extensions entry,
 // plus the count.
 func printHarnesses(cmd *cobra.Command) error {
-	entries, err := catalog.LoadAll(vibrator.CatalogFS)
+	entries, err := extensions.LoadAll(vibrator.ExtensionsFS)
 	if err != nil {
-		return fmt.Errorf("load catalog: %w", err)
+		return fmt.Errorf("load extensions: %w", err)
 	}
 	if len(entries) == 0 {
-		cmd.Println("(catalog is empty)")
+		cmd.Println("(extensions is empty)")
 		return nil
 	}
 
@@ -82,12 +82,12 @@ func printHarnesses(cmd *cobra.Command) error {
 
 // printEntries lists the entries under a specific harness, grouped by kind.
 func printEntries(cmd *cobra.Command, harness string) error {
-	entries, err := catalog.LoadForHarness(vibrator.CatalogFS, harness)
+	entries, err := extensions.LoadForHarness(vibrator.ExtensionsFS, harness)
 	if err != nil {
 		return fmt.Errorf("load harness %q: %w", harness, err)
 	}
 	if len(entries) == 0 {
-		return fmt.Errorf("no catalog entries for harness %q (run `vibrate catalog list` to see known harnesses)", harness)
+		return fmt.Errorf("no extension entries for harness %q (run `vibrate extensions list` to see known harnesses)", harness)
 	}
 
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -107,11 +107,11 @@ func printEntries(cmd *cobra.Command, harness string) error {
 	return w.Flush()
 }
 
-// runCatalogShow handles both "harness/id" and "id" lookup forms.
-func runCatalogShow(cmd *cobra.Command, args []string) error {
-	all, err := catalog.LoadAll(vibrator.CatalogFS)
+// runExtensionsShow handles both "harness/id" and "id" lookup forms.
+func runExtensionsShow(cmd *cobra.Command, args []string) error {
+	all, err := extensions.LoadAll(vibrator.ExtensionsFS)
 	if err != nil {
-		return fmt.Errorf("load catalog: %w", err)
+		return fmt.Errorf("load extensions: %w", err)
 	}
 
 	q := args[0]
@@ -120,14 +120,14 @@ func runCatalogShow(cmd *cobra.Command, args []string) error {
 	if strings.Contains(q, "/") {
 		entry, ok := all[q]
 		if !ok {
-			return fmt.Errorf("catalog entry %q not found", q)
+			return fmt.Errorf("extensions entry %q not found", q)
 		}
 		return renderEntry(cmd, entry)
 	}
 
 	// Form B: bare id — search across harnesses. Ambiguous (multi-harness
 	// hits) is an error so the user picks explicitly.
-	var matches []*catalog.Entry
+	var matches []*extensions.Entry
 	for _, e := range all {
 		if e.ID == q {
 			matches = append(matches, e)
@@ -135,7 +135,7 @@ func runCatalogShow(cmd *cobra.Command, args []string) error {
 	}
 	switch len(matches) {
 	case 0:
-		return fmt.Errorf("catalog entry %q not found", q)
+		return fmt.Errorf("extensions entry %q not found", q)
 	case 1:
 		return renderEntry(cmd, matches[0])
 	default:
@@ -150,7 +150,7 @@ func runCatalogShow(cmd *cobra.Command, args []string) error {
 // renderEntry prints a single entry's frontmatter + body in a human-readable
 // form. Output is plain text — Phase 5 may add ANSI color or markdown
 // rendering via lipgloss / glamour, but for now this is enough.
-func renderEntry(cmd *cobra.Command, e *catalog.Entry) error {
+func renderEntry(cmd *cobra.Command, e *extensions.Entry) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "ID:       %s/%s\n", e.Harness, e.ID)
 	fmt.Fprintf(out, "Name:     %s\n", e.Name)
@@ -162,8 +162,8 @@ func renderEntry(cmd *cobra.Command, e *catalog.Entry) error {
 	if len(e.Deps.Features) > 0 {
 		fmt.Fprintf(out, "Features: %s\n", strings.Join(e.Deps.Features, ", "))
 	}
-	if len(e.Deps.Catalog) > 0 {
-		fmt.Fprintf(out, "Catalog:  %s\n", strings.Join(e.Deps.Catalog, ", "))
+	if len(e.Deps.Extensions) > 0 {
+		fmt.Fprintf(out, "Extensions:  %s\n", strings.Join(e.Deps.Extensions, ", "))
 	}
 	if e.Prereq != "" {
 		fmt.Fprintf(out, "Prereq:   %s\n", e.Prereq)

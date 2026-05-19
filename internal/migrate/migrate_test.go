@@ -84,8 +84,8 @@ func TestToPin_MapsCoreFields(t *testing.T) {
 	if !reflect.DeepEqual(pin.No, []string{"aider"}) {
 		t.Errorf("NO parse wrong: %v", pin.No)
 	}
-	if !reflect.DeepEqual(pin.Catalog, []string{"claude-mem", "context7"}) {
-		t.Errorf("CATALOG parse wrong: %v", pin.Catalog)
+	if !reflect.DeepEqual(pin.Extensions, []string{"claude-mem", "context7"}) {
+		t.Errorf("CATALOG parse wrong: %v", pin.Extensions)
 	}
 	if len(notes) != len(kvs) {
 		t.Errorf("expected one note per input key, got %d / %d", len(notes), len(kvs))

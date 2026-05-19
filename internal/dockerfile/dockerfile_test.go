@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/dockerfile"
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
@@ -96,8 +96,8 @@ func TestGenerate_ContainsExpectedSections(t *testing.T) {
 	mustContain(t, s, "FROM ubuntu:24.04 AS base")
 	mustContain(t, s, "FROM base AS features")
 	mustContain(t, s, "FROM features AS harness")
-	mustContain(t, s, "FROM harness AS catalog")
-	mustContain(t, s, "FROM catalog AS runtime")
+	mustContain(t, s, "FROM harness AS extensions")
+	mustContain(t, s, "FROM extensions AS runtime")
 	mustContain(t, s, "https://claude.ai/install.sh")
 	mustContain(t, s, "CMD [\"/bin/zsh\"]")
 	mustContain(t, s, "LABEL vibrator.harness=\"claude-code\"")
@@ -120,7 +120,7 @@ func TestGenerate_ShellAffectsCMDAndUserShell(t *testing.T) {
 }
 
 // Regression: USER switch + WORKDIR must happen BEFORE the harness stage
-// so claude (Stage 3) and catalog entries (Stage 4) install into the
+// so claude (Stage 3) and extension entries (Stage 4) install into the
 // unprivileged user's home, not /root. Failure mode if this drifts:
 // `claude: permission denied` after build, plugins invisible to the user.
 func TestGenerate_UserCreationHappensBeforeHarnessStage(t *testing.T) {
@@ -146,30 +146,18 @@ func TestGenerate_UserCreationHappensBeforeHarnessStage(t *testing.T) {
 	}
 }
 
-// Regression: when --shell=zsh, the base stage must seed /root/.zshrc
-// and /etc/skel/.zshrc so zsh-newuser-install can't fire interactively
-// during the (root) catalog stage or during the (user) first-run shell.
-// For non-zsh shells, the suppression block must NOT appear — bash has
-// no equivalent dialog and we don't want to pollute the image.
-func TestGenerate_ZshSeedsRcFilesToSuppressNewUserInstall(t *testing.T) {
-	const zshrcMarker = "Suppress zsh-newuser-install"
-
-	t.Run("zsh emits suppression", func(t *testing.T) {
-		out, err := dockerfile.Generate(dockerfile.Spec{
-			Harness: hrn(t, "claude-code"),
-			Shell:   "zsh",
-		})
-		if err != nil {
-			t.Fatalf("Generate: %v", err)
-		}
-		s := string(out)
-		mustContain(t, s, zshrcMarker)
-		mustContain(t, s, "/root/.zshrc")
-		mustContain(t, s, "/etc/skel/.zshrc")
-	})
-
-	for _, sh := range []string{"bash", "fish"} {
-		t.Run(sh+" does not emit suppression", func(t *testing.T) {
+// Regression: shell rc files for all three shells must be COPY'd into
+// /etc/skel/ regardless of which shell is the default, so:
+//   - useradd -m later copies them into the unprivileged user's home
+//   - any shell invocation (bash, zsh, fish) gets the vibrator PS1 +
+//     aliases + welcome banner
+//   - zsh-newuser-install never fires (an empty .zshrc would suffice;
+//     a real one is strictly better)
+// Plus the welcome banner script must be installed in a stable
+// system-wide location so each rc file can source it.
+func TestGenerate_AllShellRcFilesAreCopiedRegardlessOfDefault(t *testing.T) {
+	for _, sh := range []string{"bash", "zsh", "fish"} {
+		t.Run("default="+sh, func(t *testing.T) {
 			out, err := dockerfile.Generate(dockerfile.Spec{
 				Harness: hrn(t, "claude-code"),
 				Shell:   sh,
@@ -177,11 +165,85 @@ func TestGenerate_ZshSeedsRcFilesToSuppressNewUserInstall(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Generate: %v", err)
 			}
-			if strings.Contains(string(out), zshrcMarker) {
-				t.Errorf("shell=%s should not include zsh suppression block", sh)
-			}
+			s := string(out)
+			// Each rc file lands in /etc/skel/.
+			mustContain(t, s, "COPY shells/bashrc /etc/skel/.bashrc")
+			mustContain(t, s, "COPY shells/zshrc /etc/skel/.zshrc")
+			mustContain(t, s, "COPY shells/config.fish /etc/skel/.config/fish/config.fish")
+			// Welcome banner lands in a stable system-wide location.
+			mustContain(t, s, "COPY scripts/welcome.sh /opt/vibrator/welcome.sh")
 		})
 	}
+}
+
+// Regression: install-destination ENVs set in Stages 1-2 (as root,
+// pointing at system paths) MUST be overridden after the USER switch
+// to point at user-writable paths. Otherwise extension installs in
+// Stage 4 hit EACCES on /usr/local/* paths. Failure mode is silent
+// until an extension actually tries to install a tool that respects
+// the env var.
+//
+// Concretely today: UV_TOOL_BIN_DIR is set to /usr/local/bin in Stage 1
+// (correct for root-stage uv tool installs in audit-toolkit feature)
+// and MUST be re-set to a user path after USER switch (so a
+// 'uv tool install' in an extension at Stage 4 doesn't fail). Same
+// shape for NPM_CONFIG_PREFIX.
+//
+// If you add a new install-direction ENV to Stage 1 without an override
+// here, extension installs that depend on that tool will break. Document
+// it in the INVARIANT block in writeUserCreation and extend this test.
+func TestGenerate_InstallEnvsOverriddenAtUserSwitch(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "claude-code"),
+		Shell:   "zsh",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	s := string(out)
+
+	userIdx := strings.Index(s, "USER ${USERNAME}")
+	if userIdx < 0 {
+		t.Fatalf("USER switch not found in generated Dockerfile")
+	}
+	postUser := s[userIdx:]
+
+	requiredOverrides := []struct {
+		envName  string
+		userHome string
+	}{
+		{"NPM_CONFIG_PREFIX", "/home/${USERNAME}/.npm-global"},
+		{"UV_TOOL_BIN_DIR", "/home/${USERNAME}/.local/bin"},
+	}
+	for _, want := range requiredOverrides {
+		needle := "ENV " + want.envName + "=" + want.userHome
+		if !strings.Contains(postUser, needle) {
+			t.Errorf("missing post-USER override: %q\n"+
+				"Without this, any extension that uses the corresponding tool "+
+				"will fail with EACCES when writing to its system path.",
+				needle)
+		}
+	}
+}
+
+// Regression: the welcome banner reads VIBRATOR_PROFILE / FEATURES_LIST /
+// EXTENSIONS_LIST from the container's env at runtime — these must be set
+// as ENV (not just LABEL) so they're visible to /bin/sh.
+func TestGenerate_VariantMetadataIsEmittedAsEnv(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "claude-code"),
+		Shell:   "zsh",
+		Profile: "backend",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	s := string(out)
+	mustContain(t, s, `ENV VIBRATOR_PROFILE="backend"`)
+	// FEATURES_LIST is emitted even when empty (consistent shape for
+	// banner scripts) — value will be "" but the key is present.
+	mustContain(t, s, "ENV VIBRATOR_FEATURES_LIST=")
+	mustContain(t, s, "ENV VIBRATOR_EXTENSIONS_LIST=")
 }
 
 func TestGenerate_FeaturesEmitInGivenOrder(t *testing.T) {
@@ -220,27 +282,27 @@ func TestGenerate_NoFeaturesProducesEmptyFeaturesStage(t *testing.T) {
 	mustContain(t, string(out), "(no features enabled — minimal profile)")
 }
 
-func TestGenerate_CatalogEntriesEmitAlphabetically(t *testing.T) {
-	// Pass two catalog entries in non-alphabetical order; the generator
+func TestGenerate_ExtensionsEmitAlphabetically(t *testing.T) {
+	// Pass two extension entries in non-alphabetical order; the generator
 	// should still emit them sorted by ID.
-	entries := []*catalog.Entry{
-		{Harness: "claude-code", ID: "zebra", Kind: catalog.KindPlugin, Install: "RUN echo zebra"},
-		{Harness: "claude-code", ID: "alpha", Kind: catalog.KindPlugin, Install: "RUN echo alpha"},
+	entries := []*extensions.Entry{
+		{Harness: "claude-code", ID: "zebra", Kind: extensions.KindPlugin, Install: "RUN echo zebra"},
+		{Harness: "claude-code", ID: "alpha", Kind: extensions.KindPlugin, Install: "RUN echo alpha"},
 	}
 	out, err := dockerfile.Generate(dockerfile.Spec{
 		Harness:        hrn(t, "claude-code"),
 		Profile:        "full",
 		Shell:          "zsh",
-		CatalogEntries: entries,
+		Extensions: entries,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	s := string(out)
-	alphaIdx := strings.Index(s, "# --- catalog/claude-code/alpha")
-	zebraIdx := strings.Index(s, "# --- catalog/claude-code/zebra")
+	alphaIdx := strings.Index(s, "# --- extensions/claude-code/alpha")
+	zebraIdx := strings.Index(s, "# --- extensions/claude-code/zebra")
 	if alphaIdx < 0 || zebraIdx < 0 {
-		t.Fatalf("missing catalog banners:\n%s", s)
+		t.Fatalf("missing extensions banners:\n%s", s)
 	}
 	if alphaIdx > zebraIdx {
 		t.Errorf("alpha should precede zebra in output (got alpha@%d zebra@%d)",
@@ -301,17 +363,17 @@ func TestGolden(t *testing.T) {
 			filename: "backend-codex-zsh.dockerfile",
 		},
 		{
-			name: "full-claude-code-with-catalog",
+			name: "full-claude-code-with-extensions",
 			spec: dockerfile.Spec{
 				Harness:  hrn(t, "claude-code"),
 				Profile:  "full",
 				Shell:    "fish",
 				Features: feats(t, "python", "node", "ralphex"),
-				CatalogEntries: []*catalog.Entry{
-					{Harness: "claude-code", ID: "context7", Kind: catalog.KindMCP,
+				Extensions: []*extensions.Entry{
+					{Harness: "claude-code", ID: "context7", Kind: extensions.KindMCP,
 						Source: "https://github.com/upstash/context7",
 						Install: "claude mcp add context7 --scope user --transport http https://mcp.context7.com/mcp"},
-					{Harness: "claude-code", ID: "sequential-thinking", Kind: catalog.KindMCP,
+					{Harness: "claude-code", ID: "sequential-thinking", Kind: extensions.KindMCP,
 						Source: "https://github.com/modelcontextprotocol/servers",
 						Install: "npm install -g @modelcontextprotocol/server-sequential-thinking\nclaude mcp add sequential-thinking --scope user --transport stdio -- mcp-server-sequential-thinking"},
 				},
@@ -320,7 +382,7 @@ func TestGolden(t *testing.T) {
 				Username:        "vibrate",
 				VibratorVersion: "test-1.0",
 			},
-			filename: "full-claude-code-with-catalog.dockerfile",
+			filename: "full-claude-code-with-extensions.dockerfile",
 		},
 	}
 

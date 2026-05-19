@@ -13,7 +13,7 @@ import (
 //
 // Plugin enumeration is intentionally not attempted yet — agents are
 // arbitrary markdown files at user-chosen paths. We'll grow this when
-// the catalog has enough opencode-targeted entries to warrant it.
+// the extensions has enough opencode-targeted entries to warrant it.
 type openCodeProber struct{}
 
 func (openCodeProber) HarnessID() string { return "opencode" }

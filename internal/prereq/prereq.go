@@ -1,8 +1,8 @@
-// Package prereq describes host-side prerequisites that catalog entries
+// Package prereq describes host-side prerequisites that extension entries
 // can depend on, and provides probes ("verifiers") plus optional auto-fixers
 // ("bootstrappers") to satisfy them.
 //
-// The canonical example is `claude-mem-server-beta`: the `claude-mem` catalog
+// The canonical example is `claude-mem-server-beta`: the `claude-mem` extensions
 // entry only works if a claude-mem server is running on the host AND the
 // workspace has a project-scoped API key cached in `.vb`. The verifier checks
 // reachability + presence of the cached key; the bootstrapper mints a fresh
@@ -13,12 +13,12 @@
 //
 // Vibrator probes prereqs at TWO distinct moments:
 //
-//  1. **Inside the wizard** — informational. If a catalog entry's prereq fails
+//  1. **Inside the wizard** — informational. If an extension's prereq fails
 //     to verify, we print an inline ⚠ with a doc-anchor link, but the user can
 //     proceed (they may be setting up the host server in parallel).
 //
 //  2. **At launch time** — strict. Just before `docker run`/`exec`, we re-probe
-//     every prereq of every installed catalog entry. On failure we hard-stop
+//     every prereq of every installed extensions entry. On failure we hard-stop
 //     with an actionable error (and the same doc anchor). This is the gate
 //     that prevents the user from entering a container that's missing
 //     required host wiring.
@@ -41,11 +41,11 @@ package prereq
 
 import "context"
 
-// Prereq is a host-side dependency that one or more catalog entries can
-// require. Catalog entries reference a Prereq by ID via the `prereq:` field
+// Prereq is a host-side dependency that one or more extension entries can
+// require. Extensions entries reference a Prereq by ID via the `prereq:` field
 // in their YAML frontmatter.
 type Prereq struct {
-	// ID is the stable identifier referenced from catalog entries and from
+	// ID is the stable identifier referenced from extension entries and from
 	// `vibrate prereqs bootstrap <id>`. Lowercase kebab-case.
 	ID string
 
@@ -53,7 +53,7 @@ type Prereq struct {
 	// status output.
 	Name string
 
-	// SetupDoc points at a section in the catalog markdown that documents
+	// SetupDoc points at a section in the extensions markdown that documents
 	// the manual host-side setup steps. Format: "<harness>/<id>.md#anchor".
 	// Used as a fallback when Bootstrapper is nil OR when Bootstrap fails.
 	SetupDoc string

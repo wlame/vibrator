@@ -3,6 +3,7 @@ package app
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/wlame/vibrator/internal/config"
@@ -260,6 +261,90 @@ func TestBuildContainerEnv_StableOrder(t *testing.T) {
 	if !reflect.DeepEqual(names, sorted) {
 		t.Errorf("env vars not sorted by name: %v", names)
 	}
+}
+
+// --- sanitizeUsername ------------------------------------------------------
+
+func TestSanitizeUsername(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		// Common host names — pass through unchanged once lowercased.
+		{"wlame", "wlame"},
+		{"alice", "alice"},
+		{"john_doe", "john_doe"},
+		{"user-1", "user-1"},
+
+		// macOS-style mixed case → lowercased.
+		{"Wlame", "wlame"},
+		{"JohnDoe", "johndoe"},
+
+		// Invalid chars replaced with `_`.
+		{"john.doe", "john_doe"},
+		{"jane doe", "jane_doe"},
+		{"user@host", "user_host"},
+
+		// Leading digit → prefixed with `_`.
+		{"1user", "_1user"},
+
+		// Leading dash: `-` is a valid follow-char but not a valid
+		// starter, so the starter-fix pass prepends `_`. Result is
+		// `_-leading`, which matches the useradd regex `[a-z_][a-z0-9_-]*`.
+		// Ugly but legal — and a user with a leading `-` in their host
+		// name is in pathological territory anyway.
+		{"-leading", "_-leading"},
+
+		// Long names — truncated to 32 chars.
+		{strings.Repeat("a", 40), strings.Repeat("a", 32)},
+
+		// Empty → empty (HostUsername then falls back).
+		{"", ""},
+
+		// All-invalid → underscores; if first char wasn't already a
+		// letter/underscore, prepend `_`. "@@@" → "___" → starts with `_`,
+		// which is valid, so result is "___".
+		{"@@@", "___"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := sanitizeUsername(tc.in); got != tc.want {
+				t.Errorf("sanitizeUsername(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- buildSpecs: catalog deps fold into feature set ----------------------
+
+// Regression: catalog entries declare `deps.features` in their frontmatter
+// (e.g., filesystem-mcp needs `node` for `npm install -g …`). Before the
+// fix in buildSpecs, those declarations were documentation-only and the
+// resolved feature list contained only the profile baseline — so the
+// install snippet hit "npm: not found" at docker build time.
+func TestBuildSpecs_CatalogDepsAreFoldedIntoFeatures(t *testing.T) {
+	// `backend` profile has no node; filesystem-mcp's deps.features = [node]
+	// — so a successful merge means the resolved feature list includes node.
+	pin := config.Pin{
+		Harness: "claude-code",
+		Profile: "backend",
+		Catalog: []string{"filesystem-mcp"},
+	}
+	_, ws, err := buildSpecs(pin, Options{})
+	if err != nil {
+		t.Fatalf("buildSpecs: %v", err)
+	}
+	if !containsString(ws.Features, "node") {
+		t.Errorf("expected resolved Features to include \"node\" via catalog dep, got %v", ws.Features)
+	}
+}
+
+func containsString(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // --- helper ---------------------------------------------------------------

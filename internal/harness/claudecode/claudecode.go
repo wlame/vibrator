@@ -16,11 +16,17 @@ func (claudeCode) ID() string   { return ID }
 func (claudeCode) Name() string { return "Claude Code" }
 
 func (claudeCode) Dockerfile() string {
-	// Claude installs to ~/.local/bin/claude — running as root, that's
-	// /root/.local/bin/claude. We symlink to /usr/local/bin so the binary
-	// is on PATH for every user (the unprivileged user we create later).
+	// Stage 3 runs as the unprivileged user (USER switched at end of
+	// Stage 2), so install.sh's $HOME-based default puts claude in
+	// /home/$USERNAME/.local/bin/claude — owned by that user, no /root
+	// traversal needed.
+	//
+	// The sudo'd symlink into /usr/local/bin keeps claude on PATH for
+	// every user/session (useful for root sub-invocations and for
+	// scripts that don't source the user's shell rc). NOPASSWD sudo is
+	// granted to the user in the user-creation block.
 	return `RUN curl -fsSL --retry 3 --retry-delay 5 https://claude.ai/install.sh | bash \
- && ln -sf /root/.local/bin/claude /usr/local/bin/claude \
+ && sudo ln -sf "$HOME/.local/bin/claude" /usr/local/bin/claude \
  && claude --version`
 }
 

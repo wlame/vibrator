@@ -56,28 +56,7 @@ FROM base AS features
 
 # (no features enabled — minimal profile)
 
-# ============================================================================
-# Stage 3 — harness install
-# ============================================================================
-FROM features AS harness
-
-# --- harness: claude-code (Claude Code) ---
-RUN curl -fsSL --retry 3 --retry-delay 5 https://claude.ai/install.sh | bash \
- && ln -sf /root/.local/bin/claude /usr/local/bin/claude \
- && claude --version
-
-# ============================================================================
-# Stage 4 — catalog entries
-# ============================================================================
-FROM harness AS catalog
-
-# (no catalog entries selected)
-
-# ============================================================================
-# Stage 5 — runtime: unprivileged user, labels, default command
-# ============================================================================
-FROM catalog AS runtime
-
+# --- user creation + USER switch -------------------------------------------
 # Build args supply the host's UID/GID so file permissions on bind-mounted
 # workspace paths match the caller (set by internal/docker at build time).
 ARG USERNAME=vibrate
@@ -96,6 +75,29 @@ RUN set -eux; \
 
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
+
+# ============================================================================
+# Stage 3 — harness install
+# ============================================================================
+FROM features AS harness
+
+# --- harness: claude-code (Claude Code) ---
+RUN curl -fsSL --retry 3 --retry-delay 5 https://claude.ai/install.sh | bash \
+ && sudo ln -sf "$HOME/.local/bin/claude" /usr/local/bin/claude \
+ && claude --version
+
+# ============================================================================
+# Stage 4 — catalog entries
+# ============================================================================
+FROM harness AS catalog
+
+# (no catalog entries selected)
+
+# ============================================================================
+# Stage 5 — runtime: labels, default command
+# (User creation + USER switch already happened at end of Stage 2.)
+# ============================================================================
+FROM catalog AS runtime
 
 # Auth env vars expected by this harness (forwarded by `docker run -e`):
 ENV CLAUDE_CODE_OAUTH_TOKEN=""

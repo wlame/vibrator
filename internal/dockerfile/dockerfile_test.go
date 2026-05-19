@@ -119,6 +119,71 @@ func TestGenerate_ShellAffectsCMDAndUserShell(t *testing.T) {
 	}
 }
 
+// Regression: USER switch + WORKDIR must happen BEFORE the harness stage
+// so claude (Stage 3) and catalog entries (Stage 4) install into the
+// unprivileged user's home, not /root. Failure mode if this drifts:
+// `claude: permission denied` after build, plugins invisible to the user.
+func TestGenerate_UserCreationHappensBeforeHarnessStage(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "claude-code"),
+		Shell:   "zsh",
+		Profile: "backend",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	s := string(out)
+
+	userIdx := strings.Index(s, "USER ${USERNAME}")
+	harnessIdx := strings.Index(s, "FROM features AS harness")
+	if userIdx < 0 || harnessIdx < 0 {
+		t.Fatalf("missing markers: userIdx=%d harnessIdx=%d in:\n%s", userIdx, harnessIdx, s)
+	}
+	if userIdx > harnessIdx {
+		t.Errorf("USER switch (idx=%d) must precede harness stage (idx=%d) — "+
+			"otherwise claude installs as root and is unreachable from the user.",
+			userIdx, harnessIdx)
+	}
+}
+
+// Regression: when --shell=zsh, the base stage must seed /root/.zshrc
+// and /etc/skel/.zshrc so zsh-newuser-install can't fire interactively
+// during the (root) catalog stage or during the (user) first-run shell.
+// For non-zsh shells, the suppression block must NOT appear — bash has
+// no equivalent dialog and we don't want to pollute the image.
+func TestGenerate_ZshSeedsRcFilesToSuppressNewUserInstall(t *testing.T) {
+	const zshrcMarker = "Suppress zsh-newuser-install"
+
+	t.Run("zsh emits suppression", func(t *testing.T) {
+		out, err := dockerfile.Generate(dockerfile.Spec{
+			Harness: hrn(t, "claude-code"),
+			Shell:   "zsh",
+		})
+		if err != nil {
+			t.Fatalf("Generate: %v", err)
+		}
+		s := string(out)
+		mustContain(t, s, zshrcMarker)
+		mustContain(t, s, "/root/.zshrc")
+		mustContain(t, s, "/etc/skel/.zshrc")
+	})
+
+	for _, sh := range []string{"bash", "fish"} {
+		t.Run(sh+" does not emit suppression", func(t *testing.T) {
+			out, err := dockerfile.Generate(dockerfile.Spec{
+				Harness: hrn(t, "claude-code"),
+				Shell:   sh,
+			})
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if strings.Contains(string(out), zshrcMarker) {
+				t.Errorf("shell=%s should not include zsh suppression block", sh)
+			}
+		})
+	}
+}
+
 func TestGenerate_FeaturesEmitInGivenOrder(t *testing.T) {
 	// feat list is the dep-resolved Registry-order slice. Generator must
 	// preserve that order so deps emit before dependents.

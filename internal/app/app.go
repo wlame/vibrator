@@ -125,6 +125,16 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		pin = result.Pin
 		saveAfterWizard = !opts.NoSave
+
+		// Show the user what they picked + the equivalent CLI command,
+		// so they can copy it into a script next time. We print to
+		// stderr (not stdout) so this doesn't pollute scripted callers
+		// piping vibrate's stdout somewhere.
+		fmt.Fprintln(opts.Stderr)
+		fmt.Fprintln(opts.Stderr, wizard.Summary(pin, wsDir))
+		fmt.Fprintln(opts.Stderr, "Equivalent command (skip the wizard next time):")
+		fmt.Fprintln(opts.Stderr, wizard.EquivalentCommand(pin))
+		fmt.Fprintln(opts.Stderr)
 	}
 
 	// 4. Validate the resolved pin before committing.

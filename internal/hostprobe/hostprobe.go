@@ -55,6 +55,14 @@ type Detected struct {
 	// Sorted for stable iteration.
 	PluginIDs []string
 
+	// Marketplaces lists the registered marketplaces (short IDs as they
+	// appear in claude's `known_marketplaces.json`). Surfaces the
+	// "where did this plugin come from" question — helpful for
+	// diagnosing catalog entries that target the wrong marketplace ID.
+	// Sorted for stable iteration. Currently populated only by
+	// claude-code's prober.
+	Marketplaces []string
+
 	// MCPServers is the set of MCP server names discovered (where the
 	// harness has a separate MCP config — currently just claude-code).
 	// Sorted for stable iteration.

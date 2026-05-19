@@ -144,6 +144,34 @@ func TestClaudeCodeProber_PrefersNewOverLegacy(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeProber_MarketplacesFromKnownMarketplaces(t *testing.T) {
+	tmp := t.TempDir()
+	// Mirror the real known_marketplaces.json shape: top-level object
+	// whose keys are short marketplace IDs.
+	seedClaudeHome(t, tmp, map[string]string{
+		"plugins/known_marketplaces.json": `{
+			"claude-plugins-official": {
+				"source": {"source": "github", "repo": "anthropics/claude-plugins-official"}
+			},
+			"umputun-cc-thingz": {
+				"source": {"source": "github", "repo": "umputun/cc-thingz"}
+			},
+			"thedotmack": {
+				"source": {"source": "github", "repo": "thedotmack/claude-mem"}
+			}
+		}`,
+	})
+
+	d, err := claudeCodeProber{}.Probe(tmp)
+	if err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	want := []string{"claude-plugins-official", "thedotmack", "umputun-cc-thingz"}
+	if !reflect.DeepEqual(d.Marketplaces, want) {
+		t.Errorf("Marketplaces = %v, want %v (note: short IDs, NOT github repo paths)", d.Marketplaces, want)
+	}
+}
+
 func TestClaudeCodeProber_MCPServersFromRootConfig(t *testing.T) {
 	tmp := t.TempDir()
 	seedClaudeHome(t, tmp, nil) // empty ~/.claude/

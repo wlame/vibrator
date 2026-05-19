@@ -26,39 +26,39 @@ func EquivalentCommand(p config.Pin) string {
 	b.WriteString("vibrate")
 
 	if p.Harness != "" {
-		fmt.Fprintf(&b, " \\\n  --harness=%s", p.Harness)
+		fmt.Fprintf(&b, " --harness=%s", p.Harness)
 	}
 	if p.Profile != "" {
-		fmt.Fprintf(&b, " \\\n  --profile=%s", p.Profile)
+		fmt.Fprintf(&b, " --profile=%s", p.Profile)
 	}
 	if p.Shell != "" {
-		fmt.Fprintf(&b, " \\\n  --shell=%s", p.Shell)
+		fmt.Fprintf(&b, " --shell=%s", p.Shell)
 	}
 	if len(p.With) > 0 {
-		fmt.Fprintf(&b, " \\\n  --with=%s", strings.Join(p.With, ","))
+		fmt.Fprintf(&b, " --with=%s", strings.Join(p.With, ","))
 	}
 	if len(p.No) > 0 {
-		fmt.Fprintf(&b, " \\\n  --no=%s", strings.Join(p.No, ","))
+		fmt.Fprintf(&b, " --no=%s", strings.Join(p.No, ","))
 	}
 	if len(p.Catalog) > 0 {
 		// Sort catalog for stable output regardless of wizard insertion order.
 		sorted := append([]string{}, p.Catalog...)
 		sort.Strings(sorted)
-		fmt.Fprintf(&b, " \\\n  --catalog=%s", strings.Join(sorted, ","))
+		fmt.Fprintf(&b, " --catalog=%s", strings.Join(sorted, ","))
 	}
 
 	var pastedKeyNote bool
 	if p.LLM != nil {
-		fmt.Fprintf(&b, " \\\n  --llm-provider=%s", p.LLM.Provider)
+		fmt.Fprintf(&b, " --llm-provider=%s", p.LLM.Provider)
 		if p.LLM.Model != "" {
-			fmt.Fprintf(&b, " \\\n  --llm-model=%s", p.LLM.Model)
+			fmt.Fprintf(&b, " --llm-model=%s", p.LLM.Model)
 		}
 		if p.LLM.BaseURL != "" {
-			fmt.Fprintf(&b, " \\\n  --llm-base-url=%s", p.LLM.BaseURL)
+			fmt.Fprintf(&b, " --llm-base-url=%s", p.LLM.BaseURL)
 		}
 		if p.LLM.Auth != nil {
 			if p.LLM.Auth.Env != "" {
-				fmt.Fprintf(&b, " \\\n  --llm-auth-env=%s", p.LLM.Auth.Env)
+				fmt.Fprintf(&b, " --llm-auth-env=%s", p.LLM.Auth.Env)
 			}
 			if p.LLM.Auth.Value != "" {
 				// Don't print the value; the CLI accepts the env-var path

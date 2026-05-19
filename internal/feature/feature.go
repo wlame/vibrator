@@ -52,7 +52,15 @@ var Registry = []Feature{
 RUN curl -LsSf --retry 3 --retry-delay 5 --retry-all-errors https://astral.sh/uv/install.sh \
       | UV_INSTALL_DIR=/usr/local/bin sh \
  && uv --version
-RUN uv python install 3.13 \
+# Pre-create UV_PYTHON_INSTALL_DIR with 0755 so the unprivileged user
+# (created in Stage 2 end) can traverse it to reach the python binary.
+# Without this, ` + "`uv python find 3.13`" + ` returns a path under /root/...
+# even though UV_PYTHON_INSTALL_DIR is set — uv reads the ENV but cache
+# discovery walks through /root/.cache/uv as a fallback. Mkdir + chmod
+# forces the install dir to exist and be world-readable before install.
+RUN mkdir -p /opt/uv-python \
+ && chmod 0755 /opt/uv-python \
+ && uv python install 3.13 \
  && ln -sf "$(uv python find 3.13)" /usr/local/bin/python3.13 \
  && update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.13 100 \
  && python3 --version`,

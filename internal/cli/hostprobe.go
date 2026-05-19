@@ -8,14 +8,14 @@ import (
 	"github.com/spf13/cobra"
 
 	vibrator "github.com/wlame/vibrator"
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/hostprobe"
 	// Probers register themselves in init() within the hostprobe package;
 	// no separate side-effect import needed.
 )
 
 // hostprobeCmd reports what vibrator detected on the host for each
-// registered harness, plus a mapping back to known catalog entries.
+// registered harness, plus a mapping back to known extension entries.
 //
 // This is primarily a debug / diagnostic command — the same data drives
 // the wizard's pre-check behavior, so running it standalone is the easy
@@ -28,7 +28,7 @@ var hostprobeCmd = &cobra.Command{
 For each registered harness, prints:
   - whether it appears installed (config dir present)
   - which raw plugin / MCP server IDs were found on the host
-  - which of those map to catalog entries (used for wizard pre-check)
+  - which of those map to extension entries (used for wizard pre-check)
 
 Useful for confirming that the wizard will start with the right boxes
 ticked, or for debugging why an expected plugin wasn't auto-detected.`,
@@ -54,11 +54,11 @@ func runHostprobe(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 	}
 
-	// Load catalog so we can show the mapping from raw host IDs to our
-	// catalog entries. If catalog loading fails we still print the raw IDs.
-	entries, catalogErr := catalog.LoadAll(vibrator.CatalogFS)
-	if catalogErr != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: catalog load failed: %v\n", catalogErr)
+	// Load extensions so we can show the mapping from raw host IDs to our
+	// extension entries. If extensions loading fails we still print the raw IDs.
+	entries, extErr := extensions.LoadAll(vibrator.ExtensionsFS)
+	if extErr != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: extensions load failed: %v\n", extErr)
 	}
 
 	for _, id := range hostprobe.HarnessIDs() {
@@ -93,18 +93,18 @@ func runHostprobe(cmd *cobra.Command, _ []string) error {
 			}
 		}
 
-		// Catalog mapping — what the wizard would pre-check.
-		if catalogErr == nil {
+		// Extensions mapping — what the wizard would pre-check.
+		if extErr == nil {
 			merged := append(append([]string{}, d.PluginIDs...), d.MCPServers...)
-			matched := catalog.MatchHostIDs(entries, id, merged)
+			matched := extensions.MatchHostIDs(entries, id, merged)
 			if len(matched) > 0 {
-				fmt.Fprintf(out, "  %sCatalog matches (%d) — wizard would pre-check:%s\n",
+				fmt.Fprintf(out, "  %sExtension matches (%d) — wizard would pre-check:%s\n",
 					c.bold, len(matched), c.reset)
 				for _, m := range matched {
 					fmt.Fprintf(out, "    %s✓%s %s\n", c.green, c.reset, m)
 				}
 			} else {
-				fmt.Fprintf(out, "  %s(no catalog matches for the detected ids)%s\n", c.dim, c.reset)
+				fmt.Fprintf(out, "  %s(no extensions matches for the detected ids)%s\n", c.dim, c.reset)
 			}
 		}
 

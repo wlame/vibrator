@@ -1,4 +1,4 @@
-package catalog
+package extensions
 
 import (
 	"reflect"
@@ -17,7 +17,7 @@ func TestMatchHostIDs_ExactID(t *testing.T) {
 }
 
 func TestMatchHostIDs_ViaAlias(t *testing.T) {
-	// Host reports plugin name "playwright" but our catalog ID is
+	// Host reports plugin name "playwright" but our extensions ID is
 	// "playwright-mcp" — bridge via HostAliases.
 	entries := map[string]*Entry{
 		"claude-code/playwright-mcp": {

@@ -1,18 +1,18 @@
 // Package hostprobe scans the host machine for already-installed agent
 // tools, plugins, skills, MCP servers, and the like — so the wizard can
 // pre-check items the user already has, and the launch path can verify
-// the host carries what the chosen catalog selections expect.
+// the host carries what the chosen extensions selections expect.
 //
-// # Why hostprobe is separate from the catalog
+// # Why hostprobe is separate from the extensions
 //
-// Hostprobe is intentionally catalog-agnostic. It returns raw host-side
+// Hostprobe is intentionally extensions-agnostic. It returns raw host-side
 // identifiers (e.g., "claude-mem", "context7", "serena") plus diagnostic
-// notes. Mapping those identifiers to specific catalog entries is the
-// catalog package's responsibility — see catalog.MatchHostIDs.
+// notes. Mapping those identifiers to specific extension entries is the
+// extensions package's responsibility — see extensions.MatchHostIDs.
 //
-// This split lets us add new probers without touching the catalog, and
+// This split lets us add new probers without touching the extensions, and
 // makes hostprobe unit-testable against a `t.TempDir()` rather than
-// requiring a full catalog fixture.
+// requiring a full extensions fixture.
 //
 // # Best-effort
 //
@@ -51,14 +51,14 @@ type Detected struct {
 	HomeDir string
 
 	// PluginIDs is the set of raw host-side identifiers discovered. NOT
-	// yet mapped to catalog entries — the catalog package does that.
+	// yet mapped to extension entries — the extensions package does that.
 	// Sorted for stable iteration.
 	PluginIDs []string
 
 	// Marketplaces lists the registered marketplaces (short IDs as they
 	// appear in claude's `known_marketplaces.json`). Surfaces the
 	// "where did this plugin come from" question — helpful for
-	// diagnosing catalog entries that target the wrong marketplace ID.
+	// diagnosing extension entries that target the wrong marketplace ID.
 	// Sorted for stable iteration. Currently populated only by
 	// claude-code's prober.
 	Marketplaces []string

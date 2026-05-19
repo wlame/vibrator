@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
 	"github.com/wlame/vibrator/internal/hostprobe"
@@ -15,7 +15,7 @@ import (
 
 func TestPlanSteps_AllUnsetShowsEverything(t *testing.T) {
 	steps := PlanSteps(Input{})
-	if !steps.Harness || !steps.Profile || !steps.Shell || !steps.Catalog {
+	if !steps.Harness || !steps.Profile || !steps.Shell || !steps.Extensions {
 		t.Errorf("expected all steps true on empty pin, got %+v", steps)
 	}
 	// LLM step is true initially (harness unknown — decided at runtime).
@@ -35,8 +35,8 @@ func TestPlanSteps_SkipsAlreadySetFields(t *testing.T) {
 	if steps.Harness || steps.Profile || steps.Shell {
 		t.Errorf("expected harness/profile/shell skipped, got %+v", steps)
 	}
-	if !steps.Catalog {
-		t.Errorf("Catalog step should always be true, got false")
+	if !steps.Extensions {
+		t.Errorf("Extensions step should always be true, got false")
 	}
 }
 
@@ -77,7 +77,7 @@ func TestEquivalentCommand_FullPin(t *testing.T) {
 		Shell:   "zsh",
 		With:    []string{"playwright"},
 		No:      []string{"aider"},
-		Catalog: []string{"context7", "claude-mem", "serena"},
+		Extensions: []string{"context7", "claude-mem", "serena"},
 	})
 	// Must contain all the flags in stable order.
 	mustContain(t, got, "--harness=claude-code")
@@ -85,8 +85,8 @@ func TestEquivalentCommand_FullPin(t *testing.T) {
 	mustContain(t, got, "--shell=zsh")
 	mustContain(t, got, "--with=playwright")
 	mustContain(t, got, "--no=aider")
-	// Catalog must be sorted regardless of insertion order.
-	mustContain(t, got, "--catalog=claude-mem,context7,serena")
+	// Extensions must be sorted regardless of insertion order.
+	mustContain(t, got, "--extensions=claude-mem,context7,serena")
 }
 
 func TestEquivalentCommand_WithEnvAuth(t *testing.T) {
@@ -149,13 +149,13 @@ func TestSummary_RendersAllSections(t *testing.T) {
 			Provider: "openai", Model: "gpt-4o",
 			Auth: &config.LLMAuth{Env: "OPENAI_API_KEY"},
 		},
-		Catalog: []string{"github", "linear"},
+		Extensions: []string{"github", "linear"},
 	}, "/Users/wlame/dev/x")
 	mustContain(t, got, "Workspace: /Users/wlame/dev/x")
 	mustContain(t, got, "Harness:   codex")
 	mustContain(t, got, "LLM:       openai / gpt-4o")
 	mustContain(t, got, "$OPENAI_API_KEY")
-	mustContain(t, got, "Catalog:   github, linear")
+	mustContain(t, got, "Extensions:   github, linear")
 }
 
 func TestSummary_PastedKeyIsNotShown(t *testing.T) {
@@ -233,11 +233,11 @@ func TestCommitLLM_DropsEmptyAuth(t *testing.T) {
 
 func TestKindBindings_AppendAndFlatten(t *testing.T) {
 	b := &kindBindings{}
-	b.appendByKind(catalog.KindPlugin, "p1")
-	b.appendByKind(catalog.KindMCP, "m1")
-	b.appendByKind(catalog.KindSkill, "s1")
-	b.appendByKind(catalog.KindMCP, "m2")
-	b.appendByKind(catalog.KindTool, "t1")
+	b.appendByKind(extensions.KindPlugin, "p1")
+	b.appendByKind(extensions.KindMCP, "m1")
+	b.appendByKind(extensions.KindSkill, "s1")
+	b.appendByKind(extensions.KindMCP, "m2")
+	b.appendByKind(extensions.KindTool, "t1")
 
 	// flatten preserves Kind order: plugin, skill, mcp, subagent, tool.
 	got := b.flatten()
@@ -249,25 +249,25 @@ func TestKindBindings_AppendAndFlatten(t *testing.T) {
 
 func TestKindBindings_DedupesAcrossKinds(t *testing.T) {
 	b := &kindBindings{}
-	b.appendByKind(catalog.KindPlugin, "dup")
-	b.appendByKind(catalog.KindSkill, "dup")
+	b.appendByKind(extensions.KindPlugin, "dup")
+	b.appendByKind(extensions.KindSkill, "dup")
 	got := b.flatten()
 	if len(got) != 1 || got[0] != "dup" {
 		t.Errorf("expected single 'dup' after dedupe, got %v", got)
 	}
 }
 
-// --- preCheckedCatalogIDs -------------------------------------------------
+// --- preCheckedExtensionIDs -------------------------------------------------
 
-func TestPreCheckedCatalogIDs_MapsViaCatalog(t *testing.T) {
-	entries := map[string]*catalog.Entry{
+func TestPreCheckedExtensionIDs_MapsViaExtensions(t *testing.T) {
+	entries := map[string]*extensions.Entry{
 		"claude-code/claude-mem": {
 			Harness: "claude-code", ID: "claude-mem",
-			Kind: catalog.KindPlugin, Name: "x", Source: "x",
+			Kind: extensions.KindPlugin, Name: "x", Source: "x",
 		},
 		"claude-code/playwright-mcp": {
 			Harness: "claude-code", ID: "playwright-mcp",
-			Kind: catalog.KindMCP, Name: "x", Source: "x",
+			Kind: extensions.KindMCP, Name: "x", Source: "x",
 			HostAliases: []string{"playwright"},
 		},
 	}
@@ -279,7 +279,7 @@ func TestPreCheckedCatalogIDs_MapsViaCatalog(t *testing.T) {
 			MCPServers: []string{},
 		},
 	}
-	got := preCheckedCatalogIDs("claude-code", entries, detected)
+	got := preCheckedExtensionIDs("claude-code", entries, detected)
 	if !got["claude-mem"] {
 		t.Errorf("claude-mem should be pre-checked via direct ID match")
 	}
@@ -288,14 +288,14 @@ func TestPreCheckedCatalogIDs_MapsViaCatalog(t *testing.T) {
 	}
 }
 
-func TestPreCheckedCatalogIDs_EmptyWhenHarnessNotInstalled(t *testing.T) {
-	entries := map[string]*catalog.Entry{
-		"claude-code/foo": {Harness: "claude-code", ID: "foo", Kind: catalog.KindPlugin, Name: "x", Source: "x"},
+func TestPreCheckedExtensionIDs_EmptyWhenHarnessNotInstalled(t *testing.T) {
+	entries := map[string]*extensions.Entry{
+		"claude-code/foo": {Harness: "claude-code", ID: "foo", Kind: extensions.KindPlugin, Name: "x", Source: "x"},
 	}
 	detected := map[string]hostprobe.Detected{
 		"claude-code": {HarnessID: "claude-code", Installed: false},
 	}
-	got := preCheckedCatalogIDs("claude-code", entries, detected)
+	got := preCheckedExtensionIDs("claude-code", entries, detected)
 	if len(got) != 0 {
 		t.Errorf("expected empty pre-check set when harness not installed, got %v", got)
 	}

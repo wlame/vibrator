@@ -84,8 +84,8 @@ func TestRegistry_AllHaveHostConfigDir(t *testing.T) {
 	}
 }
 
-// Harness IDs must match catalog/<id>/ directory names. Verified against
-// the embedded catalog in the root vibrator package — checked there to
+// Harness IDs must match extensions/<id>/ directory names. Verified against
+// the embedded extensions in the root vibrator package — checked there to
 // avoid an import cycle.
 func TestRegistry_IDsAreKebabCase(t *testing.T) {
 	for _, h := range harness.Registry {

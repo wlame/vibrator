@@ -19,7 +19,7 @@ func TestPin_RoundtripScalarsAndLists(t *testing.T) {
 		Shell:   "zsh",
 		With:    []string{"playwright", "audit-toolkit"},
 		No:      []string{"aider"},
-		Catalog: []string{"claude-mem", "context7", "serena"},
+		Extensions: []string{"claude-mem", "context7", "serena"},
 	}
 	if err := Save(path, want); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -185,8 +185,8 @@ func TestIsEmpty(t *testing.T) {
 	if (&Pin{Harness: "x"}).IsEmpty() {
 		t.Errorf("pin with harness should not be empty")
 	}
-	if (&Pin{Catalog: []string{"x"}}).IsEmpty() {
-		t.Errorf("pin with catalog entry should not be empty")
+	if (&Pin{Extensions: []string{"x"}}).IsEmpty() {
+		t.Errorf("pin with extensions entry should not be empty")
 	}
 	if (&Pin{LLM: &LLMSpec{Provider: "ollama", Model: "qwen3"}}).IsEmpty() {
 		t.Errorf("pin with LLM should not be empty")

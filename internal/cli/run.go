@@ -16,7 +16,7 @@ type runFlags struct {
 	shell      string
 	with       []string
 	no         []string
-	catalog    []string
+	extensions    []string
 	username   string
 	hostUID    int
 	hostGID    int
@@ -56,7 +56,7 @@ func buildAppOptions(cmd *cobra.Command) app.Options {
 		Shell:           runFlagsState.shell,
 		With:            runFlagsState.with,
 		No:              runFlagsState.no,
-		CatalogIDs:      runFlagsState.catalog,
+		ExtensionIDs:      runFlagsState.extensions,
 		Username:        runFlagsState.username,
 		HostUID:         runFlagsState.hostUID,
 		HostGID:         runFlagsState.hostGID,
@@ -82,8 +82,8 @@ func init() {
 		"Features to enable on top of the profile.")
 	runCmd.Flags().StringSliceVar(&runFlagsState.no, "no", nil,
 		"Features to disable on top of the profile.")
-	runCmd.Flags().StringSliceVar(&runFlagsState.catalog, "catalog", nil,
-		"Catalog entry IDs to install.")
+	runCmd.Flags().StringSliceVar(&runFlagsState.extensions, "extensions", nil,
+		"Extension IDs to install.")
 	runCmd.Flags().StringVar(&runFlagsState.username, "username", "",
 		"Unprivileged user created inside the container.")
 	runCmd.Flags().IntVar(&runFlagsState.hostUID, "host-uid", 0,

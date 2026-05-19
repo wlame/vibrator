@@ -156,6 +156,17 @@ func TestBuildRunArgs_WorkingDirEmitsWhenSet(t *testing.T) {
 	}
 }
 
+func TestBuildRunArgs_HostnameEmitsWhenSet(t *testing.T) {
+	spec := RunSpec{
+		Image:    "x:latest",
+		Hostname: "vibrate-vibrator",
+	}
+	got := buildRunArgs(spec)
+	if !containsSubseq(got, []string{"--hostname", "vibrate-vibrator"}) {
+		t.Errorf("missing --hostname, got %v", got)
+	}
+}
+
 func TestBuildRunArgs_WorkingDirOmittedWhenEmpty(t *testing.T) {
 	spec := RunSpec{Image: "x:latest"}
 	got := buildRunArgs(spec)

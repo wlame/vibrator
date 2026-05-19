@@ -20,7 +20,7 @@ import (
 //     Codex may move/rename this in future releases.
 //
 //  3. ~/.codex/config.toml → existence noted but not parsed (the
-//     interesting catalog entries we ship are app integrations like
+//     interesting extension entries we ship are app integrations like
 //     github, linear, slack — those aren't tracked in config.toml today).
 type codexProber struct{}
 

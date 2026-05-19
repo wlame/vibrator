@@ -5,10 +5,10 @@
 // Two principles drive the design:
 //
 //  1. Same logical input always produces the same identity, regardless of the
-//     order features or catalog entries were enabled. Achieved by sorting +
+//     order features or extension entries were enabled. Achieved by sorting +
 //     canonical-form serialization before hashing.
 //
-//  2. Different harness/profile/shell/feature/catalog combinations produce
+//  2. Different harness/profile/shell/feature/extensions combinations produce
 //     distinct image tags AND distinct container names. So running Claude
 //     Code "backend" and Codex "backend" in the same workspace gets two
 //     containers, not one over-mounted shared one.
@@ -36,14 +36,14 @@ type Spec struct {
 	Profile  string   // user-facing label only — NOT part of fingerprint
 	Shell    string   // "bash" | "zsh" | "fish"
 	Features []string // resolved final feature list (after profile + with + no)
-	Catalog  []string // resolved catalog selections (per-harness IDs)
+	Extensions  []string // resolved extensions selections (per-harness IDs)
 }
 
 // Fingerprint returns an 8-character hex prefix of SHA-256 over the spec's
 // canonical form. Two specs that differ only in field order produce the same
 // fingerprint.
 //
-// A wholly empty spec (no harness, no shell, no features, no catalog) returns
+// A wholly empty spec (no harness, no shell, no features, no extensions) returns
 // "00000000" — a sentinel that's easy to spot in image tags and won't collide
 // with real SHA-256 prefixes in practice.
 func Fingerprint(spec Spec) string {
@@ -73,6 +73,35 @@ func ImageName(spec Spec, fingerprint string) string {
 	return fmt.Sprintf("vb-%s-%s-%s:latest", harness, profile, fingerprint)
 }
 
+// Hostname returns the value passed to `docker run --hostname` for a
+// given workspace path. Format: `vibrate-<sanitized-basename>`. The
+// "vibrate-" prefix is what makes the shell prompt visibly different
+// from a host shell — users can spot at a glance that they're inside
+// a container, replacing the older `[vb]` PS1 prefix.
+//
+// RFC 1123: a hostname label is letters, digits, and hyphens; can't
+// start or end with a hyphen; max 63 chars per label. We sanitize
+// accordingly. Empty basename falls back to "vibrate-workspace".
+func Hostname(workspacePath string) string {
+	abs := workspacePath
+	if a, err := filepath.Abs(workspacePath); err == nil {
+		abs = a
+	}
+	base := sanitizeHostnameSegment(filepath.Base(abs))
+	if base == "" {
+		base = "workspace"
+	}
+	out := "vibrate-" + base
+	// Truncate to 63 chars (RFC 1123 single-label limit). The "vibrate-"
+	// prefix is 8 chars so the basename portion can be up to 55 chars.
+	if len(out) > 63 {
+		out = out[:63]
+	}
+	// Trim a trailing hyphen if truncation left one — invalid per RFC.
+	out = strings.TrimRight(out, "-")
+	return out
+}
+
 // ContainerName returns the per-workspace container name for a given
 // workspace path and fingerprint.
 // Format: `vb-<sanitized-basename>-<wsHash8>-<fp8>`.
@@ -100,8 +129,8 @@ func ContainerName(workspacePath, fingerprint string) string {
 func canonicalSpec(spec Spec) string {
 	features := append([]string(nil), spec.Features...)
 	sort.Strings(features)
-	catalog := append([]string(nil), spec.Catalog...)
-	sort.Strings(catalog)
+	extensions := append([]string(nil), spec.Extensions...)
+	sort.Strings(extensions)
 
 	// Lowercase the small enums so e.g. "Zsh" and "zsh" produce the same hash.
 	harness := strings.ToLower(strings.TrimSpace(spec.Harness))
@@ -111,7 +140,7 @@ func canonicalSpec(spec Spec) string {
 	fmt.Fprintf(&b, "harness=%s;", harness)
 	fmt.Fprintf(&b, "shell=%s;", shell)
 	fmt.Fprintf(&b, "features=%s;", strings.Join(features, ","))
-	fmt.Fprintf(&b, "catalog=%s", strings.Join(catalog, ","))
+	fmt.Fprintf(&b, "extensions=%s", strings.Join(extensions, ","))
 	return b.String()
 }
 
@@ -119,7 +148,7 @@ func isEmptySpec(spec Spec) bool {
 	return strings.TrimSpace(spec.Harness) == "" &&
 		strings.TrimSpace(spec.Shell) == "" &&
 		len(spec.Features) == 0 &&
-		len(spec.Catalog) == 0
+		len(spec.Extensions) == 0
 }
 
 // sanitizeTagSegment normalizes a string for use in a docker image tag.
@@ -162,6 +191,26 @@ func sanitizeNameSegment(s string) string {
 	out := b.String()
 	out = strings.TrimLeft(out, "-_")
 	return out
+}
+
+// sanitizeHostnameSegment normalizes a string for use in a hostname
+// label per RFC 1123. Allowed: a-z 0-9 -. NO underscores (RFC forbids
+// them even though some resolvers accept them in practice). Result is
+// lower-cased; leading/trailing hyphens are stripped.
+func sanitizeHostnameSegment(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= '0' && r <= '9',
+			r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 // hashHex returns the first n hex chars of sha256(s).

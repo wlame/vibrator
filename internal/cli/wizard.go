@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	vibrator "github.com/wlame/vibrator"
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/hostprobe"
 	"github.com/wlame/vibrator/internal/wizard"
@@ -27,9 +27,9 @@ var wizardCmd = &cobra.Command{
 	Long: `Runs the interactive setup wizard for the current workspace.
 
 Loads any existing .vb in $PWD as starting state, probes the host for
-installed plugins (to pre-check the right catalog entries), then steps
+installed plugins (to pre-check the right extension entries), then steps
 the user through harness, profile, shell, LLM provider (where
-applicable), and catalog selection.
+applicable), and extensions selection.
 
 The result is printed as a summary + equivalent CLI command. NOTHING is
 written to disk and NO container is built. Use this to preview wizard
@@ -61,16 +61,16 @@ func runWizardStandalone(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Probe the host so the catalog step can pre-check items the user
+	// Probe the host so the extensions step can pre-check items the user
 	// already has installed locally.
 	home, _ := os.UserHomeDir()
 	hostDetected, _ := hostprobe.ProbeAll(home)
 
-	// Load the catalog so the wizard's catalog step has options to
+	// Load the extensions so the wizard's extensions step has options to
 	// render.
-	entries, err := catalog.LoadAll(vibrator.CatalogFS)
+	entries, err := extensions.LoadAll(vibrator.ExtensionsFS)
 	if err != nil {
-		return fmt.Errorf("load catalog: %w", err)
+		return fmt.Errorf("load extensions: %w", err)
 	}
 
 	// Run the wizard.
@@ -78,7 +78,7 @@ func runWizardStandalone(cmd *cobra.Command, _ []string) error {
 		Initial:        initial,
 		WorkspaceDir:   cwd,
 		HostDetected:   hostDetected,
-		CatalogEntries: entries,
+		Extensions: entries,
 	})
 	if err != nil {
 		return err

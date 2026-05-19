@@ -35,4 +35,4 @@ privilege read role on the DB, never the superuser.
 Set `DATABASE_URL` to a `postgres://readonly:...@host/db` form.
 
 For richer features (index tuning, query optimization) consider
-`postgres-mcp-pro` (CrystalDBA) — a separate catalog entry.
+`postgres-mcp-pro` (CrystalDBA) — a separate extension.

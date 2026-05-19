@@ -92,6 +92,7 @@ type RunSpec struct {
 	Env          []EnvVar          // -e repeated
 	Labels       map[string]string // --label repeated
 	WorkingDir   string            // --workdir (cwd inside the container)
+	Hostname     string            // --hostname (RFC 1123 — letters, digits, hyphens; max 63 chars)
 	Cmd          []string          // command + args inside the container
 
 	// I/O streams. nil stdin/stdout/stderr connect to the real process
@@ -525,6 +526,9 @@ func buildRunArgs(spec RunSpec) []string {
 	}
 	if spec.ContainerName != "" {
 		args = append(args, "--name", spec.ContainerName)
+	}
+	if spec.Hostname != "" {
+		args = append(args, "--hostname", spec.Hostname)
 	}
 	for _, k := range sortedMapKeys(spec.Labels) {
 		args = append(args, "--label", k+"="+spec.Labels[k])

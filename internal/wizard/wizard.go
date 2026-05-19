@@ -7,7 +7,7 @@
 // The wizard never asks for a value the caller already provided. Each
 // step is shown only when its corresponding Pin field is unset. Users
 // who pass `--harness=claude-code --profile=full --shell=zsh` see only
-// the catalog selection step; users who pass nothing see the full
+// the extensions selection step; users who pass nothing see the full
 // flow.
 //
 // # Form library
@@ -24,7 +24,7 @@
 //
 //   - Pure helpers (summary.go, this file's gating logic) — unit-tested
 //     against fixtures.
-//   - Form composition (llm.go, catalog.go) — smoke-tested via the binary.
+//   - Form composition (llm.go, extensions.go) — smoke-tested via the binary.
 package wizard
 
 import (
@@ -34,7 +34,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/hostprobe"
@@ -52,12 +52,12 @@ type Input struct {
 	WorkspaceDir string
 
 	// HostDetected is the result of hostprobe.ProbeAll, used to pre-check
-	// catalog entries that the user already has on the host.
+	// extension entries that the user already has on the host.
 	HostDetected map[string]hostprobe.Detected
 
-	// CatalogEntries is the loaded catalog (typically from
-	// catalog.LoadAll). The wizard uses it for the selection step.
-	CatalogEntries map[string]*catalog.Entry
+	// Extensions is the loaded extensions (typically from
+	// extensions.LoadAll). The wizard uses it for the selection step.
+	Extensions map[string]*extensions.Entry
 }
 
 // Result is what Run returns when the wizard completes successfully.
@@ -79,7 +79,7 @@ type Steps struct {
 	Profile bool
 	Shell   bool
 	LLM     bool
-	Catalog bool
+	Extensions bool
 }
 
 // PlanSteps computes which steps the wizard would show given an input.
@@ -96,7 +96,7 @@ func PlanSteps(in Input) Steps {
 	s.Harness = in.Initial.Harness == ""
 	s.Profile = in.Initial.Profile == ""
 	s.Shell = in.Initial.Shell == ""
-	s.Catalog = true // always show catalog step — empty selection is valid
+	s.Extensions = true // always show extensions step — empty selection is valid
 
 	if !s.Harness {
 		// Harness is known; we can decide LLM planning now.
@@ -144,11 +144,11 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		llmBinds = b
 	}
 
-	var catalogBinds *kindBindings
-	if steps.Catalog && len(in.CatalogEntries) > 0 {
-		catGroups, b := buildCatalogGroups(&pin, in.CatalogEntries, in.HostDetected)
+	var extensionBinds *kindBindings
+	if steps.Extensions && len(in.Extensions) > 0 {
+		catGroups, b := buildExtensionGroups(&pin, in.Extensions, in.HostDetected)
 		groups = append(groups, catGroups...)
-		catalogBinds = b
+		extensionBinds = b
 	}
 
 	if len(groups) == 0 {
@@ -176,8 +176,8 @@ func Run(ctx context.Context, in Input) (Result, error) {
 			pin.LLM = nil
 		}
 	}
-	if catalogBinds != nil {
-		pin.Catalog = catalogBinds.flatten()
+	if extensionBinds != nil {
+		pin.Extensions = extensionBinds.flatten()
 	}
 
 	return Result{Pin: pin}, nil

@@ -1,0 +1,46 @@
+# Vibrator bashrc.
+# Lives in /etc/skel/.bashrc at image-build time; useradd -m copies it
+# into the unprivileged user's home. Edit templates/shells/bashrc in
+# the source repo to change behavior.
+
+# Bail early for non-interactive shells (script invocations, scp, etc.)
+case $- in
+    *i*) ;;
+    *) return ;;
+esac
+
+# --- history ----------------------------------------------------------
+HISTFILE="$HOME/.bash_history"
+HISTSIZE=50000
+HISTFILESIZE=50000
+HISTCONTROL=ignoredups:erasedups
+shopt -s histappend
+
+# --- prompt -----------------------------------------------------------
+# user@host in vibrator-yellow, workspace in green. Hostname is set
+# to `vibrate-<workspace>` by docker run --hostname, so the yellow
+# user@vibrate-XYZ section is the at-a-glance "you're in a vibrator
+# container" cue (no separate [vb] prefix needed).
+PS1='\[\033[33m\]\u@\h\[\033[0m\] \[\033[32m\]\w\[\033[0m\] \$ '
+
+# --- aliases ----------------------------------------------------------
+alias ll='ls -la'
+
+# See zshrc for the rationale on `--dangerously-skip-permissions`.
+alias claude='claude --dangerously-skip-permissions'
+alias claude-safe='command claude'
+
+command -v nvim >/dev/null 2>&1 && { alias vim='nvim'; alias vi='nvim'; }
+
+# --- environment ------------------------------------------------------
+export GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
+
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# --- welcome banner ---------------------------------------------------
+if [ -z "$VIBRATOR_NO_BANNER" ] && [ -r /opt/vibrator/welcome.sh ]; then
+    . /opt/vibrator/welcome.sh
+fi

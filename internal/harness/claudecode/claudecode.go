@@ -51,7 +51,7 @@ func (claudeCode) RequiredFeatures() []string {
 	// Claude itself is a single binary — no runtime deps. But its
 	// integration with claude-mem plugin walks Python (uv for serena MCP)
 	// and Node (claude-mem plugin scripts re-exec into bun); those come in
-	// as catalog entry deps, not harness deps.
+	// as extensions entry deps, not harness deps.
 	return nil
 }
 

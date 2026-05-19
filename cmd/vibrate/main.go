@@ -12,7 +12,7 @@ import (
 	"github.com/wlame/vibrator/internal/cli"
 
 	// Side-effect import: registers every built-in harness with the global
-	// harness registry. Without this, `vibrate catalog ...`,
+	// harness registry. Without this, `vibrate extensions ...`,
 	// `vibrate build-dockerfile`, etc. wouldn't know about claude-code,
 	// codex, opencode, or pi. Keep this as the only consumer of harness/all
 	// — internal packages should import only the specific harnesses they

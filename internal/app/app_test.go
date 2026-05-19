@@ -1,6 +1,9 @@
 package app
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -311,6 +314,169 @@ func TestSanitizeUsername(t *testing.T) {
 				t.Errorf("sanitizeUsername(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// --- buildClaudeHostMounts ------------------------------------------------
+
+func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
+	// HOME points at an empty tempdir → no host-state files exist → no
+	// config/settings/rules/hooks mounts. Session-persist dirs DO get
+	// auto-created (D5 contract), so we still see those mounts.
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	var stderr bytes.Buffer
+	got := buildClaudeHostMounts("alice", &stderr)
+
+	mounts := make(map[string]docker.Volume, len(got))
+	for _, v := range got {
+		mounts[v.Container] = v
+	}
+	for _, c := range []string{
+		"/home/alice/.claude.host.json",
+		"/home/alice/.claude/settings.host.json",
+		"/home/alice/.claude/rules-host",
+		"/home/alice/.claude/hooks",
+	} {
+		if _, present := mounts[c]; present {
+			t.Errorf("unexpected mount %s on bare HOME — should only mount when host source exists", c)
+		}
+	}
+	for _, name := range claudeSessionPersistDirs {
+		c := "/home/alice/.claude/" + name
+		if _, present := mounts[c]; !present {
+			t.Errorf("missing session-persist mount %s — D5 contract requires auto-create", c)
+		}
+	}
+}
+
+func TestBuildClaudeHostMounts_MountsExistingHostState(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	mustWriteFile(t, filepath.Join(tmp, ".claude.json"), `{"oauthAccount":"x"}`)
+	mustMkdirAll(t, filepath.Join(tmp, ".claude"))
+	mustWriteFile(t, filepath.Join(tmp, ".claude", "settings.json"), `{}`)
+	mustMkdirAll(t, filepath.Join(tmp, ".claude", "rules"))
+	mustMkdirAll(t, filepath.Join(tmp, ".claude", "hooks"))
+
+	var stderr bytes.Buffer
+	got := buildClaudeHostMounts("alice", &stderr)
+
+	mounts := make(map[string]docker.Volume, len(got))
+	for _, v := range got {
+		mounts[v.Container] = v
+	}
+
+	cases := []struct {
+		container string
+		wantHost  string
+		wantRO    bool
+	}{
+		{"/home/alice/.claude.host.json", filepath.Join(tmp, ".claude.json"), true},
+		{"/home/alice/.claude/settings.host.json", filepath.Join(tmp, ".claude", "settings.json"), true},
+		{"/home/alice/.claude/rules-host", filepath.Join(tmp, ".claude", "rules"), true},
+		{"/home/alice/.claude/hooks", filepath.Join(tmp, ".claude", "hooks"), false},
+	}
+	for _, c := range cases {
+		v, ok := mounts[c.container]
+		if !ok {
+			t.Errorf("missing mount %s", c.container)
+			continue
+		}
+		if v.Host != c.wantHost {
+			t.Errorf("mount %s host = %q, want %q", c.container, v.Host, c.wantHost)
+		}
+		if v.ReadOnly != c.wantRO {
+			t.Errorf("mount %s ReadOnly = %v, want %v", c.container, v.ReadOnly, c.wantRO)
+		}
+	}
+}
+
+// --- buildOptionalMounts (D6 + D7) ----------------------------------------
+
+func TestBuildOptionalMounts_NoAWSNoExtension_ReturnsEmpty(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	var stderr bytes.Buffer
+	got := buildOptionalMounts("alice", config.Pin{}, "abc12345", &stderr)
+	if len(got) != 0 {
+		t.Errorf("bare HOME + no extensions: want 0 mounts, got %d: %+v", len(got), got)
+	}
+}
+
+func TestBuildOptionalMounts_AWSDirMountsReadOnly(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	mustMkdirAll(t, filepath.Join(tmp, ".aws"))
+
+	var stderr bytes.Buffer
+	got := buildOptionalMounts("alice", config.Pin{}, "abc12345", &stderr)
+
+	var found *docker.Volume
+	for i := range got {
+		if got[i].Container == "/home/alice/.aws" {
+			found = &got[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected /home/alice/.aws mount, got %+v", got)
+	}
+	if found.Host != filepath.Join(tmp, ".aws") {
+		t.Errorf("host path = %q, want %q", found.Host, filepath.Join(tmp, ".aws"))
+	}
+	if !found.ReadOnly {
+		t.Error("AWS creds mount must be read-only — container should not be able to rotate or wipe them")
+	}
+}
+
+func TestBuildOptionalMounts_ClaudeMemExtensionMountsCacheRW(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	pin := config.Pin{Extensions: []string{"claude-mem"}}
+	var stderr bytes.Buffer
+	got := buildOptionalMounts("alice", pin, "abc12345", &stderr)
+
+	wantHost := filepath.Join(tmp, ".cache", "vibrator", "claude-mem", "abc12345")
+	wantContainer := "/home/alice/.claude-mem/cache"
+
+	var found *docker.Volume
+	for i := range got {
+		if got[i].Container == wantContainer {
+			found = &got[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected %s mount, got %+v", wantContainer, got)
+	}
+	if found.Host != wantHost {
+		t.Errorf("host = %q, want %q", found.Host, wantHost)
+	}
+	if found.ReadOnly {
+		t.Error("claude-mem cache mount must be RW — the plugin writes to it")
+	}
+	// The mount-creation helper must have auto-created the host dir;
+	// otherwise the docker mount would silently create it as root and
+	// the unprivileged container user couldn't write there.
+	if !isDir(wantHost) {
+		t.Errorf("buildOptionalMounts should have created host cache dir %s", wantHost)
+	}
+}
+
+func mustWriteFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
 	}
 }
 

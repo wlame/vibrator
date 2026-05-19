@@ -99,7 +99,7 @@ func TestGenerate_ContainsExpectedSections(t *testing.T) {
 	mustContain(t, s, "FROM harness AS extensions")
 	mustContain(t, s, "FROM extensions AS runtime")
 	mustContain(t, s, "https://claude.ai/install.sh")
-	mustContain(t, s, "CMD [\"/bin/zsh\"]")
+	mustContain(t, s, "CMD [\"/usr/local/bin/claude-exec\", \"/bin/zsh\"]")
 	mustContain(t, s, "LABEL vibrator.harness=\"claude-code\"")
 }
 
@@ -113,7 +113,7 @@ func TestGenerate_ShellAffectsCMDAndUserShell(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Generate: %v", err)
 			}
-			mustContain(t, string(out), "CMD [\"/bin/"+sh+"\"]")
+			mustContain(t, string(out), "CMD [\"/usr/local/bin/claude-exec\", \"/bin/"+sh+"\"]")
 			mustContain(t, string(out), "useradd -m -s /bin/"+sh)
 		})
 	}

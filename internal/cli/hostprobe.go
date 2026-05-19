@@ -86,6 +86,12 @@ func runHostprobe(cmd *cobra.Command, _ []string) error {
 				fmt.Fprintf(out, "    - %s\n", m)
 			}
 		}
+		if len(d.Marketplaces) > 0 {
+			fmt.Fprintf(out, "  Registered marketplaces (%d):\n", len(d.Marketplaces))
+			for _, mp := range d.Marketplaces {
+				fmt.Fprintf(out, "    - %s\n", mp)
+			}
+		}
 
 		// Catalog mapping — what the wizard would pre-check.
 		if catalogErr == nil {

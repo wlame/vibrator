@@ -88,15 +88,21 @@ integration:
 tidy:
     {{go}} mod tidy
 
-# Install the binary system-wide with a `vb` short alias.
+# Install the binary system-wide with a `vb` short alias + shell completion.
 #
 # Usage:
-#   just install                  # → /usr/local/bin (uses sudo)
+#   just install                  # → /usr/local/bin (uses sudo if needed)
 #   just install ~/.local/bin     # → user-local, no sudo
 #
 # If `dest` is writable by the current user (e.g., ~/.local/bin),
-# sudo is skipped automatically. Otherwise the install + symlink
-# steps go through sudo.
+# sudo is skipped and completion goes to user-level paths
+# (~/.local/share/bash-completion/completions, ~/.zsh/completions,
+# ~/.config/fish/completions). Otherwise sudo is used and completion
+# lands in system locations.
+#
+# Detects $SHELL to pick which shell's completion to install. Pass
+# --shell=name as an env override if your $SHELL doesn't match what
+# you actually use (e.g., `SHELL=zsh just install`).
 install dest="/usr/local/bin": build
     #!/usr/bin/env bash
     set -euo pipefail
@@ -108,15 +114,69 @@ install dest="/usr/local/bin": build
     mkdir -p "$DEST" 2>/dev/null || true
     if [[ -w "$DEST" ]]; then
       SUDO=""
+      USER_LEVEL=1
     else
       SUDO="sudo"
+      USER_LEVEL=0
       echo "→ Destination $DEST is not user-writable; using sudo"
     fi
+
+    # --- Binary + alias ---
     $SUDO install {{binary}} "$DEST/"
     $SUDO ln -sf "$DEST/vibrate" "$DEST/vb"
     echo "✓ Installed: $DEST/vibrate (alias: vb)"
 
-# Remove the installed binary + alias from `dest`.
+    # --- Shell completion ---
+    SHELL_NAME="$(basename "${SHELL:-}")"
+    case "$SHELL_NAME" in
+      bash)
+        if [[ $USER_LEVEL -eq 1 ]]; then
+          COMP_DIR="$HOME/.local/share/bash-completion/completions"
+        else
+          COMP_DIR="/etc/bash_completion.d"
+        fi
+        COMP_FILE="vibrate"
+        ;;
+      zsh)
+        if [[ $USER_LEVEL -eq 1 ]]; then
+          COMP_DIR="$HOME/.zsh/completions"
+        else
+          COMP_DIR="/usr/local/share/zsh/site-functions"
+        fi
+        COMP_FILE="_vibrate"
+        ;;
+      fish)
+        if [[ $USER_LEVEL -eq 1 ]]; then
+          COMP_DIR="$HOME/.config/fish/completions"
+        else
+          COMP_DIR="/usr/local/share/fish/vendor_completions.d"
+        fi
+        COMP_FILE="vibrate.fish"
+        ;;
+      *)
+        echo "  (shell '$SHELL_NAME' has no auto-completion support — skipping)"
+        echo "  Run \`vibrate completion <shell>\` manually to generate one."
+        exit 0
+        ;;
+    esac
+
+    $SUDO mkdir -p "$COMP_DIR"
+    # Pipe through tee so the redirect happens under the correct
+    # privilege level (sudo if needed). > redirection wouldn't.
+    "$DEST/vibrate" completion "$SHELL_NAME" | $SUDO tee "$COMP_DIR/$COMP_FILE" > /dev/null
+    echo "✓ Installed $SHELL_NAME completion: $COMP_DIR/$COMP_FILE"
+
+    # zsh user-level completions only work if $COMP_DIR is in $fpath.
+    # bash and fish auto-discover from the standard XDG paths.
+    if [[ "$SHELL_NAME" == "zsh" && $USER_LEVEL -eq 1 ]]; then
+      echo
+      echo "  zsh note: ensure $COMP_DIR is in your fpath. Add to ~/.zshrc:"
+      echo "    fpath=(\$HOME/.zsh/completions \$fpath)"
+      echo "    autoload -U compinit && compinit"
+    fi
+
+# Remove the installed binary + alias + completion from `dest`.
+# Same dest semantics as `install` — pass the same arg you installed with.
 uninstall dest="/usr/local/bin":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -124,11 +184,35 @@ uninstall dest="/usr/local/bin":
     DEST="${DEST/#\~/$HOME}"
     if [[ -w "$DEST" ]]; then
       SUDO=""
+      USER_LEVEL=1
     else
       SUDO="sudo"
+      USER_LEVEL=0
     fi
+
     $SUDO rm -f "$DEST/vibrate" "$DEST/vb"
     echo "✓ Removed: $DEST/vibrate and $DEST/vb"
+
+    # Remove completion for whichever shell we'd have installed for.
+    SHELL_NAME="$(basename "${SHELL:-}")"
+    case "$SHELL_NAME" in
+      bash)
+        if [[ $USER_LEVEL -eq 1 ]]; then COMP="$HOME/.local/share/bash-completion/completions/vibrate"; else COMP="/etc/bash_completion.d/vibrate"; fi
+        ;;
+      zsh)
+        if [[ $USER_LEVEL -eq 1 ]]; then COMP="$HOME/.zsh/completions/_vibrate"; else COMP="/usr/local/share/zsh/site-functions/_vibrate"; fi
+        ;;
+      fish)
+        if [[ $USER_LEVEL -eq 1 ]]; then COMP="$HOME/.config/fish/completions/vibrate.fish"; else COMP="/usr/local/share/fish/vendor_completions.d/vibrate.fish"; fi
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
+    if [[ -e "$COMP" ]]; then
+      $SUDO rm -f "$COMP"
+      echo "✓ Removed completion: $COMP"
+    fi
 
 # Composite check — what CI runs on every PR
 ci: lint test build

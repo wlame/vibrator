@@ -100,7 +100,7 @@ func unquote(v string) string {
 //	SHELL                                    → pin.Shell
 //	WITH                                     → pin.With (comma-split)
 //	NO                                       → pin.No (comma-split)
-//	CATALOG                                  → pin.Catalog (comma-split)
+//	CATALOG                                  → pin.Extensions (comma-split)
 //	USERNAME                                 → ignored (now a build-time arg)
 //	CLAUDE_MEM_SERVER_BETA_API_KEY           → prereqs.claude-mem-server-beta.api_key
 //	CLAUDE_MEM_SERVER_BETA_TEAM_ID           → prereqs.claude-mem-server-beta.team_id
@@ -131,8 +131,8 @@ func ToPin(items []KV) (config.Pin, []string) {
 			pin.No = splitCommaList(kv.Value)
 			notes = append(notes, fmt.Sprintf("NO → no = %v", pin.No))
 		case "CATALOG":
-			pin.Catalog = splitCommaList(kv.Value)
-			notes = append(notes, fmt.Sprintf("CATALOG → catalog = %v", pin.Catalog))
+			pin.Extensions = splitCommaList(kv.Value)
+			notes = append(notes, fmt.Sprintf("CATALOG → extensions = %v", pin.Extensions))
 		case "USERNAME":
 			notes = append(notes, "USERNAME → (ignored — now a build-time arg, set via --username flag)")
 		case "CLAUDE_MEM_SERVER_BETA_API_KEY":

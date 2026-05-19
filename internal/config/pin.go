@@ -4,7 +4,7 @@
 //   - the harness, profile, and shell the user picked (so future `vibrate` runs
 //     in this workspace can skip the wizard entirely)
 //   - delta feature toggles on top of the profile (with/no lists)
-//   - per-harness catalog selections
+//   - per-harness extensions selections
 //   - cached prerequisite tokens (e.g., claude-mem project-scoped API key)
 //     that were minted on first run by host-side bootstrap and shouldn't be
 //     re-minted on subsequent invocations
@@ -47,7 +47,7 @@ type Pin struct {
 	// Resolving them happens in internal/feature, not here.
 	With    []string `toml:"with,omitempty"`
 	No      []string `toml:"no,omitempty"`
-	Catalog []string `toml:"catalog,omitempty"`
+	Extensions []string `toml:"extensions,omitempty"`
 
 	// LLM is the chosen LLM provider + model + auth shape. nil for harnesses
 	// that don't need it (Claude Code is Anthropic-only and uses the existing
@@ -122,7 +122,7 @@ type LLMAuth struct {
 // mid-wizard.
 func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
-		len(p.With) == 0 && len(p.No) == 0 && len(p.Catalog) == 0 &&
+		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 &&
 		p.LLM == nil &&
 		len(p.Prereqs) == 0 && len(p.Env) == 0
 }
@@ -166,7 +166,7 @@ func Save(path string, p *Pin) error {
 		Shell   string   `toml:"shell,omitempty"`
 		With    []string `toml:"with,omitempty"`
 		No      []string `toml:"no,omitempty"`
-		Catalog []string `toml:"catalog,omitempty"`
+		Extensions []string `toml:"extensions,omitempty"`
 		LLM     *LLMSpec `toml:"llm,omitempty"`
 	}{
 		Harness: p.Harness,
@@ -174,7 +174,7 @@ func Save(path string, p *Pin) error {
 		Shell:   p.Shell,
 		With:    p.With,
 		No:      p.No,
-		Catalog: p.Catalog,
+		Extensions: p.Extensions,
 		LLM:     p.LLM,
 	}
 	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {

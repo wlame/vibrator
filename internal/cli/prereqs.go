@@ -33,7 +33,7 @@ var prereqsStatusFlagsState prereqsStatusFlags
 
 var prereqsStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Probe host stacks declared by selected catalog entries",
+	Short: "Probe host stacks declared by selected extension entries",
 	Long: `Probes each known prerequisite and prints a one-screen status report.
 Currently the only built-in prerequisite is claude-mem (server-beta runtime).`,
 	RunE: runPrereqsStatus,

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	vibrator "github.com/wlame/vibrator"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
@@ -21,8 +22,10 @@ import (
 )
 
 // buildImage generates the Dockerfile fresh and shells out to
-// `docker build`. The Dockerfile is piped via stdin (-f -) so we never
-// touch disk — same path as `vibrate build`.
+// `docker build`. The Dockerfile is piped via stdin (-f -); the build
+// context is a per-build tempdir populated by PrepareBuildContext
+// (NOT the user's workspace — that mount happens at `docker run`
+// time, not `docker build` time).
 func buildImage(ctx context.Context, dc docker.Client,
 	dfSpec dockerfile.Spec, imageTag string, opts Options,
 ) error {
@@ -31,16 +34,17 @@ func buildImage(ctx context.Context, dc docker.Client,
 		return fmt.Errorf("generate dockerfile: %w", err)
 	}
 
-	cwd, err := os.Getwd()
+	ctxDir, cleanup, err := dockerfile.PrepareBuildContext()
 	if err != nil {
-		return err
+		return fmt.Errorf("prepare build context: %w", err)
 	}
+	defer cleanup()
 
 	fmt.Fprintf(opts.Stderr, "→ Building image %s (no-cache=%v) ...\n", imageTag, opts.Rebuild)
 
 	return dc.Build(ctx, docker.BuildSpec{
 		DockerfileBytes: out,
-		ContextDir:      cwd,
+		ContextDir:      ctxDir,
 		Tag:             imageTag,
 		NoCache:         opts.Rebuild,
 		BuildArgs: map[string]string{
@@ -70,6 +74,12 @@ func runContainer(ctx context.Context, dc docker.Client,
 	if err != nil {
 		return err
 	}
+	// Surface the workspace path to in-container scripts (welcome
+	// banner, future entrypoint). Prepend so an explicit pin.Env or
+	// auth-derived value can override.
+	envVars = append([]docker.EnvVar{
+		{Name: "WORKSPACE_PATH", Value: wsDir},
+	}, envVars...)
 
 	labels := map[string]string{
 		"vibrator.managed":   "true",
@@ -83,6 +93,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 	return dc.Run(ctx, docker.RunSpec{
 		Image:         imageTag,
 		ContainerName: containerName,
+		Hostname:      workspace.Hostname(wsDir),
 		Interactive:   true,
 		Volumes: []docker.Volume{
 			{Host: wsDir, Container: wsDir},
@@ -120,11 +131,43 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 		Container:   containerName,
 		Interactive: true,
 		WorkingDir:  wsDir,
-		Cmd:         []string{"/bin/" + shell},
-		Stdin:       opts.Stdin,
-		Stdout:      opts.Stdout,
-		Stderr:      opts.Stderr,
+		// WORKSPACE_PATH is set at original `docker run` time so it's
+		// already in the container's env, but exec'd shells inherit
+		// from the docker exec invocation, not from the run-time env.
+		// Re-pass it here so the welcome banner shows the right path
+		// on re-entry to an existing container.
+		Env: []docker.EnvVar{
+			{Name: "WORKSPACE_PATH", Value: wsDir},
+		},
+		Cmd:    []string{"/bin/" + shell},
+		Stdin:  opts.Stdin,
+		Stdout: opts.Stdout,
+		Stderr: opts.Stderr,
 	})
+}
+
+// claudeOAuthTokenFile is the conventional host path the bash impl
+// used for storing a long-lived Claude OAuth token outside the shell
+// environment. Vibrator reads it as a fallback when
+// CLAUDE_CODE_OAUTH_TOKEN isn't already exported.
+const claudeOAuthTokenFile = ".claude-docker-token"
+
+// readOAuthTokenFile returns the trimmed contents of
+// $HOME/.claude-docker-token, or "" on any error (missing file, perms,
+// empty contents — all treated identically: "no token to forward").
+//
+// Whitespace is stripped because users often `echo "tok" > file`
+// which adds a trailing newline that confuses Claude's auth.
+func readOAuthTokenFile() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, claudeOAuthTokenFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // buildContainerEnv produces the full set of env vars forwarded into
@@ -145,10 +188,20 @@ func buildContainerEnv(pin config.Pin) ([]docker.EnvVar, error) {
 	// while preserving the precedence rule (later wins).
 	final := map[string]string{}
 
-	// 1. Auth env vars — forward host values verbatim.
+	// 1. Auth env vars — forward host values verbatim. For the
+	//    claude-code OAuth token specifically, fall back to a token file
+	//    on the host (~/.claude-docker-token) when the env var is unset.
+	//    The bash impl supported this convention so users could keep the
+	//    OAuth token in a file rather than in their shell rc.
 	for _, name := range h.AuthEnvVars() {
 		if v := os.Getenv(name); v != "" {
 			final[name] = v
+			continue
+		}
+		if name == "CLAUDE_CODE_OAUTH_TOKEN" {
+			if tok := readOAuthTokenFile(); tok != "" {
+				final[name] = tok
+			}
 		}
 	}
 
@@ -217,25 +270,25 @@ func resolveAPIKey(spec *config.LLMSpec) (string, error) {
 	return "", fmt.Errorf("provider %q has no credential configured", spec.Provider)
 }
 
-// runLaunchPrereqs probes every prereq referenced by the pin's catalog
+// runLaunchPrereqs probes every prereq referenced by the pin's extensions
 // entries. Failure here is fatal — entering a container with broken
 // host wiring just wastes the user's time. The error message
-// references the catalog's setup-doc anchor so the user knows where
+// references the extensions's setup-doc anchor so the user knows where
 // to look.
 //
 // This is the wizard's "soft warn" promoted to "hard fail" for launch.
 func runLaunchPrereqs(ctx context.Context, pin config.Pin, stderr io.Writer) error {
-	if len(pin.Catalog) == 0 {
+	if len(pin.Extensions) == 0 {
 		return nil
 	}
-	entries, err := catalog.LoadAll(vibrator.CatalogFS)
+	entries, err := extensions.LoadAll(vibrator.ExtensionsFS)
 	if err != nil {
-		return fmt.Errorf("load catalog: %w", err)
+		return fmt.Errorf("load extensions: %w", err)
 	}
 
-	// Walk pin.Catalog and collect distinct prereq IDs referenced.
+	// Walk pin.Extensions and collect distinct prereq IDs referenced.
 	prereqIDs := map[string]bool{}
-	for _, id := range pin.Catalog {
+	for _, id := range pin.Extensions {
 		key := pin.Harness + "/" + id
 		entry, ok := entries[key]
 		if !ok || entry.Prereq == "" {
@@ -256,7 +309,7 @@ func runLaunchPrereqs(ctx context.Context, pin config.Pin, stderr io.Writer) err
 		case prereq.ClaudeMemPrereqID:
 			cfg, err := prereq.LoadClaudeMemAdminConfig()
 			if err != nil {
-				return fmt.Errorf("claude-mem admin config not found (%s) — see catalog/claude-code/claude-mem.md#host-setup", prereq.ClaudeMemAdminConfigPath())
+				return fmt.Errorf("claude-mem admin config not found (%s) — see extensions/claude-code/claude-mem.md#host-setup", prereq.ClaudeMemAdminConfigPath())
 			}
 			p = prereq.ClaudeMemPrereq(cfg, nil)
 		default:

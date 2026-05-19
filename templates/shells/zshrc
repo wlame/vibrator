@@ -1,0 +1,50 @@
+# Vibrator zshrc.
+# Lives in /etc/skel/.zshrc at image-build time; useradd -m copies it
+# into the unprivileged user's home. Edit templates/shells/zshrc in the
+# source repo to change behavior.
+
+# --- history ----------------------------------------------------------
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt EXTENDED_HISTORY HIST_IGNORE_DUPS SHARE_HISTORY HIST_REDUCE_BLANKS
+
+# --- prompt -----------------------------------------------------------
+# user@host in vibrator-yellow, workspace in green. The container's
+# hostname is set by `docker run --hostname` to `vibrate-<workspace>`,
+# so the yellow "user@vibrate-<workspace>" portion is the visible cue
+# that you're inside a vibrator container — replacing the old [vb]
+# prefix the bash impl used. Saves four chars of horizontal space.
+PROMPT='%F{yellow}%n@%m%f %F{green}%~%f %# '
+
+# --- aliases ----------------------------------------------------------
+alias ll='ls -la'
+
+# Claude is aliased to dangerously-skip-permissions because the whole
+# point of the vibrator sandbox is to give the agent unrestricted
+# access inside an isolated container. `claude-safe` bypasses this if
+# you want the normal flow.
+alias claude='claude --dangerously-skip-permissions'
+alias claude-safe='command claude'
+
+# Prefer neovim when available — same muscle memory across hosts.
+command -v nvim >/dev/null 2>&1 && { alias vim='nvim'; alias vi='nvim'; }
+
+# --- environment ------------------------------------------------------
+# Skip the SSH host-key prompt on first `git clone` in a fresh
+# container. The sandbox is ephemeral; pinning known_hosts here adds
+# noise without security benefit (the agent has already executed
+# arbitrary code by the time it does git).
+export GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
+
+# Ensure ~/.local/bin is on PATH so the user-installed claude binary
+# is reachable without going through /usr/local/bin's sudo symlink.
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# --- welcome banner ---------------------------------------------------
+if [[ -o interactive ]] && [ -z "$VIBRATOR_NO_BANNER" ]; then
+    [ -r /opt/vibrator/welcome.sh ] && . /opt/vibrator/welcome.sh
+fi

@@ -9,8 +9,8 @@
 //
 // New harnesses are added by writing a new Go file with a struct
 // implementing Harness and a global Registry entry. No runtime discovery —
-// extension is a PR. Catalog entries per harness still come from
-// catalog/<harness>/*.md (data-driven), so day-to-day "add another plugin"
+// extension is a PR. Extensions entries per harness still come from
+// extensions/<harness>/*.md (data-driven), so day-to-day "add another plugin"
 // is a no-Go-code change.
 package harness
 
@@ -21,7 +21,7 @@ import "fmt"
 // is added later (Phase 4) once the wizard + lifecycle needs them.
 type Harness interface {
 	// ID is the kebab-case stable identifier used everywhere (image tags,
-	// CLI flags, catalog directory name). Match catalog/<id>/.
+	// CLI flags, extensions directory name). Match extensions/<id>/.
 	ID() string
 
 	// Name is the display label shown in the wizard and `--help`.
@@ -30,7 +30,7 @@ type Harness interface {
 	// Dockerfile returns the verbatim Dockerfile fragment that installs the
 	// harness binary into the image. The fragment runs after features have
 	// been installed and after the unprivileged user has been created, but
-	// before catalog entries are processed. All install commands should
+	// before extension entries are processed. All install commands should
 	// land binaries in /usr/local/bin/ so they're on PATH for every user.
 	Dockerfile() string
 
@@ -84,7 +84,7 @@ type Harness interface {
 }
 
 // Registry holds every built-in harness, ordered for display in the wizard.
-// Adding a new harness = appending here. Validation that catalog/<id>/
+// Adding a new harness = appending here. Validation that extensions/<id>/
 // exists for every registered harness happens via a self-check test in
 // the root vibrator package (embedded_test.go).
 var Registry []Harness

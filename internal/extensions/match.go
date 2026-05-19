@@ -1,8 +1,8 @@
-package catalog
+package extensions
 
 import "sort"
 
-// MatchHostIDs returns the subset of catalog entry IDs for the given harness
+// MatchHostIDs returns the subset of extensions entry IDs for the given harness
 // whose ID or HostAliases match any value in hostIDs. The returned slice is
 // sorted lexicographically for stable wizard rendering.
 //
@@ -13,7 +13,7 @@ import "sort"
 //   - Only entries belonging to `harness` are considered.
 //
 // Typical usage: wizard calls hostprobe.ProbeAll(), gets back raw host-side
-// IDs, then asks catalog.MatchHostIDs to translate them into catalog entry
+// IDs, then asks extensions.MatchHostIDs to translate them into extensions entry
 // IDs it can pre-check in the selection step.
 func MatchHostIDs(entries map[string]*Entry, harness string, hostIDs []string) []string {
 	if len(hostIDs) == 0 || len(entries) == 0 {

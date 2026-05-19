@@ -37,7 +37,7 @@ import (
 	"strings"
 
 	vibrator "github.com/wlame/vibrator"
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
@@ -58,7 +58,7 @@ type Options struct {
 	Shell      string
 	With       []string
 	No         []string
-	CatalogIDs []string
+	ExtensionIDs []string
 	Username   string
 	HostUID    int
 	HostGID    int
@@ -271,8 +271,8 @@ func applyFlagOverrides(pin *config.Pin, opts Options) {
 	if len(opts.No) > 0 {
 		pin.No = append([]string{}, opts.No...)
 	}
-	if len(opts.CatalogIDs) > 0 {
-		pin.Catalog = append([]string{}, opts.CatalogIDs...)
+	if len(opts.ExtensionIDs) > 0 {
+		pin.Extensions = append([]string{}, opts.ExtensionIDs...)
 	}
 }
 
@@ -283,22 +283,22 @@ func needsWizard(pin config.Pin) bool {
 	return pin.Harness == ""
 }
 
-// runWizard probes the host, loads the catalog, and runs the wizard.
+// runWizard probes the host, loads the extensions, and runs the wizard.
 // Returns the wizard.Result so the caller can check Cancelled.
 func runWizard(ctx context.Context, initial config.Pin, wsDir string) (wizard.Result, error) {
 	home, _ := os.UserHomeDir()
 	detected, _ := hostprobe.ProbeAll(home)
 
-	entries, err := catalog.LoadAll(vibrator.CatalogFS)
+	entries, err := extensions.LoadAll(vibrator.ExtensionsFS)
 	if err != nil {
-		return wizard.Result{}, fmt.Errorf("load catalog: %w", err)
+		return wizard.Result{}, fmt.Errorf("load extensions: %w", err)
 	}
 
 	return wizard.Run(ctx, wizard.Input{
 		Initial:        initial,
 		WorkspaceDir:   wsDir,
 		HostDetected:   detected,
-		CatalogEntries: entries,
+		Extensions: entries,
 	})
 }
 
@@ -478,31 +478,31 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		shell = "zsh"
 	}
 
-	// Catalog entries: validate that every requested ID exists. Loaded
+	// Extensions entries: validate that every requested ID exists. Loaded
 	// before feature resolution so each entry's `deps.features` can be
 	// folded into the feature `initial` set — without this step the
-	// `deps:` declarations in catalog files are documentation-only and
+	// `deps:` declarations in extensions files are documentation-only and
 	// the install snippets blow up at build time (e.g., `npm: not found`
 	// when a node-dependent MCP is selected under a non-node profile).
-	var catEntries []*catalog.Entry
-	if len(pin.Catalog) > 0 {
-		all, err := catalog.LoadAll(vibrator.CatalogFS)
+	var catEntries []*extensions.Entry
+	if len(pin.Extensions) > 0 {
+		all, err := extensions.LoadAll(vibrator.ExtensionsFS)
 		if err != nil {
-			return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("load catalog: %w", err)
+			return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("load extensions: %w", err)
 		}
-		for _, id := range pin.Catalog {
+		for _, id := range pin.Extensions {
 			key := h.ID() + "/" + id
 			entry, ok := all[key]
 			if !ok {
 				return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf(
-					"catalog entry %q not found for harness %q", id, h.ID())
+					"extensions entry %q not found for harness %q", id, h.ID())
 			}
 			catEntries = append(catEntries, entry)
 		}
 	}
 
-	// Resolve features: profile + harness-required + catalog deps, then
-	// with/no deltas. Catalog deps land in `initial` (same tier as
+	// Resolve features: profile + harness-required + extensions deps, then
+	// with/no deltas. Extensions deps land in `initial` (same tier as
 	// harness requirements) so `--no` can still strip them if the user
 	// really insists — matching the existing precedence pattern.
 	initial := append([]string{}, p.Features...)
@@ -526,7 +526,7 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		Profile:         profileID,
 		Shell:           shell,
 		Features:        feats,
-		CatalogEntries:  catEntries,
+		Extensions:  catEntries,
 		Username:        defaultUsername(opts),
 		HostUID:         defaultUID(opts),
 		HostGID:         defaultGID(opts),
@@ -538,7 +538,7 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		Profile:  profileID,
 		Shell:    shell,
 		Features: resolved.Enabled,
-		Catalog:  pin.Catalog,
+		Extensions:  pin.Extensions,
 	}
 	return dfSpec, wsSpec, nil
 }

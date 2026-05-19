@@ -97,7 +97,7 @@ type claudeMarketplacesFile map[string]json.RawMessage
 // the host. Surfaces the canonical short name (the key of the JSON
 // object), NOT the underlying GitHub repo path — that's the
 // identifier `claude plugin install <id>@<marketplace>` expects, and
-// the one catalog entries should use.
+// the one extension entries should use.
 func readClaudeMarketplaces(path string) ([]string, string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

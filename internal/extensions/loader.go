@@ -1,4 +1,4 @@
-package catalog
+package extensions
 
 import (
 	"fmt"
@@ -10,27 +10,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// catalogRoot is the directory name we expect harness subdirectories to live
+// extensionsRoot is the directory name we expect harness subdirectories to live
 // under. Loaders interpret this as the prefix inside the supplied fs.FS.
-const catalogRoot = "catalog"
+const extensionsRoot = "extensions"
 
-// LoadAll walks fsys looking for "catalog/<harness>/<id>.md" files (exactly
-// two levels under catalogRoot, ignoring deeper nesting). Each .md is parsed
+// LoadAll walks fsys looking for "extensions/<harness>/<id>.md" files (exactly
+// two levels under extensionsRoot, ignoring deeper nesting). Each .md is parsed
 // — YAML frontmatter into metadata, post-frontmatter content into Body —
 // and validated.
 //
 // Returns a map keyed by Entry.Key() ("<harness>/<id>"). The first
 // malformed file aborts the load with an error citing the file path and
-// reason — fail-fast is the right policy here because the catalog ships
+// reason — fail-fast is the right policy here because the extensions ships
 // inside the binary; a malformed entry is a build-time bug.
 func LoadAll(fsys fs.FS) (map[string]*Entry, error) {
 	out := make(map[string]*Entry)
 
-	root, err := fs.Sub(fsys, catalogRoot)
+	root, err := fs.Sub(fsys, extensionsRoot)
 	if err != nil {
 		// fs.Sub only errors on a bad path argument, which is statically
-		// "catalog" here — should never happen in practice. Surface anyway.
-		return nil, fmt.Errorf("catalog: %w", err)
+		// "extensions" here — should never happen in practice. Surface anyway.
+		return nil, fmt.Errorf("extensions: %w", err)
 	}
 
 	err = fs.WalkDir(root, ".", func(p string, d fs.DirEntry, walkErr error) error {
@@ -41,14 +41,14 @@ func LoadAll(fsys fs.FS) (map[string]*Entry, error) {
 			return nil
 		}
 		// Only .md files. Anything else is ignored silently (lets contributors
-		// stash .gitkeep, README.md at the catalog root, etc.). README.md is
+		// stash .gitkeep, README.md at the extensions root, etc.). README.md is
 		// handled in the segment count check below.
 		if !strings.HasSuffix(p, ".md") {
 			return nil
 		}
 
 		// Expect exactly "<harness>/<id>.md" — anything else (e.g. a stray
-		// .md at the catalog root, or three-level nesting) is skipped.
+		// .md at the extensions root, or three-level nesting) is skipped.
 		parts := strings.Split(p, "/")
 		if len(parts) != 2 {
 			return nil
@@ -57,25 +57,25 @@ func LoadAll(fsys fs.FS) (map[string]*Entry, error) {
 		id := strings.TrimSuffix(parts[1], ".md")
 
 		// Reject "README.md" and similar conventional names at the harness
-		// level — they're documentation, not catalog entries.
+		// level — they're documentation, not extension entries.
 		if strings.EqualFold(id, "readme") {
 			return nil
 		}
 
 		data, err := fs.ReadFile(root, p)
 		if err != nil {
-			return fmt.Errorf("catalog/%s: read: %w", p, err)
+			return fmt.Errorf("extensions/%s: read: %w", p, err)
 		}
 
 		entry, err := parseEntry(harness, id, data)
 		if err != nil {
-			return fmt.Errorf("catalog/%s: %w", p, err)
+			return fmt.Errorf("extensions/%s: %w", p, err)
 		}
 
 		// Defense in depth: two files producing the same key would silently
 		// overwrite each other in the map. Detect and surface.
 		if existing, dup := out[entry.Key()]; dup {
-			return fmt.Errorf("catalog/%s: duplicate key %q (also from %s/%s.md)",
+			return fmt.Errorf("extensions/%s: duplicate key %q (also from %s/%s.md)",
 				p, entry.Key(), existing.Harness, existing.ID)
 		}
 		out[entry.Key()] = entry
@@ -87,8 +87,8 @@ func LoadAll(fsys fs.FS) (map[string]*Entry, error) {
 	return out, nil
 }
 
-// LoadForHarness returns the entries under catalog/<harness>/, sorted by ID.
-// Useful for `vibrate catalog list <harness>` and the wizard's per-harness
+// LoadForHarness returns the entries under extensions/<harness>/, sorted by ID.
+// Useful for `vibrate extensions list <harness>` and the wizard's per-harness
 // multi-select rendering.
 func LoadForHarness(fsys fs.FS, harness string) ([]*Entry, error) {
 	all, err := LoadAll(fsys)
@@ -114,13 +114,13 @@ func Get(fsys fs.FS, harness, id string) (*Entry, error) {
 	key := harness + "/" + id
 	e, ok := all[key]
 	if !ok {
-		return nil, fmt.Errorf("catalog: entry %q not found", key)
+		return nil, fmt.Errorf("extensions: entry %q not found", key)
 	}
 	return e, nil
 }
 
-// Harnesses returns the harness directory names present in the catalog, in
-// sorted order. Used for `vibrate catalog list` with no argument (Phase 4
+// Harnesses returns the harness directory names present in the extensions, in
+// sorted order. Used for `vibrate extensions list` with no argument (Phase 4
 // might extend this) and for validating user input against known harnesses.
 func Harnesses(fsys fs.FS) ([]string, error) {
 	all, err := LoadAll(fsys)
@@ -239,23 +239,23 @@ func validate(e *Entry) error {
 	}
 	// Cross-package validation: feature IDs in deps must reference real
 	// features. We can't import internal/feature here without creating a
-	// cycle (feature → ... → catalog), so this check lives at the package
+	// cycle (feature → ... → extensions), so this check lives at the package
 	// boundary — call ValidateAgainstFeatures from a higher package.
 	_ = path.Clean // silence the unused-import linter if path becomes unused
 	return nil
 }
 
-// ValidateAgainstFeatures cross-checks that every catalog entry's
+// ValidateAgainstFeatures cross-checks that every extensions entry's
 // Deps.Features list references known feature IDs. Run at startup or in
-// tests; if this fails, the catalog ships with a broken dep declaration.
+// tests; if this fails, the extensions ships with a broken dep declaration.
 //
 // known is a set-membership predicate (e.g., feature.IsKnown). Passing it
-// in keeps internal/catalog free of an internal/feature import.
+// in keeps internal/extensions free of an internal/feature import.
 func ValidateAgainstFeatures(entries map[string]*Entry, known func(string) bool) error {
 	for _, e := range entries {
 		for _, f := range e.Deps.Features {
 			if !known(f) {
-				return fmt.Errorf("catalog entry %s declares unknown feature dep %q", e.Key(), f)
+				return fmt.Errorf("extensions entry %s declares unknown feature dep %q", e.Key(), f)
 			}
 		}
 	}

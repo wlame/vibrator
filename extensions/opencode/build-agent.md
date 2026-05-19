@@ -42,5 +42,5 @@ Custom system prompt body...
 ## Why on by default
 
 It's literally the default agent — disabling it would break opencode's
-operability. The catalog entry exists so the wizard can show it as a
+operability. The extension exists so the wizard can show it as a
 "baked-in" item rather than appearing as an empty harness.

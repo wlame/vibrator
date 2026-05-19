@@ -36,5 +36,5 @@ if you actually do frontend / web testing work.
 ## Naming caveat
 
 `@modelcontextprotocol/server-playwright` was the original package name and
-is now deprecated. Always use `@playwright/mcp` (this catalog entry installs
+is now deprecated. Always use `@playwright/mcp` (this extension installs
 the correct one).

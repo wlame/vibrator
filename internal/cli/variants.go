@@ -93,7 +93,7 @@ func runVariantsList(cmd *cobra.Command, _ []string) error {
 			fmt.Fprintf(out, "    harness:  %s\n", im.Labels["vibrator.harness"])
 			fmt.Fprintf(out, "    profile:  %s\n", im.Labels["vibrator.profile"])
 			fmt.Fprintf(out, "    features: %s\n", or(im.Labels["vibrator.features"], "(none)"))
-			fmt.Fprintf(out, "    catalog:  %s\n", or(im.Labels["vibrator.catalog"], "(none)"))
+			fmt.Fprintf(out, "    extensions:  %s\n", or(im.Labels["vibrator.extensions"], "(none)"))
 			fmt.Fprintf(out, "    %ssize:     %s, built %s%s\n", c.dim, im.SizeHuman, im.CreatedAt, c.reset)
 		}
 	}

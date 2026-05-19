@@ -15,7 +15,7 @@ func (opencode) Name() string { return "OpenCode" }
 func (opencode) Dockerfile() string {
 	// OpenCode publishes a prebuilt binary per-arch on GitHub Releases.
 	// Pin to a recent stable version to avoid surprise breakage; bump in
-	// the same PR as a catalog refresh.
+	// the same PR as a extensions refresh.
 	return `RUN ARCH=$(dpkg --print-architecture) && \
     OPENCODE_VERSION="0.5.0" && \
     if [ "$ARCH" = "amd64" ]; then OC_ARCH="x86_64"; else OC_ARCH="aarch64"; fi && \

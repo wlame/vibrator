@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 	Use:   "vibrate",
 	Short: "Run AI coding agents in dockerized isolation",
 	Long: `vibrate runs AI coding agents (Claude Code, Codex, OpenCode, Pi) in
-isolated Docker containers per workspace, with declarative profile + catalog
+isolated Docker containers per workspace, with declarative profile + extensions
 configuration via .vb.
 
 Running 'vibrate' with no subcommand jumps into the container for the current

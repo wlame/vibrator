@@ -3,8 +3,8 @@
 // runtime (playwright), CLIs (gh, postgres-client), and tool bundles
 // (audit-toolkit).
 //
-// Features are coarse, image-shaping units. Catalog entries (plugins, MCP
-// servers, skills — see internal/catalog) reference features as deps to
+// Features are coarse, image-shaping units. Extensions entries (plugins, MCP
+// servers, skills — see internal/extensions) reference features as deps to
 // declare "I need Node.js in the image". The Resolve function walks those
 // declarations and auto-enables transitive deps with explicit warnings.
 //

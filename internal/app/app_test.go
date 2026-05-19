@@ -314,27 +314,27 @@ func TestSanitizeUsername(t *testing.T) {
 	}
 }
 
-// --- buildSpecs: catalog deps fold into feature set ----------------------
+// --- buildSpecs: extensions deps fold into feature set ----------------------
 
-// Regression: catalog entries declare `deps.features` in their frontmatter
+// Regression: extension entries declare `deps.features` in their frontmatter
 // (e.g., filesystem-mcp needs `node` for `npm install -g …`). Before the
 // fix in buildSpecs, those declarations were documentation-only and the
 // resolved feature list contained only the profile baseline — so the
 // install snippet hit "npm: not found" at docker build time.
-func TestBuildSpecs_CatalogDepsAreFoldedIntoFeatures(t *testing.T) {
+func TestBuildSpecs_ExtensionDepsAreFoldedIntoFeatures(t *testing.T) {
 	// `backend` profile has no node; filesystem-mcp's deps.features = [node]
 	// — so a successful merge means the resolved feature list includes node.
 	pin := config.Pin{
 		Harness: "claude-code",
 		Profile: "backend",
-		Catalog: []string{"filesystem-mcp"},
+		Extensions: []string{"filesystem-mcp"},
 	}
 	_, ws, err := buildSpecs(pin, Options{})
 	if err != nil {
 		t.Fatalf("buildSpecs: %v", err)
 	}
 	if !containsString(ws.Features, "node") {
-		t.Errorf("expected resolved Features to include \"node\" via catalog dep, got %v", ws.Features)
+		t.Errorf("expected resolved Features to include \"node\" via extensions dep, got %v", ws.Features)
 	}
 }
 

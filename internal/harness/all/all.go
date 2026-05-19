@@ -2,7 +2,7 @@
 // harness with the global harness.Registry.
 //
 // The vibrate binary imports this package (blank-imported) once from
-// cmd/vibrate/main.go so harness.ByID() and the catalog CLI work.
+// cmd/vibrate/main.go so harness.ByID() and the extensions CLI work.
 // Subpackages that already pull in specific harnesses (e.g., tests
 // targeting one harness) can import only what they need.
 package all

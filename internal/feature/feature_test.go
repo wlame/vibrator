@@ -171,7 +171,7 @@ func TestResolve_TransitiveDeps(t *testing.T) {
 
 func TestResolve_NoConflictsWithWith(t *testing.T) {
 	// `--no=python --with=serena` doesn't apply here because serena isn't a
-	// feature (it's a catalog entry). Use audit-toolkit which has the same
+	// feature (it's an extension). Use audit-toolkit which has the same
 	// dep: with audit-toolkit but no python. Expected behavior (matching
 	// bash): python gets re-enabled because audit-toolkit needs it.
 	got, err := Resolve(nil, []string{"audit-toolkit"}, []string{"python"})

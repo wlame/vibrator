@@ -21,7 +21,7 @@ import (
 )
 
 // ClaudeMemPrereqID is the canonical ID for the claude-mem server-beta
-// prerequisite. Referenced from `catalog/claude-code/claude-mem.md`'s
+// prerequisite. Referenced from `extensions/claude-code/claude-mem.md`'s
 // `prereq:` frontmatter field.
 const ClaudeMemPrereqID = "claude-mem-server-beta"
 
@@ -133,7 +133,7 @@ func ClaudeMemPrereq(cfg *ClaudeMemAdminConfig, client docker.Client) *Prereq {
 	p := &Prereq{
 		ID:       ClaudeMemPrereqID,
 		Name:     "claude-mem (server-beta runtime)",
-		SetupDoc: "catalog/claude-code/claude-mem.md#host-setup",
+		SetupDoc: "extensions/claude-code/claude-mem.md#host-setup",
 	}
 
 	if cfg != nil && cfg.ServerURL != "" {
@@ -145,7 +145,7 @@ func ClaudeMemPrereq(cfg *ClaudeMemAdminConfig, client docker.Client) *Prereq {
 			URL:     rewriteForHostProbe(cfg.ServerURL),
 			Timeout: 2 * time.Second,
 			Hint: "start the claude-mem server-beta stack on the host " +
-				"(see catalog/claude-code/claude-mem.md#host-setup)",
+				"(see extensions/claude-code/claude-mem.md#host-setup)",
 		}
 	} else {
 		// No URL configured → verifier always fails with a setup hint.

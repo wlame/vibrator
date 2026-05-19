@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/hostprobe"
 )
@@ -14,7 +14,7 @@ import (
 // bind to. We use separate slices (one per Kind) so each form Group
 // shows only entries of one kind — easier for users to scan than a
 // flat list. After the form completes, mergeKindBindings flattens them
-// back into pin.Catalog.
+// back into pin.Extensions.
 type kindBindings struct {
 	Plugin   []string
 	Skill    []string
@@ -23,16 +23,16 @@ type kindBindings struct {
 	Tool     []string
 }
 
-// buildCatalogGroups assembles the catalog selection step as a chain
+// buildExtensionGroups assembles the extensions selection step as a chain
 // of MultiSelect groups — one per Kind — so the user navigates through
 // "plugins", then "skills", then "MCP servers", etc. Each Group is
 // filtered to entries belonging to the chosen harness and is skipped
 // entirely when no entries match.
 //
 // Host-detected pre-checks: entries whose ID matches a host-detected
-// raw ID (via catalog.MatchHostIDs) are pre-selected, so users with
+// raw ID (via extensions.MatchHostIDs) are pre-selected, so users with
 // existing setups don't have to re-check the things they already have.
-func buildCatalogGroups(pin *config.Pin, entries map[string]*catalog.Entry,
+func buildExtensionGroups(pin *config.Pin, entries map[string]*extensions.Entry,
 	hostDetected map[string]hostprobe.Detected,
 ) ([]*huh.Group, *kindBindings) {
 	if pin.Harness == "" {
@@ -41,17 +41,17 @@ func buildCatalogGroups(pin *config.Pin, entries map[string]*catalog.Entry,
 		return nil, nil
 	}
 
-	// Pre-compute the set of catalog IDs the host already provides, so
+	// Pre-compute the set of extensions IDs the host already provides, so
 	// per-kind MultiSelects can pre-check them. Raw host IDs come from
-	// hostprobe; catalog.MatchHostIDs translates them through
+	// hostprobe; extensions.MatchHostIDs translates them through
 	// HostAliases.
-	preChecked := preCheckedCatalogIDs(pin.Harness, entries, hostDetected)
+	preChecked := preCheckedExtensionIDs(pin.Harness, entries, hostDetected)
 
 	// Seed per-kind bindings:
 	//   - pre-checked items (host-detected)
-	//   - items the user already passed via --catalog (carry-over)
+	//   - items the user already passed via --extensions (carry-over)
 	bindings := &kindBindings{}
-	carryOver := setFrom(pin.Catalog)
+	carryOver := setFrom(pin.Extensions)
 	for _, e := range entries {
 		if e.Harness != pin.Harness {
 			continue
@@ -64,7 +64,7 @@ func buildCatalogGroups(pin *config.Pin, entries map[string]*catalog.Entry,
 
 	// Build one Group per Kind, in display order (AllKinds).
 	var groups []*huh.Group
-	for _, kind := range catalog.AllKinds {
+	for _, kind := range extensions.AllKinds {
 		opts := optionsForKind(entries, pin.Harness, kind)
 		if len(opts) == 0 {
 			continue
@@ -83,45 +83,45 @@ func buildCatalogGroups(pin *config.Pin, entries map[string]*catalog.Entry,
 	}
 
 	// Bindings live in `bindings`; the caller folds them into
-	// pin.Catalog after the form completes by calling bindings.flatten().
+	// pin.Extensions after the form completes by calling bindings.flatten().
 	return groups, bindings
 }
 
 // appendByKind appends id to the appropriate per-kind slice.
-func (b *kindBindings) appendByKind(k catalog.Kind, id string) {
+func (b *kindBindings) appendByKind(k extensions.Kind, id string) {
 	switch k {
-	case catalog.KindPlugin:
+	case extensions.KindPlugin:
 		b.Plugin = append(b.Plugin, id)
-	case catalog.KindSkill:
+	case extensions.KindSkill:
 		b.Skill = append(b.Skill, id)
-	case catalog.KindMCP:
+	case extensions.KindMCP:
 		b.MCP = append(b.MCP, id)
-	case catalog.KindSubagent:
+	case extensions.KindSubagent:
 		b.Subagent = append(b.Subagent, id)
-	case catalog.KindTool:
+	case extensions.KindTool:
 		b.Tool = append(b.Tool, id)
 	}
 }
 
 // sliceForKind returns a pointer to the per-kind slice. huh's
 // MultiSelect needs a *[]string to bind to.
-func (b *kindBindings) sliceForKind(k catalog.Kind) *[]string {
+func (b *kindBindings) sliceForKind(k extensions.Kind) *[]string {
 	switch k {
-	case catalog.KindPlugin:
+	case extensions.KindPlugin:
 		return &b.Plugin
-	case catalog.KindSkill:
+	case extensions.KindSkill:
 		return &b.Skill
-	case catalog.KindMCP:
+	case extensions.KindMCP:
 		return &b.MCP
-	case catalog.KindSubagent:
+	case extensions.KindSubagent:
 		return &b.Subagent
-	case catalog.KindTool:
+	case extensions.KindTool:
 		return &b.Tool
 	}
 	return nil
 }
 
-// flatten concatenates the per-kind slices into one Catalog list,
+// flatten concatenates the per-kind slices into one Extensions list,
 // preserving Kind iteration order (plugin → skill → mcp → subagent → tool).
 // Duplicates are removed (shouldn't happen in practice since each kind
 // is disjoint, but cheap insurance).
@@ -138,8 +138,8 @@ func (b *kindBindings) flatten() []string {
 
 // optionsForKind filters entries by harness + kind and returns huh
 // options labeled "Name — id" for legibility.
-func optionsForKind(entries map[string]*catalog.Entry, harnessID string,
-	kind catalog.Kind,
+func optionsForKind(entries map[string]*extensions.Entry, harnessID string,
+	kind extensions.Kind,
 ) []huh.Option[string] {
 	var opts []huh.Option[string]
 	for _, e := range entries {
@@ -155,10 +155,10 @@ func optionsForKind(entries map[string]*catalog.Entry, harnessID string,
 	return opts
 }
 
-// preCheckedCatalogIDs returns the set of catalog IDs that should be
+// preCheckedExtensionIDs returns the set of extensions IDs that should be
 // pre-selected based on host-detected plugins and MCP servers for the
 // chosen harness.
-func preCheckedCatalogIDs(harnessID string, entries map[string]*catalog.Entry,
+func preCheckedExtensionIDs(harnessID string, entries map[string]*extensions.Entry,
 	hostDetected map[string]hostprobe.Detected,
 ) map[string]bool {
 	out := make(map[string]bool)
@@ -170,24 +170,24 @@ func preCheckedCatalogIDs(harnessID string, entries map[string]*catalog.Entry,
 		return out
 	}
 	merged := append(append([]string{}, d.PluginIDs...), d.MCPServers...)
-	for _, id := range catalog.MatchHostIDs(entries, harnessID, merged) {
+	for _, id := range extensions.MatchHostIDs(entries, harnessID, merged) {
 		out[id] = true
 	}
 	return out
 }
 
 // kindDisplayTitle is the user-facing title for a Kind.
-func kindDisplayTitle(k catalog.Kind) string {
+func kindDisplayTitle(k extensions.Kind) string {
 	switch k {
-	case catalog.KindPlugin:
+	case extensions.KindPlugin:
 		return "Plugins"
-	case catalog.KindSkill:
+	case extensions.KindSkill:
 		return "Skills"
-	case catalog.KindMCP:
+	case extensions.KindMCP:
 		return "MCP servers"
-	case catalog.KindSubagent:
+	case extensions.KindSubagent:
 		return "Subagents"
-	case catalog.KindTool:
+	case extensions.KindTool:
 		return "Tools"
 	}
 	return string(k)
@@ -203,7 +203,7 @@ func setFrom(items []string) map[string]bool {
 }
 
 // dedupe removes duplicates while preserving first-occurrence order.
-// Catalog lists are small (< 50 entries), so an O(n) map-based pass is
+// Extensions lists are small (< 50 entries), so an O(n) map-based pass is
 // fine.
 func dedupe(items []string) []string {
 	if len(items) <= 1 {

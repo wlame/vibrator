@@ -10,7 +10,7 @@ import (
 
 	vibrator "github.com/wlame/vibrator"
 	"github.com/wlame/vibrator/internal/app"
-	"github.com/wlame/vibrator/internal/catalog"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
 	"github.com/wlame/vibrator/internal/feature"
@@ -28,7 +28,7 @@ type buildFlags struct {
 	shell        string
 	with         []string
 	no           []string
-	catalogIDs   []string
+	extensionIDs   []string
 	username     string
 	out          string // build-dockerfile only
 	noCache      bool   // build only
@@ -94,8 +94,8 @@ func registerBuildFlags(cmd *cobra.Command, flags *buildFlags, buildOnly bool) {
 		"Features to enable on top of the profile (repeatable, comma-separated).")
 	cmd.Flags().StringSliceVar(&flags.no, "no", nil,
 		"Features to disable on top of the profile (repeatable, comma-separated).")
-	cmd.Flags().StringSliceVar(&flags.catalogIDs, "catalog", nil,
-		"Catalog entry IDs to install (comma-separated; from the chosen harness).")
+	cmd.Flags().StringSliceVar(&flags.extensionIDs, "extensions", nil,
+		"Extension IDs to install (comma-separated; from the chosen harness).")
 	cmd.Flags().StringVar(&flags.username, "username", app.HostUsername(),
 		"Unprivileged user created inside the container. Defaults to the host user's name (sanitized for Linux useradd).")
 	cmd.Flags().IntVar(&flags.hostUID, "host-uid", os.Getuid(),
@@ -152,19 +152,19 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 		feats = append(feats, fe)
 	}
 
-	// Catalog selections: validate every requested ID exists for this harness.
-	var catEntries []*catalog.Entry
-	if len(f.catalogIDs) > 0 {
-		all, err := catalog.LoadAll(vibrator.CatalogFS)
+	// Extensions selections: validate every requested ID exists for this harness.
+	var catEntries []*extensions.Entry
+	if len(f.extensionIDs) > 0 {
+		all, err := extensions.LoadAll(vibrator.ExtensionsFS)
 		if err != nil {
-			return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("load catalog: %w", err)
+			return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("load extensions: %w", err)
 		}
-		for _, id := range f.catalogIDs {
+		for _, id := range f.extensionIDs {
 			key := h.ID() + "/" + id
 			entry, ok := all[key]
 			if !ok {
 				return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf(
-					"catalog entry %q not found for harness %q", id, h.ID())
+					"extensions entry %q not found for harness %q", id, h.ID())
 			}
 			catEntries = append(catEntries, entry)
 		}
@@ -175,7 +175,7 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 		Profile:         f.profileID,
 		Shell:           f.shell,
 		Features:        feats,
-		CatalogEntries:  catEntries,
+		Extensions:  catEntries,
 		Username:        f.username,
 		HostUID:         f.hostUID,
 		HostGID:         f.hostGID,
@@ -187,7 +187,7 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 		Profile:  f.profileID,
 		Shell:    f.shell,
 		Features: resolved.Enabled,
-		Catalog:  f.catalogIDs,
+		Extensions:  f.extensionIDs,
 	}
 
 	return dfSpec, wsSpec, nil
@@ -236,14 +236,20 @@ func runBuild(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("docker: %w", err)
 	}
 
-	// Use the current directory as the build context. Vibrator's Dockerfile
-	// doesn't COPY workspace files (everything is bind-mounted at runtime),
-	// so context content is largely irrelevant — but Docker still requires
-	// a context dir to be specified.
-	ctxDir, err := os.Getwd()
+	// Per-build tempdir is the docker build context. Vibrator-owned
+	// templates (shells, scripts) live under templates/ in the repo
+	// and get extracted into the tempdir at build time by
+	// dockerfile.PrepareBuildContext. The Dockerfile COPYs from there.
+	//
+	// Previously we used cwd, which streamed the user's whole workspace
+	// to the daemon on every build — wasteful and a footgun (a stray
+	// Dockerfile in the workspace would override ours via `-f -`'s
+	// search semantics).
+	ctxDir, cleanup, err := dockerfile.PrepareBuildContext()
 	if err != nil {
-		return fmt.Errorf("cwd: %w", err)
+		return fmt.Errorf("prepare build context: %w", err)
 	}
+	defer cleanup()
 
 	fmt.Fprintf(cmd.ErrOrStderr(), "Building %s (no-cache=%v)\n", tag, buildFlagsState.noCache)
 

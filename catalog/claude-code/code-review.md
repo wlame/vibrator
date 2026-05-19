@@ -4,7 +4,12 @@ kind: plugin
 default: true
 size_mb: 1
 install: |
-  claude plugin install code-review@anthropics/claude-plugins-official
+  # Register Anthropic's official marketplace if it isn't already.
+  # `marketplace add` is idempotent against an existing entry but emits
+  # a non-zero exit when the marketplace already exists — `|| true`
+  # keeps the snippet safe to run across cached / fresh layers.
+  claude plugin marketplace add anthropics/claude-plugins-official 2>/dev/null || true
+  claude plugin install code-review@claude-plugins-official
 source: https://github.com/anthropics/claude-plugins-official
 ---
 

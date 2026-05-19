@@ -4,7 +4,10 @@ kind: plugin
 default: false
 size_mb: 2
 install: |
-  claude plugin install frontend-design@anthropics/claude-plugins-official
+  # Anthropic's official marketplace; registered as short name
+  # `claude-plugins-official`. Idempotent across cached layers.
+  claude plugin marketplace add anthropics/claude-plugins-official 2>/dev/null || true
+  claude plugin install frontend-design@claude-plugins-official
 source: https://github.com/anthropics/claude-plugins-official
 ---
 

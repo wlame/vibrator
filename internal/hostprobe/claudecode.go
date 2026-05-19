@@ -72,9 +72,63 @@ func (claudeCodeProber) Probe(homeBase string) (Detected, error) {
 		}
 	}
 
+	// --- Registered marketplaces from plugins/known_marketplaces.json ---
+
+	mpPath := filepath.Join(home, "plugins", "known_marketplaces.json")
+	if mps, note, err := readClaudeMarketplaces(mpPath); err == nil && len(mps) > 0 {
+		d.Marketplaces = mps
+		if note != "" {
+			d.Notes = append(d.Notes, note)
+		}
+	}
+
 	sort.Strings(d.PluginIDs)
 	sort.Strings(d.MCPServers)
+	sort.Strings(d.Marketplaces)
 	return d, nil
+}
+
+// claudeMarketplacesFile is the shape of `plugins/known_marketplaces.json`.
+// Top-level keys are the short marketplace IDs (e.g.
+// "claude-plugins-official"); we only need the keys.
+type claudeMarketplacesFile map[string]json.RawMessage
+
+// readClaudeMarketplaces returns the short marketplace IDs registered on
+// the host. Surfaces the canonical short name (the key of the JSON
+// object), NOT the underlying GitHub repo path — that's the
+// identifier `claude plugin install <id>@<marketplace>` expects, and
+// the one catalog entries should use.
+func readClaudeMarketplaces(path string) ([]string, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	// The file has shape: {"marketplaces": { ... }} OR top-level object
+	// directly. Try the wrapped form first (newer layouts), fall back
+	// to plain.
+	var wrapped struct {
+		Marketplaces claudeMarketplacesFile `json:"marketplaces"`
+	}
+	if err := json.Unmarshal(data, &wrapped); err == nil && len(wrapped.Marketplaces) > 0 {
+		ids := collectMarketplaceIDs(wrapped.Marketplaces)
+		return ids, fmt.Sprintf("plugins/known_marketplaces.json: %d marketplaces", len(ids)), nil
+	}
+	var plain claudeMarketplacesFile
+	if err := json.Unmarshal(data, &plain); err != nil {
+		return nil, "", fmt.Errorf("decode %s: %w", path, err)
+	}
+	ids := collectMarketplaceIDs(plain)
+	return ids, fmt.Sprintf("plugins/known_marketplaces.json: %d marketplaces", len(ids)), nil
+}
+
+// collectMarketplaceIDs extracts sorted top-level keys.
+func collectMarketplaceIDs(m claudeMarketplacesFile) []string {
+	ids := make([]string, 0, len(m))
+	for k := range m {
+		ids = append(ids, k)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // claudeInstalledPluginsFile is the minimal shape we care about from

@@ -13,7 +13,8 @@ and catalog configuration via a `.vb` file at the project root.
 ## Quick start
 
 ```bash
-# Install: builds the binary and places it on $PATH with a short `vb` alias
+# Install: builds the binary, places it on $PATH with a short `vb` alias,
+# and registers shell-completion for $SHELL (bash, zsh, or fish).
 just install                       # → /usr/local/bin (uses sudo if needed)
 # or:
 just install ~/.local/bin          # → user-local, no sudo
@@ -185,8 +186,8 @@ just test-cover     # tests + write coverage.out
 just build          # produce ./build/vibrate
 just lint           # go vet (+ golangci-lint if installed)
 just integration    # real-docker tests (skipped unless INTEGRATION=1)
-just install        # build + place binary on $PATH with `vb` alias
-just uninstall      # remove the installed binary + alias
+just install        # build + place binary on $PATH + `vb` alias + shell completion
+just uninstall      # remove the binary, alias, and completion
 just tidy           # go mod tidy
 just clean          # remove ./build/ and ./dist/
 

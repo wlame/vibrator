@@ -4,9 +4,12 @@ kind: plugin
 default: true
 size_mb: 2
 install: |
-  # Installed via Anthropic's official plugins marketplace (claude-plugins-official).
-  # See setup-marketplace.sh in the harness Install step for the marketplace clone.
-  claude plugin install feature-dev@anthropics/claude-plugins-official
+  # Anthropic's official plugins marketplace — registered as the short
+  # name `claude-plugins-official` regardless of the GitHub repo path
+  # (`anthropics/claude-plugins-official`). `|| true` makes the
+  # registration idempotent across cached layers.
+  claude plugin marketplace add anthropics/claude-plugins-official 2>/dev/null || true
+  claude plugin install feature-dev@claude-plugins-official
 source: https://github.com/anthropics/claude-plugins-official
 ---
 

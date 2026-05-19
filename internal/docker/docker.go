@@ -91,6 +91,7 @@ type RunSpec struct {
 	Volumes      []Volume          // -v repeated
 	Env          []EnvVar          // -e repeated
 	Labels       map[string]string // --label repeated
+	WorkingDir   string            // --workdir (cwd inside the container)
 	Cmd          []string          // command + args inside the container
 
 	// I/O streams. nil stdin/stdout/stderr connect to the real process
@@ -104,6 +105,7 @@ type ExecSpec struct {
 	Container      string
 	Interactive    bool
 	Env            []EnvVar
+	WorkingDir     string // --workdir (cwd inside the container)
 	Cmd            []string
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
@@ -318,6 +320,9 @@ func (c *CLIClient) Exec(ctx context.Context, spec ExecSpec) error {
 	for _, e := range spec.Env {
 		args = append(args, "-e", e.Name+"="+e.Value)
 	}
+	if spec.WorkingDir != "" {
+		args = append(args, "--workdir", spec.WorkingDir)
+	}
 	args = append(args, spec.Container)
 	args = append(args, spec.Cmd...)
 
@@ -529,6 +534,9 @@ func buildRunArgs(spec RunSpec) []string {
 	}
 	for _, v := range spec.Volumes {
 		args = append(args, "-v", v.String())
+	}
+	if spec.WorkingDir != "" {
+		args = append(args, "--workdir", spec.WorkingDir)
 	}
 	args = append(args, spec.Image)
 	args = append(args, spec.Cmd...)

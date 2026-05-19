@@ -85,6 +85,26 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm ralphex.tar.gz && \
     ralphex --version
 
+# --- user creation + USER switch -------------------------------------------
+# Build args supply the host's UID/GID so file permissions on bind-mounted
+# workspace paths match the caller (set by internal/docker at build time).
+ARG USERNAME=vibrate
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+
+# Replace any existing user/group at the target UID/GID (Ubuntu ships an
+# "ubuntu" user at 1000 which usually clashes with the host's first user).
+RUN set -eux; \
+    if EXISTING_USER=$(getent passwd ${HOST_UID} | cut -d: -f1); [ -n "$EXISTING_USER" ]; then userdel -r "$EXISTING_USER" 2>/dev/null || true; fi; \
+    if EXISTING_GROUP=$(getent group ${HOST_GID} | cut -d: -f1); [ -n "$EXISTING_GROUP" ]; then groupdel "$EXISTING_GROUP" 2>/dev/null || true; fi; \
+    groupadd -g ${HOST_GID} ${USERNAME} && \
+    useradd -m -s /bin/fish -u ${HOST_UID} -g ${HOST_GID} ${USERNAME} && \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
+
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}
+
 # ============================================================================
 # Stage 3 — harness install
 # ============================================================================
@@ -92,7 +112,7 @@ FROM features AS harness
 
 # --- harness: claude-code (Claude Code) ---
 RUN curl -fsSL --retry 3 --retry-delay 5 https://claude.ai/install.sh | bash \
- && ln -sf /root/.local/bin/claude /usr/local/bin/claude \
+ && sudo ln -sf "$HOME/.local/bin/claude" /usr/local/bin/claude \
  && claude --version
 
 # ============================================================================
@@ -116,28 +136,10 @@ claude mcp add sequential-thinking --scope user --transport stdio -- mcp-server-
 EOF
 
 # ============================================================================
-# Stage 5 — runtime: unprivileged user, labels, default command
+# Stage 5 — runtime: labels, default command
+# (User creation + USER switch already happened at end of Stage 2.)
 # ============================================================================
 FROM catalog AS runtime
-
-# Build args supply the host's UID/GID so file permissions on bind-mounted
-# workspace paths match the caller (set by internal/docker at build time).
-ARG USERNAME=vibrate
-ARG HOST_UID=1000
-ARG HOST_GID=1000
-
-# Replace any existing user/group at the target UID/GID (Ubuntu ships an
-# "ubuntu" user at 1000 which usually clashes with the host's first user).
-RUN set -eux; \
-    if EXISTING_USER=$(getent passwd ${HOST_UID} | cut -d: -f1); [ -n "$EXISTING_USER" ]; then userdel -r "$EXISTING_USER" 2>/dev/null || true; fi; \
-    if EXISTING_GROUP=$(getent group ${HOST_GID} | cut -d: -f1); [ -n "$EXISTING_GROUP" ]; then groupdel "$EXISTING_GROUP" 2>/dev/null || true; fi; \
-    groupadd -g ${HOST_GID} ${USERNAME} && \
-    useradd -m -s /bin/fish -u ${HOST_UID} -g ${HOST_GID} ${USERNAME} && \
-    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
-
-USER ${USERNAME}
-WORKDIR /home/${USERNAME}
 
 # Auth env vars expected by this harness (forwarded by `docker run -e`):
 ENV CLAUDE_CODE_OAUTH_TOKEN=""

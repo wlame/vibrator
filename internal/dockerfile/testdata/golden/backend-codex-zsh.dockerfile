@@ -30,6 +30,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
 
+# Suppress zsh-newuser-install for build (root) and runtime (skel-copied).
+RUN : > /root/.zshrc \
+ && install -D -m 0644 /root/.zshrc /etc/skel/.zshrc
+
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 COLORTERM=truecolor
 
 # uv tools install into /usr/local/bin so every user finds them on PATH.
@@ -105,27 +109,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm ralphex.tar.gz && \
     ralphex --version
 
-# ============================================================================
-# Stage 3 — harness install
-# ============================================================================
-FROM features AS harness
-
-# --- harness: codex (OpenAI Codex) ---
-RUN npm install -g @openai/codex \
- && codex --version
-
-# ============================================================================
-# Stage 4 — catalog entries
-# ============================================================================
-FROM harness AS catalog
-
-# (no catalog entries selected)
-
-# ============================================================================
-# Stage 5 — runtime: unprivileged user, labels, default command
-# ============================================================================
-FROM catalog AS runtime
-
+# --- user creation + USER switch -------------------------------------------
 # Build args supply the host's UID/GID so file permissions on bind-mounted
 # workspace paths match the caller (set by internal/docker at build time).
 ARG USERNAME=vibrate
@@ -144,6 +128,28 @@ RUN set -eux; \
 
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
+
+# ============================================================================
+# Stage 3 — harness install
+# ============================================================================
+FROM features AS harness
+
+# --- harness: codex (OpenAI Codex) ---
+RUN npm install -g @openai/codex \
+ && codex --version
+
+# ============================================================================
+# Stage 4 — catalog entries
+# ============================================================================
+FROM harness AS catalog
+
+# (no catalog entries selected)
+
+# ============================================================================
+# Stage 5 — runtime: labels, default command
+# (User creation + USER switch already happened at end of Stage 2.)
+# ============================================================================
+FROM catalog AS runtime
 
 # Auth env vars expected by this harness (forwarded by `docker run -e`):
 ENV OPENAI_API_KEY=""

@@ -49,6 +49,13 @@ const claudeMemKeyRandomBytes = 24
 // confuses BSD sed. We have no such constraint here.
 var localhostRewrite = regexp.MustCompile(`//([^/@]*@)?(localhost|127\.0\.0\.1)([:/])`)
 
+// hostInternalRewrite is the inverse: it captures host.docker.internal so
+// host-side probes (which can't resolve that DNS name — Docker Desktop only
+// injects it inside containers) can fall back to 127.0.0.1. Anchored the
+// same way as localhostRewrite to preserve any userinfo and the trailing
+// `:port` or `/path` separator.
+var hostInternalRewrite = regexp.MustCompile(`//([^/@]*@)?host\.docker\.internal([:/])`)
+
 // ClaudeMemAdminConfig is the host-only configuration that controls how the
 // claude-mem prereq bootstraps and verifies. Lives at
 // `~/.config/vibrator/claude-mem.toml` (overridable via
@@ -131,7 +138,11 @@ func ClaudeMemPrereq(cfg *ClaudeMemAdminConfig, client docker.Client) *Prereq {
 
 	if cfg != nil && cfg.ServerURL != "" {
 		p.Verifier = HTTPVerify{
-			URL:     cfg.ServerURL,
+			// Stored ServerURL is container-shaped (host.docker.internal:port)
+			// because that's what the workspace container ultimately uses.
+			// Probes run from the host, where that name doesn't resolve, so
+			// rewrite to 127.0.0.1 for the probe only.
+			URL:     rewriteForHostProbe(cfg.ServerURL),
 			Timeout: 2 * time.Second,
 			Hint: "start the claude-mem server-beta stack on the host " +
 				"(see catalog/claude-code/claude-mem.md#host-setup)",
@@ -370,6 +381,15 @@ func sha256Hex(s string) string {
 // separator character.
 func rewriteForOneshot(url string) string {
 	return localhostRewrite.ReplaceAllString(url, "//${1}host.docker.internal${3}")
+}
+
+// rewriteForHostProbe is the inverse of rewriteForOneshot: it rewrites
+// host.docker.internal back to 127.0.0.1 so probes running on the host
+// (where the Docker DNS name doesn't resolve) can reach the same endpoint
+// that the workspace container would. URLs that don't reference
+// host.docker.internal pass through untouched.
+func rewriteForHostProbe(url string) string {
+	return hostInternalRewrite.ReplaceAllString(url, "//${1}127.0.0.1${2}")
 }
 
 // cmDefault returns s if non-empty, else def. Small helper.

@@ -145,6 +145,27 @@ func TestBuildRunArgs_FullSpec(t *testing.T) {
 	}
 }
 
+func TestBuildRunArgs_WorkingDirEmitsWhenSet(t *testing.T) {
+	spec := RunSpec{
+		Image:      "x:latest",
+		WorkingDir: "/Users/wlame/dev/foo",
+	}
+	got := buildRunArgs(spec)
+	if !containsSubseq(got, []string{"--workdir", "/Users/wlame/dev/foo"}) {
+		t.Errorf("missing --workdir, got %v", got)
+	}
+}
+
+func TestBuildRunArgs_WorkingDirOmittedWhenEmpty(t *testing.T) {
+	spec := RunSpec{Image: "x:latest"}
+	got := buildRunArgs(spec)
+	for _, a := range got {
+		if a == "--workdir" {
+			t.Errorf("--workdir should not appear when WorkingDir is empty; got %v", got)
+		}
+	}
+}
+
 func TestBuildRunArgs_LabelsAreSorted(t *testing.T) {
 	// Stable label emission is essential: image fingerprints depend on it.
 	spec := RunSpec{

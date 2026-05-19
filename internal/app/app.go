@@ -30,7 +30,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -189,14 +191,14 @@ func Run(ctx context.Context, opts Options) error {
 	switch status {
 	case "running":
 		fmt.Fprintln(opts.Stderr, "→ Container already running — exec'ing in")
-		return execIntoContainer(ctx, dockerCli, containerName, pin, opts)
+		return execIntoContainer(ctx, dockerCli, containerName, wsDir, pin, opts)
 
 	case "exited", "created", "dead":
 		fmt.Fprintf(opts.Stderr, "→ Container %s (%s) — starting + exec\n", containerName, status)
 		if err := dockerCli.Start(ctx, containerName); err != nil {
 			return fmt.Errorf("docker start: %w", err)
 		}
-		return execIntoContainer(ctx, dockerCli, containerName, pin, opts)
+		return execIntoContainer(ctx, dockerCli, containerName, wsDir, pin, opts)
 
 	case "":
 		// Container doesn't exist. Build image if needed, then run.
@@ -346,12 +348,94 @@ func printLaunchPlan(stderr io.Writer, wsDir, imageTag, containerName string, pi
 	}
 }
 
+// fallbackUsername is the username used when the host user can't be
+// detected or isn't safe for Linux useradd (e.g., running as root).
+const fallbackUsername = "vibrate"
+
+// validUsername matches the Linux useradd convention: lowercase letters,
+// digits, underscores, and dashes only, starting with a letter or
+// underscore. macOS allows mixed case and a few odd chars; we sanitize
+// them out (HostUsername docs the exact rules).
+var validUsername = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+
+// HostUsername returns the host user's name, sanitized for use as a
+// Linux container username. Sanitization rules:
+//
+//   - Lowercase (Linux is case-sensitive, but lowercase is convention
+//     and avoids surprising file-ownership-by-name mismatches).
+//   - Anything outside [a-z0-9_-] is replaced with `_`.
+//   - If the first char isn't a letter or `_`, prepend `_`.
+//   - Truncated to 32 chars (Linux useradd's NAME_REGEX default).
+//   - Falls back to "vibrate" if detection fails OR the sanitized
+//     result is empty OR the host user is root (UID 0 — useradd at 0
+//     would clash with the container's existing root).
+//
+// Exported so the CLI layer can compute the same default value at
+// flag-parse time (for `--help` output) that the orchestrator uses at
+// runtime — single source of truth, no drift.
+func HostUsername() string {
+	u, err := user.Current()
+	if err != nil || u == nil {
+		return fallbackUsername
+	}
+	if u.Uid == "0" {
+		return fallbackUsername
+	}
+	cleaned := sanitizeUsername(u.Username)
+	if cleaned == "" {
+		return fallbackUsername
+	}
+	return cleaned
+}
+
+// sanitizeUsername applies the rules documented on HostUsername.
+// Exposed as a separate function so it can be unit-tested without
+// touching the real OS user database.
+func sanitizeUsername(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	// Lowercase + replace invalid chars with `_`.
+	var b strings.Builder
+	b.Grow(len(raw))
+	for _, r := range strings.ToLower(raw) {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= '0' && r <= '9',
+			r == '_', r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	out := b.String()
+	// Must start with a letter or `_` — if it doesn't, prepend `_`.
+	if out != "" {
+		first := out[0]
+		if !((first >= 'a' && first <= 'z') || first == '_') {
+			out = "_" + out
+		}
+	}
+	// Truncate to 32 chars (useradd NAME_REGEX default).
+	if len(out) > 32 {
+		out = out[:32]
+	}
+	// Final validation — if we somehow still don't match, give up.
+	if !validUsername.MatchString(out) {
+		return ""
+	}
+	return out
+}
+
 // defaultUsername resolves the username baked into the container.
+// Honors `--username` if explicitly set, otherwise derives from the
+// host user via HostUsername. Falls back to "vibrate" only when
+// HostUsername can't derive a safe value.
 func defaultUsername(opts Options) string {
 	if opts.Username != "" {
 		return opts.Username
 	}
-	return "vibrate"
+	return HostUsername()
 }
 
 // defaultUID resolves the host UID to bake in.
@@ -394,21 +478,12 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		shell = "zsh"
 	}
 
-	// Resolve features: profile + harness-required + with/no deltas.
-	initial := append([]string{}, p.Features...)
-	initial = append(initial, h.RequiredFeatures()...)
-	resolved, err := feature.Resolve(initial, pin.With, pin.No)
-	if err != nil {
-		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("resolve features: %w", err)
-	}
-
-	feats := make([]feature.Feature, 0, len(resolved.Enabled))
-	for _, id := range resolved.Enabled {
-		fe, _ := feature.ByID(id)
-		feats = append(feats, fe)
-	}
-
-	// Catalog entries: validate that every requested ID exists.
+	// Catalog entries: validate that every requested ID exists. Loaded
+	// before feature resolution so each entry's `deps.features` can be
+	// folded into the feature `initial` set — without this step the
+	// `deps:` declarations in catalog files are documentation-only and
+	// the install snippets blow up at build time (e.g., `npm: not found`
+	// when a node-dependent MCP is selected under a non-node profile).
 	var catEntries []*catalog.Entry
 	if len(pin.Catalog) > 0 {
 		all, err := catalog.LoadAll(vibrator.CatalogFS)
@@ -424,6 +499,26 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 			}
 			catEntries = append(catEntries, entry)
 		}
+	}
+
+	// Resolve features: profile + harness-required + catalog deps, then
+	// with/no deltas. Catalog deps land in `initial` (same tier as
+	// harness requirements) so `--no` can still strip them if the user
+	// really insists — matching the existing precedence pattern.
+	initial := append([]string{}, p.Features...)
+	initial = append(initial, h.RequiredFeatures()...)
+	for _, e := range catEntries {
+		initial = append(initial, e.Deps.Features...)
+	}
+	resolved, err := feature.Resolve(initial, pin.With, pin.No)
+	if err != nil {
+		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("resolve features: %w", err)
+	}
+
+	feats := make([]feature.Feature, 0, len(resolved.Enabled))
+	for _, id := range resolved.Enabled {
+		fe, _ := feature.ByID(id)
+		feats = append(feats, fe)
 	}
 
 	dfSpec := dockerfile.Spec{

@@ -194,13 +194,20 @@ COPY scripts/entrypoint.sh /opt/vibrator/entrypoint.sh
 RUN chmod 0755 /opt/vibrator/entrypoint.sh
 
 # --- claude-exec wrapper (CMD on docker run + Cmd on docker exec) -----
-# Re-runs the Serena MCP probe on every shell entry so a host-side
+# Re-runs the integration probes on every shell entry so a host-side
 # server start/stop is picked up without rebuilding the container.
 # Installed at /usr/local/bin/claude-exec for a stable absolute path
 # the launch code can reference. See scripts/claude-exec.sh for what
 # it does on each invocation.
 COPY scripts/claude-exec.sh /usr/local/bin/claude-exec
 RUN chmod 0755 /usr/local/bin/claude-exec
+
+# --- integrations manifest (per-harness wiring; data-driven probes) ---
+# Generated at build time from the integrations registry filtered by
+# the harness being built. claude-exec.sh reads this file on every
+# shell entry to refresh MCP transport + env state.
+RUN mkdir -p /etc/vibrator
+COPY integrations.json /etc/vibrator/integrations.json
 
 # Mirror rc files into /root/ so root sub-invocations (debugging via
 # 'docker exec -u root') get the same prompt + banner, and so zsh
@@ -461,6 +468,7 @@ FROM extensions AS runtime
 	// future entrypoint) can read them. Same values are emitted as
 	// LABELs below for image-management commands (`vibrate variants list`).
 	b.WriteString("# Variant metadata — readable from inside the container.\n")
+	fmt.Fprintf(b, "ENV VIBRATOR_HARNESS=%q\n", spec.Harness.ID())
 	fmt.Fprintf(b, "ENV VIBRATOR_PROFILE=%q\n", spec.Profile)
 	fmt.Fprintf(b, "ENV VIBRATOR_FEATURES_LIST=%q\n", featureIDsCSV(spec.Features))
 	fmt.Fprintf(b, "ENV VIBRATOR_EXTENSIONS_LIST=%q\n", extensionsIDsCSV(spec.Extensions))

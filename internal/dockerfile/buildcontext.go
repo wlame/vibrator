@@ -8,7 +8,15 @@ import (
 	"strings"
 
 	vibrator "github.com/wlame/vibrator"
+	"github.com/wlame/vibrator/internal/integration"
 )
+
+// IntegrationsManifestFilename is the basename of the per-harness
+// integration manifest written into the build context and COPYed into
+// the container image at /etc/vibrator/integrations.json. Kept as a
+// package-level constant so the dockerfile generator and the build
+// runner agree on the same name without string duplication.
+const IntegrationsManifestFilename = "integrations.json"
 
 // PrepareBuildContext materializes a per-build docker build context in
 // a temp directory. The returned cleanup function MUST be called when
@@ -20,6 +28,10 @@ import (
 //     — but with the leading "templates/" prefix stripped, so the
 //     Dockerfile can `COPY shells/zshrc /etc/skel/.zshrc` instead of
 //     `COPY templates/shells/zshrc …` (less noise in the Dockerfile).
+//   - An empty integrations.json placeholder — overwritten by
+//     WriteIntegrationsManifest once the caller knows the harness.
+//     Always present so the Dockerfile's unconditional COPY works
+//     even if the caller forgets to fill it in (defense in depth).
 //   - Files matching templateContextSkip (README.md, etc.) are filtered
 //     out — they document the layout for contributors but have no
 //     business in the container image.
@@ -42,7 +54,36 @@ func PrepareBuildContext() (string, func(), error) {
 		cleanup()
 		return "", nil, err
 	}
+
+	// Empty manifest placeholder — the dockerfile generator emits an
+	// unconditional COPY for this file, so it MUST exist even on the
+	// degenerate "no integrations registered for this harness" path.
+	if err := os.WriteFile(filepath.Join(dir, IntegrationsManifestFilename), []byte("[]\n"), 0o644); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("write placeholder manifest: %w", err)
+	}
 	return dir, cleanup, nil
+}
+
+// WriteIntegrationsManifest writes the per-harness integration manifest
+// (an array of integration.ManifestEntry) into the build context at
+// the well-known filename. Call AFTER PrepareBuildContext and BEFORE
+// the docker build runs.
+//
+// The harness ID filters which Wiring entries apply (Wiring.Harness ==
+// harness OR "*"). See internal/integration/manifest.go for the schema
+// and templates/scripts/claude-exec.sh for the consumer.
+func WriteIntegrationsManifest(ctxDir, harness string) error {
+	path := filepath.Join(ctxDir, IntegrationsManifestFilename)
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create manifest: %w", err)
+	}
+	defer f.Close()
+	if err := integration.WriteManifest(f, harness); err != nil {
+		return fmt.Errorf("encode manifest: %w", err)
+	}
+	return nil
 }
 
 // templateContextSkip lists path components inside templates/ that

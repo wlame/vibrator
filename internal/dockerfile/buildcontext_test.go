@@ -1,10 +1,13 @@
 package dockerfile
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wlame/vibrator/internal/integration"
 )
 
 func TestPrepareBuildContext_CreatesAndCleansTempDir(t *testing.T) {
@@ -97,6 +100,42 @@ func TestEntrypointScript_LogFunctionsAlwaysReturnZero(t *testing.T) {
 	}
 }
 
+// claude-exec.sh is the consumer of /etc/vibrator/integrations.json.
+// The manifest format is defined in internal/integration/manifest.go;
+// this test pins the load-bearing JSON keys that the data-driven loop
+// reads. A rename here is a coordinated change with manifest.go.
+func TestClaudeExecScript_ManifestDrivenLoop(t *testing.T) {
+	dir, cleanup, err := PrepareBuildContext()
+	if err != nil {
+		t.Fatalf("PrepareBuildContext: %v", err)
+	}
+	defer cleanup()
+
+	body, err := os.ReadFile(filepath.Join(dir, "scripts", "claude-exec.sh"))
+	if err != nil {
+		t.Fatalf("read claude-exec.sh: %v", err)
+	}
+	s := string(body)
+
+	cases := []struct{ name, needle string }{
+		{"manifest path", "/etc/vibrator/integrations.json"},
+		{"harness filter env", "VIBRATOR_HARNESS"},
+		{"harness wildcard filter", `.harness == "*"`},
+		{"mcp.name field", ".mcp.name"},
+		{"mcp.http.url field", ".mcp.http.url"},
+		{"mcp.stdio field", ".mcp.stdio"},
+		{"env wiring iteration", ".env"},
+		{"http probe helper", "_vb_probe_http"},
+		{"http write helper", "_vb_write_mcp_http"},
+		{"stdio write helper", "_vb_write_mcp_stdio"},
+	}
+	for _, c := range cases {
+		if !strings.Contains(s, c.needle) {
+			t.Errorf("%s: claude-exec.sh missing %q", c.name, c.needle)
+		}
+	}
+}
+
 // Regression for Sprint 5 entrypoint additions (C9, C10, C11). Each is
 // load-bearing for a specific UX outcome:
 //
@@ -173,6 +212,51 @@ func TestPrepareBuildContext_ExtractsExpectedTemplateFiles(t *testing.T) {
 		if info.Size() == 0 {
 			t.Errorf("%s is empty — embed wiring broken?", rel)
 		}
+	}
+}
+
+func TestPrepareBuildContext_WritesPlaceholderManifest(t *testing.T) {
+	// PrepareBuildContext must always write integrations.json so the
+	// Dockerfile's unconditional COPY of that file doesn't break a
+	// build that forgot to call WriteIntegrationsManifest.
+	dir, cleanup, err := PrepareBuildContext()
+	if err != nil {
+		t.Fatalf("PrepareBuildContext: %v", err)
+	}
+	defer cleanup()
+
+	body, err := os.ReadFile(filepath.Join(dir, IntegrationsManifestFilename))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	got := strings.TrimSpace(string(body))
+	if got != "[]" {
+		t.Errorf("placeholder manifest = %q, want %q", got, "[]")
+	}
+}
+
+func TestWriteIntegrationsManifest_ProducesValidJSON(t *testing.T) {
+	// Smoke-test: after calling the writer, the file in the build
+	// context must parse as a JSON array of ManifestEntry. The
+	// registry's actual contents don't matter — what we're proving
+	// is that the file-system plumbing is wired up correctly.
+	dir, cleanup, err := PrepareBuildContext()
+	if err != nil {
+		t.Fatalf("PrepareBuildContext: %v", err)
+	}
+	defer cleanup()
+
+	if err := WriteIntegrationsManifest(dir, "claudecode"); err != nil {
+		t.Fatalf("WriteIntegrationsManifest: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, IntegrationsManifestFilename))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var entries []integration.ManifestEntry
+	if err := json.Unmarshal(body, &entries); err != nil {
+		t.Fatalf("manifest is not valid JSON array: %v\ncontent: %s", err, body)
 	}
 }
 

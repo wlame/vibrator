@@ -105,6 +105,21 @@ func LoadClaudeMemAdminConfig() (*ClaudeMemAdminConfig, error) {
 	return &cfg, nil
 }
 
+// SaveClaudeMemAdminConfig writes cfg to the admin config path, creating
+// parent directories if needed, with mode 0600 (the file may contain the
+// database_url credential).
+func SaveClaudeMemAdminConfig(cfg *ClaudeMemAdminConfig) error {
+	path := ClaudeMemAdminConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	}
+	var b bytes.Buffer
+	if err := toml.NewEncoder(&b).Encode(cfg); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	return os.WriteFile(path, b.Bytes(), 0600)
+}
+
 // ClaudeMemAdminConfigPath returns the resolved path used by Load. Split
 // out so the CLI can print it in `vibrate prereqs status` even when the
 // file is missing.

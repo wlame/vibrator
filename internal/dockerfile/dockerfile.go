@@ -152,6 +152,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       unzip xz-utils \
       build-essential \
       locales \
+      zsh-autosuggestions \
+      zsh-syntax-highlighting \
+      bash-completion \
 `)
 	// Append the user's chosen shell so it's installed in the base stage.
 	// bash is already present on Ubuntu — listing it explicitly is harmless.

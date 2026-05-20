@@ -16,6 +16,11 @@ HISTFILESIZE=50000
 HISTCONTROL=ignoredups:erasedups
 shopt -s histappend
 
+# --- completion -------------------------------------------------------
+if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+fi
+
 # --- prompt -----------------------------------------------------------
 # user@host in vibrator-yellow, workspace in green. Hostname is set
 # to `vibrate-<workspace>` by docker run --hostname, so the yellow

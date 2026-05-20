@@ -3,6 +3,14 @@
 # into the unprivileged user's home. Edit templates/shells/zshrc in the
 # source repo to change behavior.
 
+# --- completion -------------------------------------------------------
+autoload -Uz compinit && compinit
+[ -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+    source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+# syntax-highlighting must be sourced last — it overrides ZLE widgets
+[ -r /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
+    source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
 # --- history ----------------------------------------------------------
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=50000

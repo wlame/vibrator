@@ -26,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       unzip xz-utils \
       build-essential \
       locales \
+      zsh-autosuggestions \
+      zsh-syntax-highlighting \
+      bash-completion \
       bash \
  && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*

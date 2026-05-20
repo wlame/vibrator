@@ -422,3 +422,35 @@ func mustContain(t *testing.T, haystack, needle string) {
 		t.Errorf("output missing %q\n--- output ---\n%s", needle, haystack)
 	}
 }
+
+// TestGenerate_EmitsVibratorHarnessEnv asserts the runtime stage sets
+// VIBRATOR_HARNESS — claude-exec.sh reads this env to filter the
+// integration manifest at session-start time.
+func TestGenerate_EmitsVibratorHarnessEnv(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "claude-code"),
+		Shell:   "zsh",
+		Profile: "minimal",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	mustContain(t, string(out), `ENV VIBRATOR_HARNESS="claude-code"`)
+}
+
+// TestGenerate_CopiesIntegrationsManifest pins the COPY directive
+// for the build-time manifest. Without it, /etc/vibrator/integrations.json
+// is missing in the image and claude-exec.sh's loop silently no-ops.
+func TestGenerate_CopiesIntegrationsManifest(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "claude-code"),
+		Shell:   "zsh",
+		Profile: "minimal",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	s := string(out)
+	mustContain(t, s, "COPY integrations.json /etc/vibrator/integrations.json")
+	mustContain(t, s, "RUN mkdir -p /etc/vibrator")
+}

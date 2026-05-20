@@ -42,6 +42,15 @@ func buildImage(ctx context.Context, dc docker.Client,
 	}
 	defer cleanup()
 
+	// Materialize the per-harness integrations manifest into the build
+	// context. The dockerfile generator emits an unconditional COPY
+	// for this file, so it must exist before `docker build`. See
+	// internal/integration/manifest.go for the schema + buildcontext.go
+	// for the writer's overall contract.
+	if err := dockerfile.WriteIntegrationsManifest(ctxDir, dfSpec.Harness.ID()); err != nil {
+		return fmt.Errorf("write integrations manifest: %w", err)
+	}
+
 	fmt.Fprintf(opts.Stderr, "→ Building image %s (no-cache=%v) ...\n", imageTag, opts.Rebuild)
 
 	return dc.Build(ctx, docker.BuildSpec{

@@ -13,8 +13,8 @@ import (
 
 	// Side-effect imports — each sub-package registers its Integration
 	// in its init(). Adding a new built-in integration: drop a new
-	// blank import line here. User-defined TOML integrations (future
-	// step) won't need a code change here.
+	// blank import line here. User-defined TOML integrations are
+	// loaded dynamically (see init() below).
 	_ "github.com/wlame/vibrator/internal/integration/claudemem"
 	_ "github.com/wlame/vibrator/internal/integration/serena"
 )
@@ -30,6 +30,11 @@ var integrationsListCmd = &cobra.Command{
 
 func init() {
 	integrationsCmd.AddCommand(integrationsListCmd)
+
+	// Load any user-defined TOML integrations from the standard config
+	// directory. Errors are non-fatal — the loader records them so the
+	// `list` command can surface them at the bottom of the output.
+	_, _ = integration.LoadFromDir(integration.UserIntegrationsDir())
 }
 
 func runIntegrationsList(cmd *cobra.Command, _ []string) error {
@@ -42,6 +47,16 @@ func runIntegrationsList(cmd *cobra.Command, _ []string) error {
 
 	for _, i := range all {
 		renderIntegration(out, i, c)
+	}
+
+	// Surface any TOML load errors so users can spot a bad descriptor
+	// quickly. Common cases: missing required field, typo in keys.
+	if errs := integration.LoadErrors(); len(errs) > 0 {
+		fmt.Fprintf(out, "\n%sLoad errors%s\n", c.yellow, c.reset)
+		fmt.Fprintln(out, strings.Repeat("─", 42))
+		for _, e := range errs {
+			fmt.Fprintf(out, "  %s✗%s %s\n", c.red, c.reset, e.Error())
+		}
 	}
 	fmt.Fprintln(out)
 	return nil

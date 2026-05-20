@@ -82,6 +82,13 @@ type ClaudeMemAdminConfig struct {
 	// TeamName, when non-empty, overrides claudeMemDefaultTeam. Useful when
 	// a host runs multiple separated team scopes.
 	TeamName string `toml:"team_name,omitempty"`
+
+	// StackDir is the path to the cloned claude-mem-stack repo (the
+	// directory containing docker-compose.yml). Optional — when empty,
+	// the compose runtime path defaults to ~/dev/claude-mem-stack.
+	// The CLI prompts for this at setup and saves whatever the user
+	// confirmed.
+	StackDir string `toml:"stack_dir,omitempty"`
 }
 
 // LoadClaudeMemAdminConfig reads the admin config from disk. Returns

@@ -246,18 +246,18 @@ FROM harness AS extensions
 
 # --- extensions/claude-code/context7 (mcp) ---
 # Source: https://github.com/upstash/context7
-RUN <<'EOF'
+RUN <<'VIBRATE_EXT_INSTALL'
 set -e
 claude mcp add context7 --scope user --transport http https://mcp.context7.com/mcp
-EOF
+VIBRATE_EXT_INSTALL
 
 # --- extensions/claude-code/sequential-thinking (mcp) ---
 # Source: https://github.com/modelcontextprotocol/servers
-RUN <<'EOF'
+RUN <<'VIBRATE_EXT_INSTALL'
 set -e
 npm install -g @modelcontextprotocol/server-sequential-thinking
 claude mcp add sequential-thinking --scope user --transport stdio -- mcp-server-sequential-thinking
-EOF
+VIBRATE_EXT_INSTALL
 
 # ============================================================================
 # Stage 5 — runtime: labels, default command

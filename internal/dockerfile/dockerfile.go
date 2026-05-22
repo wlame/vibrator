@@ -413,31 +413,56 @@ FROM harness AS extensions
 		if e.Source != "" {
 			fmt.Fprintf(b, "# Source: %s\n", e.Source)
 		}
-		writeExtensionInstall(b, e.Install)
+		if err := writeExtensionInstall(b, e.Install); err != nil {
+			// Stage emission is best-effort here — Generate returns
+			// the buffer regardless. Surface delimiter conflicts as
+			// an inline error so the build fails fast on docker side.
+			fmt.Fprintf(b, "# ERROR: %v\n", err)
+		}
 		b.WriteString("\n")
 	}
 }
 
-// writeExtensionInstall wraps an extension's shell install snippet in
-// a BuildKit heredoc RUN block. The extensions `install:` field is plain
+// extensionRunDelimiter is the heredoc tag used by writeExtensionInstall.
+// Deliberately distinct from the common `EOF` so that install snippets
+// containing their own `cat > file <<'EOF' ... EOF` blocks don't
+// accidentally terminate the outer RUN heredoc early.
+//
+// BuildKit's heredoc matches the literal tag on a line by itself; any
+// other line (including a bare `EOF`) is treated as content. Pick a tag
+// no install script would plausibly use as a sentinel.
+const extensionRunDelimiter = "VIBRATE_EXT_INSTALL"
+
+// writeExtensionInstall wraps an extension's shell install snippet in a
+// BuildKit heredoc RUN block. The extensions `install:` field is plain
 // shell (no Dockerfile RUN prefix) so authors don't have to think about
 // line continuations or `&&` chaining. We add `set -e` so a failed
 // command aborts the build (matches Docker's exit-on-error semantics
 // for single-command RUNs).
 //
-// Single-quoted `<<'EOF'` prevents the shell from expanding variables
-// at heredoc-feed time — `$HOME`, `$USER`, etc. inside the script are
-// resolved by the container's shell when the script runs, not by the
-// host's docker build.
-func writeExtensionInstall(b *bytes.Buffer, install string) {
+// Single-quoted `<<'VIBRATE_EXT_INSTALL'` prevents the shell from
+// expanding variables at heredoc-feed time — `$HOME`, `$USER`, etc.
+// inside the script are resolved by the container's shell when the
+// script runs, not by the host's docker build.
+//
+// Defensive guard: if an install script happens to contain a standalone
+// line equal to our delimiter, we reject the build rather than emit
+// silently-broken output. Authors hit a clear error message.
+func writeExtensionInstall(b *bytes.Buffer, install string) error {
 	body := strings.TrimRight(install, "\n")
 	if strings.TrimSpace(body) == "" {
-		return
+		return nil
 	}
-	b.WriteString("RUN <<'EOF'\n")
+	for _, line := range strings.Split(body, "\n") {
+		if strings.TrimSpace(line) == extensionRunDelimiter {
+			return fmt.Errorf("extension install contains reserved heredoc delimiter %q on a standalone line — rename or quote", extensionRunDelimiter)
+		}
+	}
+	b.WriteString("RUN <<'" + extensionRunDelimiter + "'\n")
 	b.WriteString("set -e\n")
 	b.WriteString(body)
-	b.WriteString("\nEOF\n")
+	b.WriteString("\n" + extensionRunDelimiter + "\n")
+	return nil
 }
 
 // writeRuntimeStage emits Stage 5: labels, env, CMD. User creation

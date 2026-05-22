@@ -41,6 +41,134 @@ const (
 // wizard's grouped display.
 var AllKinds = []Kind{KindPlugin, KindSkill, KindMCP, KindSubagent, KindTool}
 
+// Category groups extension entries by semantic purpose, orthogonally to
+// Kind. The wizard can group entries by Kind (what they are technically)
+// AND by Category (what they help with). A Category is freeform string —
+// no fixed taxonomy is enforced by the loader — but we provide a canonical
+// list below so the wizard renders predictable order.
+//
+// Adding a new value: add a constant + entry in AllCategories. Loader
+// won't reject unknown values, so contributors can experiment.
+type Category string
+
+const (
+	CategoryCodeIntel        Category = "code-intelligence"
+	CategoryMemory           Category = "memory"
+	CategoryDocs             Category = "documentation"
+	CategoryWebBrowser       Category = "web-browser"
+	CategoryVCS              Category = "version-control"
+	CategoryProjectMgmt      Category = "project-management"
+	CategoryCommunication    Category = "communication"
+	CategoryCloudInfra       Category = "cloud-infrastructure"
+	CategoryDatabases        Category = "databases"
+	CategoryDesignUI         Category = "design-ui"
+	CategoryTesting          Category = "testing"
+	CategorySecurity         Category = "security"
+	CategoryAIIntegration    Category = "ai-integration"
+	CategoryDevTools         Category = "dev-tools"
+	CategoryObservability    Category = "observability"
+	CategoryHarnessSpecific  Category = "harness-specific"
+	CategoryNiche            Category = "niche"
+)
+
+// AllCategories is the canonical iteration order, mirroring the structure
+// of the research catalogues in .claude/research/harnesses/.
+var AllCategories = []Category{
+	CategoryCodeIntel,
+	CategoryMemory,
+	CategoryDocs,
+	CategoryWebBrowser,
+	CategoryVCS,
+	CategoryProjectMgmt,
+	CategoryCommunication,
+	CategoryCloudInfra,
+	CategoryDatabases,
+	CategoryDesignUI,
+	CategoryTesting,
+	CategorySecurity,
+	CategoryAIIntegration,
+	CategoryDevTools,
+	CategoryObservability,
+	CategoryHarnessSpecific,
+	CategoryNiche,
+}
+
+// CategoryLabel returns the user-facing display name for a Category.
+// Falls through to the raw value for unrecognized categories so the
+// wizard still renders something when contributors invent new ones.
+func CategoryLabel(c Category) string {
+	switch c {
+	case CategoryCodeIntel:
+		return "Code Intelligence"
+	case CategoryMemory:
+		return "Memory & Context"
+	case CategoryDocs:
+		return "Documentation"
+	case CategoryWebBrowser:
+		return "Web & Browser"
+	case CategoryVCS:
+		return "Version Control"
+	case CategoryProjectMgmt:
+		return "Project Management"
+	case CategoryCommunication:
+		return "Communication"
+	case CategoryCloudInfra:
+		return "Cloud & Infrastructure"
+	case CategoryDatabases:
+		return "Databases"
+	case CategoryDesignUI:
+		return "Design & UI"
+	case CategoryTesting:
+		return "Testing & QA"
+	case CategorySecurity:
+		return "Security"
+	case CategoryAIIntegration:
+		return "AI/LLM Integration"
+	case CategoryDevTools:
+		return "Developer Tools"
+	case CategoryObservability:
+		return "Observability"
+	case CategoryHarnessSpecific:
+		return "Harness-specific"
+	case CategoryNiche:
+		return "Niche / Specialized"
+	}
+	if c == "" {
+		return "Uncategorized"
+	}
+	return string(c)
+}
+
+// RuntimeNeeds describes what an extension needs at runtime, beyond the
+// build-time install. Used by the wizard to surface security/operational
+// constraints before the user commits to enabling something.
+//
+// All fields default to safe values (false / empty), so omitting this
+// block in frontmatter means "purely local, no special needs".
+type RuntimeNeeds struct {
+	// LocalOnly is true when the extension works entirely offline once
+	// installed (no outbound network at runtime, no host services).
+	// Flips the wizard badge to "[local]" — the safest signal.
+	LocalOnly bool `yaml:"local_only,omitempty"`
+
+	// SelfHosted, when non-empty, names a host-side service the extension
+	// depends on (e.g., "serena-host" or "claude-mem-stack"). The wizard
+	// uses this to point at the corresponding `vibrate integrations`
+	// flow when the user picks the entry.
+	SelfHosted string `yaml:"self_hosted,omitempty"`
+
+	// ThirdPartyAPI, when non-empty, names the third-party service the
+	// extension calls (e.g., "GitHub", "Linear", "OpenAI"). Forms the
+	// "[needs $service token]" badge in the wizard.
+	ThirdPartyAPI string `yaml:"third_party_api,omitempty"`
+
+	// OutboundNet is true when the extension makes outbound network
+	// calls at runtime to something other than the listed
+	// ThirdPartyAPI (e.g., model providers via OpenAI-compatible
+	// endpoints, generic web search backends).
+	OutboundNet bool `yaml:"outbound_net,omitempty"`
+}
+
 // Valid reports whether k is one of the known kinds. Frontmatter parsing
 // rejects any other value early.
 func (k Kind) Valid() bool {
@@ -125,6 +253,16 @@ type Entry struct {
 	// host has "playwright", our extensions has "playwright-mcp". Lookups
 	// match against both ID and HostAliases. Lowercase, exact match.
 	HostAliases []string `yaml:"host_aliases,omitempty"`
+
+	// Category groups this entry semantically for wizard display. See
+	// the Category constants for the canonical set; freeform strings are
+	// accepted (the wizard falls through to raw value as the label).
+	Category Category `yaml:"category,omitempty"`
+
+	// RuntimeNeeds describes what the extension needs at runtime
+	// (vs. install time). Used by the wizard to show security/operational
+	// badges next to each option.
+	RuntimeNeeds RuntimeNeeds `yaml:"runtime_needs,omitempty"`
 
 	// Body is the markdown content after the frontmatter. Populated by the
 	// loader; never set in frontmatter.

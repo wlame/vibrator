@@ -2,6 +2,8 @@ package wizard
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 
@@ -137,22 +139,90 @@ func (b *kindBindings) flatten() []string {
 }
 
 // optionsForKind filters entries by harness + kind and returns huh
-// options labeled "Name — id" for legibility.
+// options labeled "Name — id  [badges]" for legibility. Badges encode
+// the runtime needs in a compact form so users can spot:
+//
+//   - [local]              — no network, no host services
+//   - [host: <integration>] — depends on a host-side service
+//   - [token: $ENV]         — needs a third-party API credential
+//   - [net]                 — makes outbound network calls
+//
+// Multiple badges concatenate. Sort by category name (then by ID
+// within category) so users see related entries grouped — important
+// when there are 30+ entries per harness.
 func optionsForKind(entries map[string]*extensions.Entry, harnessID string,
 	kind extensions.Kind,
 ) []huh.Option[string] {
-	var opts []huh.Option[string]
+	type entryWithSort struct {
+		entry *extensions.Entry
+		cat   string
+	}
+	var matched []entryWithSort
 	for _, e := range entries {
 		if e.Harness != harnessID || e.Kind != kind {
 			continue
 		}
-		label := e.Name
-		if label == "" {
-			label = e.ID
+		matched = append(matched, entryWithSort{
+			entry: e,
+			cat:   string(e.Category),
+		})
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].cat != matched[j].cat {
+			return matched[i].cat < matched[j].cat
 		}
-		opts = append(opts, huh.NewOption(label+" — "+e.ID, e.ID))
+		return matched[i].entry.ID < matched[j].entry.ID
+	})
+
+	opts := make([]huh.Option[string], 0, len(matched))
+	for _, m := range matched {
+		opts = append(opts, huh.NewOption(formatEntryLabel(m.entry), m.entry.ID))
 	}
 	return opts
+}
+
+// formatEntryLabel composes the human-readable option label:
+//
+//	"<Name> — <id>  <category-tag> <runtime-badges>"
+//
+// Used by the wizard and exported for shared tests.
+func formatEntryLabel(e *extensions.Entry) string {
+	name := e.Name
+	if name == "" {
+		name = e.ID
+	}
+	label := name + " — " + e.ID
+	if e.Category != "" {
+		label += "  [" + extensions.CategoryLabel(e.Category) + "]"
+	}
+	badges := runtimeBadges(e)
+	if badges != "" {
+		label += "  " + badges
+	}
+	return label
+}
+
+// runtimeBadges renders the RuntimeNeeds into bracketed tags. Order is
+// fixed (local → host → token → net) so equivalent entries always
+// produce the same string — easier to spot patterns when scanning a
+// list of 30+ options.
+func runtimeBadges(e *extensions.Entry) string {
+	var badges []string
+	if e.RuntimeNeeds.LocalOnly {
+		badges = append(badges, "[local]")
+	}
+	if e.RuntimeNeeds.SelfHosted != "" {
+		badges = append(badges, "[host: "+e.RuntimeNeeds.SelfHosted+"]")
+	}
+	if e.Auth != nil && e.Auth.Env != "" {
+		badges = append(badges, "[token: $"+e.Auth.Env+"]")
+	} else if e.RuntimeNeeds.ThirdPartyAPI != "" {
+		badges = append(badges, "[3rd-party: "+e.RuntimeNeeds.ThirdPartyAPI+"]")
+	}
+	if e.RuntimeNeeds.OutboundNet {
+		badges = append(badges, "[net]")
+	}
+	return strings.Join(badges, " ")
 }
 
 // preCheckedExtensionIDs returns the set of extensions IDs that should be

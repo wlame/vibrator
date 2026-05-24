@@ -22,8 +22,10 @@ var rootCmd = &cobra.Command{
 isolated Docker containers per workspace, with declarative profile + extensions
 configuration via .vb.
 
-Running 'vibrate' with no subcommand jumps into the container for the current
-workspace, building or starting it as needed.`,
+Running 'vibrate' with no subcommand builds (if needed), starts, and
+launches the harness's CLI (claude / codex / opencode / pi) directly
+inside the container for the current workspace. Use 'vibrate shell'
+to drop into a shell instead.`,
 
 	// SilenceUsage stops cobra from dumping the full usage text on every
 	// runtime error — we'd rather show a focused error message. Errors are

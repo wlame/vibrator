@@ -65,6 +65,21 @@ type Harness interface {
 	// vars and to manage local-provider lifecycle.
 	SupportsLLMProvider() bool
 
+	// LaunchCommand returns the argv that `vibrate` exec's inside the
+	// container by default — the harness's own CLI entry point. Bare
+	// `vibrate` (and `vibrate run`) launch this directly; `vibrate
+	// shell` is the escape hatch that launches the user's shell
+	// instead.
+	//
+	// Implementations should return the canonical command users would
+	// type at the shell. Empty slice is a programming error — every
+	// harness has a launch command, that's what makes it a harness.
+	//
+	// The orchestrator prepends /usr/local/bin/claude-exec so the
+	// session-start hooks (integration manifest, transport switching)
+	// still run before the agent boots.
+	LaunchCommand() []string
+
 	// LLMEnvVars maps an LLM provider configuration into the container
 	// environment variables this harness expects.
 	//

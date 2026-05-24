@@ -97,3 +97,49 @@ func TestRegistry_IDsAreKebabCase(t *testing.T) {
 		}
 	}
 }
+
+// Every harness must declare a non-empty LaunchCommand — without it,
+// bare `vibrate` can't exec anything inside the container.
+func TestRegistry_AllHaveLaunchCommand(t *testing.T) {
+	for _, h := range harness.Registry {
+		argv := h.LaunchCommand()
+		if len(argv) == 0 {
+			t.Errorf("harness %q has empty LaunchCommand", h.ID())
+			continue
+		}
+		// First element should be the canonical command name — match
+		// the harness ID convention. Not a strict rule (codex's CLI
+		// could theoretically be "codex-cli" while harness ID stays
+		// "codex"), but verify it's plausibly a binary name.
+		if argv[0] == "" {
+			t.Errorf("harness %q LaunchCommand[0] is empty", h.ID())
+		}
+		if strings.Contains(argv[0], "/") || strings.Contains(argv[0], " ") {
+			t.Errorf("harness %q LaunchCommand[0] %q looks suspicious (path / space)", h.ID(), argv[0])
+		}
+	}
+}
+
+// Specifically pin the launch commands so a rename in upstream
+// projects (e.g., claude → claude-cli) is a deliberate edit, not a
+// silent change.
+func TestLaunchCommand_KnownValues(t *testing.T) {
+	cases := map[string]string{
+		"claude-code": "claude",
+		"codex":       "codex",
+		"opencode":    "opencode",
+		"pi":          "pi",
+	}
+	for id, want := range cases {
+		t.Run(id, func(t *testing.T) {
+			h, ok := harness.ByID(id)
+			if !ok {
+				t.Fatalf("harness %q not registered", id)
+			}
+			argv := h.LaunchCommand()
+			if len(argv) == 0 || argv[0] != want {
+				t.Errorf("LaunchCommand[0] = %v, want first element %q", argv, want)
+			}
+		})
+	}
+}

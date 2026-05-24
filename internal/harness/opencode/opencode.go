@@ -72,6 +72,10 @@ func (opencode) SupportsLLMProvider() bool { return true }
 // the OpenAI-compat pair as a hint — power users still need the
 // matching opencode.json snippet if they need provider-specific
 // behavior. Future work: bind-mount a generated opencode.json fragment.
+// LaunchCommand returns the argv for OpenCode's TUI. `opencode` (no
+// args) opens the agent in the current workspace.
+func (opencode) LaunchCommand() []string { return []string{"opencode"} }
+
 func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
 	env := map[string]string{}
 	switch provider {

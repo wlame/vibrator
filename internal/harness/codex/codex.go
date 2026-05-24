@@ -42,6 +42,10 @@ func (codex) RequiredFeatures() []string {
 // Azure OpenAI, etc.) via OPENAI_BASE_URL.
 func (codex) SupportsLLMProvider() bool { return true }
 
+// LaunchCommand returns the argv for the Codex CLI. `codex` (no args)
+// opens the agent in the current workspace.
+func (codex) LaunchCommand() []string { return []string{"codex"} }
+
 // LLMEnvVars maps the LLM choice into Codex's OPENAI_API_KEY +
 // OPENAI_BASE_URL convention. Codex speaks OpenAI's HTTP API, so all
 // providers (including Anthropic, Ollama, LM Studio) are reached via

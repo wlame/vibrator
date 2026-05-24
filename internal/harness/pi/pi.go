@@ -46,6 +46,11 @@ func (pi) RequiredFeatures() []string {
 // Ollama or remote OpenAI/Anthropic via custom base URLs.
 func (pi) SupportsLLMProvider() bool { return true }
 
+// LaunchCommand returns the argv for the Pi coding agent. `pi` (no
+// args) opens the agent in the current workspace using the
+// configured provider.
+func (pi) LaunchCommand() []string { return []string{"pi"} }
+
 // LLMEnvVars maps the LLM choice into Pi's OpenAI-compatible env vars.
 // Pi reads OPENAI_API_KEY + OPENAI_BASE_URL (plus a few provider-
 // specific shortcuts for direct endpoints — kept as authEnvVars).

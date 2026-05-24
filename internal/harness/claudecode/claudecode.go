@@ -64,6 +64,10 @@ func (claudeCode) SupportsLLMProvider() bool { return false }
 // LLMEnvVars returns nil — see SupportsLLMProvider.
 func (claudeCode) LLMEnvVars(_, _, _, _ string) map[string]string { return nil }
 
+// LaunchCommand returns the argv for Claude Code's CLI. Plain `claude`
+// drops the user into the agent's TUI at the workspace.
+func (claudeCode) LaunchCommand() []string { return []string{"claude"} }
+
 func init() {
 	harness.Register(New())
 }

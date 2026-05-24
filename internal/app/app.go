@@ -49,6 +49,34 @@ import (
 	"github.com/wlame/vibrator/internal/workspace"
 )
 
+// LaunchTarget selects which command the orchestrator exec's inside
+// the container. The default (LaunchHarness, also represented by the
+// zero value "") preserves the new "bare vibrate launches the agent"
+// UX; LaunchShell keeps the escape-hatch behaviour previously offered
+// by bare vibrate.
+type LaunchTarget string
+
+const (
+	// LaunchHarness exec's the harness's own CLI (claude / codex /
+	// opencode / pi). The default for `vibrate` and `vibrate run`.
+	LaunchHarness LaunchTarget = "harness"
+
+	// LaunchShell exec's the user's shell instead. Triggered by
+	// `vibrate shell`; preserves the legacy "drop me in a shell"
+	// behaviour for debugging, installing extras, one-off commands.
+	LaunchShell LaunchTarget = "shell"
+)
+
+// effectiveLaunchTarget normalizes the zero-value to LaunchHarness so
+// downstream consumers can branch on a known value without a special
+// case for the empty string.
+func (lt LaunchTarget) effective() LaunchTarget {
+	if lt == "" {
+		return LaunchHarness
+	}
+	return lt
+}
+
 // Options bundles the flag state passed from the CLI layer. Mirrors
 // `vibrate build`'s flags plus a few orchestrator-only knobs.
 type Options struct {
@@ -74,6 +102,14 @@ type Options struct {
 	// Rebuild forces a fresh `docker build` even when a matching image
 	// exists. Same as `--no-cache` at the docker level.
 	Rebuild bool
+
+	// LaunchTarget selects what `vibrate` exec's inside the container.
+	// The default ("" or LaunchHarness) runs the harness's own CLI
+	// (claude / codex / opencode / pi) directly — that's the bare
+	// `vibrate` UX. LaunchShell drops into the user's shell instead —
+	// what `vibrate shell` does, useful for debugging, installing
+	// extras, or running one-off commands.
+	LaunchTarget LaunchTarget
 
 	// DinD enables Docker-in-Docker: the host's docker socket is
 	// bind-mounted into the container and the container user is added

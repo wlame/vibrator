@@ -32,32 +32,40 @@ var runFlagsState runFlags
 // with no arguments, cobra runs the root's PersistentPreRun + RunE — we
 // wire `vibrate` (bare) to behave like `vibrate run` via the rootCmd's
 // RunE in init().
+//
+// `vibrate run` (and bare `vibrate`) launches the harness's own CLI
+// directly inside the container — `claude` for claude-code, `codex`
+// for codex, `opencode` for opencode, `pi` for pi. To get a shell
+// instead, use `vibrate shell`.
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Build or start the container for the current workspace and exec into it",
+	Short: "Build/start the container and launch the harness's CLI",
 	Long: `Resolves the workspace configuration (CLI flags > .vb pin > defaults),
 runs the interactive wizard for any unset fields, builds the image if missing,
-creates or starts the container, and execs you into it.
+creates or starts the container, and launches the harness's own CLI
+(claude / codex / opencode / pi) inside it.
 
-This is also the default action when 'vibrate' is invoked with no subcommand.`,
+This is also the default action when 'vibrate' is invoked with no subcommand.
+
+To get a shell inside the container instead, use 'vibrate shell'.`,
 	RunE: runRunCommand,
 }
 
 func runRunCommand(cmd *cobra.Command, _ []string) error {
-	return app.Run(context.Background(), buildAppOptions(cmd))
+	return app.Run(context.Background(), buildAppOptions(cmd, app.LaunchHarness))
 }
 
 // buildAppOptions translates the run flag state into an app.Options
-// struct. Shared between `vibrate run` (explicit) and the root command
-// (bare invocation default).
-func buildAppOptions(cmd *cobra.Command) app.Options {
+// struct. Shared between `vibrate run`, bare `vibrate`, and `vibrate
+// shell` — the only difference between them is the launch target.
+func buildAppOptions(cmd *cobra.Command, target app.LaunchTarget) app.Options {
 	return app.Options{
 		Harness:         runFlagsState.harness,
 		Profile:         runFlagsState.profile,
 		Shell:           runFlagsState.shell,
 		With:            runFlagsState.with,
 		No:              runFlagsState.no,
-		ExtensionIDs:      runFlagsState.extensions,
+		ExtensionIDs:    runFlagsState.extensions,
 		Username:        runFlagsState.username,
 		HostUID:         runFlagsState.hostUID,
 		HostGID:         runFlagsState.hostGID,
@@ -65,6 +73,7 @@ func buildAppOptions(cmd *cobra.Command) app.Options {
 		NoSave:          runFlagsState.noSave,
 		Rebuild:         runFlagsState.rebuild,
 		DinD:            runFlagsState.dind,
+		LaunchTarget:    target,
 		VibratorVersion: Version,
 		Stdout:          cmd.OutOrStdout(),
 		Stderr:          cmd.ErrOrStderr(),

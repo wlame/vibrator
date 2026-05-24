@@ -149,12 +149,23 @@ func runContainer(ctx context.Context, dc docker.Client,
 
 	fmt.Fprintf(opts.Stderr, "→ Creating container %s ...\n", containerName)
 
+	// What to exec inside the new container: harness CLI (default) or
+	// shell (vibrate shell). We pass an explicit Cmd to override the
+	// image's CMD; the Dockerfile still bakes shell as CMD so a manual
+	// `docker run <image>` from someone bypassing vibrate still gets a
+	// sensible default.
+	launchCmd, err := resolveLaunchCmd(pin, opts)
+	if err != nil {
+		return err
+	}
+
 	return dc.Run(ctx, docker.RunSpec{
 		Image:         imageTag,
 		ContainerName: containerName,
 		Hostname:      workspace.Hostname(wsDir),
 		GroupAdd:      dockerGroupAdd,
 		Interactive:   true,
+		Cmd:           launchCmd,
 		// F1: --init wires tini as PID 1 inside the container. Without
 		// it, processes left behind by the user's shell (orphan node
 		// servers, dead playwright children, MCP servers killed mid-
@@ -187,17 +198,22 @@ func runContainer(ctx context.Context, dc docker.Client,
 	})
 }
 
-// execIntoContainer runs an interactive shell inside an already-running
-// (or just-started) container. wsDir is the workspace path on the host
-// (also the path inside the container, since vibrator mounts at the
-// same absolute path) — used to set --workdir so re-entries land in
-// the project, not the user's $HOME.
+// execIntoContainer runs the chosen launch target inside an already-
+// running (or just-started) container. wsDir is the workspace path on
+// the host (also the path inside the container, since vibrator mounts
+// at the same absolute path) — used to set --workdir so re-entries
+// land in the project, not the user's $HOME.
+//
+// The launch target (harness CLI vs shell) comes from opts.LaunchTarget.
+// Both targets are wrapped with claude-exec so the session-start hooks
+// (integration manifest probes, transport switching) fire on every
+// re-entry, not just on first `docker run`.
 func execIntoContainer(ctx context.Context, dc docker.Client,
 	containerName, wsDir string, pin config.Pin, opts Options,
 ) error {
-	shell := pin.Shell
-	if shell == "" {
-		shell = "zsh"
+	cmd, err := resolveLaunchCmd(pin, opts)
+	if err != nil {
+		return err
 	}
 	return dc.Exec(ctx, docker.ExecSpec{
 		Container:   containerName,
@@ -211,15 +227,52 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 		Env: []docker.EnvVar{
 			{Name: "WORKSPACE_PATH", Value: wsDir},
 		},
-		// Wrap the shell with claude-exec so the live Serena MCP probe
-		// (C6) re-runs on every entry. claude-exec exec's its $@ at
-		// the end, so the shell becomes the wrapper's replacement
-		// process — signals route correctly, no extra PID layer.
-		Cmd:    []string{"/usr/local/bin/claude-exec", "/bin/" + shell},
+		Cmd:    cmd,
 		Stdin:  opts.Stdin,
 		Stdout: opts.Stdout,
 		Stderr: opts.Stderr,
 	})
+}
+
+// resolveLaunchCmd builds the argv that runs inside the container,
+// based on the requested LaunchTarget:
+//
+//   - LaunchHarness (default): the harness's own CLI — claude, codex,
+//     opencode, or pi — wrapped with claude-exec.
+//   - LaunchShell:             the user's shell (pin.Shell), wrapped
+//     with claude-exec.
+//
+// Both wrap with claude-exec so the integrations manifest is reprocessed
+// on every session start — without it, host-side service changes (e.g.,
+// starting the Serena host server between sessions) wouldn't get picked
+// up by an exec'd harness.
+//
+// Returns an error only for the harness path, and only when the
+// registered harness has no LaunchCommand (a programming bug — every
+// harness must declare one).
+func resolveLaunchCmd(pin config.Pin, opts Options) ([]string, error) {
+	switch opts.LaunchTarget.effective() {
+	case LaunchShell:
+		shell := pin.Shell
+		if shell == "" {
+			shell = "zsh"
+		}
+		return []string{"/usr/local/bin/claude-exec", "/bin/" + shell}, nil
+
+	case LaunchHarness:
+		h, ok := harness.ByID(pin.Harness)
+		if !ok {
+			return nil, fmt.Errorf("harness %q not registered (build error?)", pin.Harness)
+		}
+		argv := h.LaunchCommand()
+		if len(argv) == 0 {
+			return nil, fmt.Errorf("harness %q declares no LaunchCommand", pin.Harness)
+		}
+		return append([]string{"/usr/local/bin/claude-exec"}, argv...), nil
+	}
+
+	// Unreachable — effective() normalizes "" to LaunchHarness.
+	return nil, fmt.Errorf("unknown launch target %q", opts.LaunchTarget)
 }
 
 // claudeSessionPersistDirs are the per-CC subdirectories that hold

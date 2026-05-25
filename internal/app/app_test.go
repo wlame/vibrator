@@ -11,6 +11,7 @@ import (
 
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
+	"github.com/wlame/vibrator/internal/extensions"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
 )
 
@@ -158,7 +159,7 @@ func TestBuildContainerEnv_ClaudeCodeForwardsAuthVars(t *testing.T) {
 	// Claude Code's AuthEnvVars: CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY.
 	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "tok-123")
 	t.Setenv("ANTHROPIC_API_KEY", "ak-456")
-	got, err := buildContainerEnv(config.Pin{Harness: "claude-code"})
+	got, err := buildContainerEnv(config.Pin{Harness: "claude-code"}, nil)
 	if err != nil {
 		t.Fatalf("buildContainerEnv: %v", err)
 	}
@@ -178,7 +179,7 @@ func TestBuildContainerEnv_CodexWithCloudLLM(t *testing.T) {
 			Provider: "openai", Model: "gpt-4o",
 			Auth: &config.LLMAuth{Value: "sk-test"},
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("buildContainerEnv: %v", err)
 	}
@@ -195,7 +196,7 @@ func TestBuildContainerEnv_CodexWithOllama(t *testing.T) {
 			Provider: "ollama", Model: "qwen3:32b",
 			BaseURL: "http://host.docker.internal:11434",
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("buildContainerEnv: %v", err)
 	}
@@ -216,7 +217,7 @@ func TestBuildContainerEnv_PinEnvOverridesWithDollarIndirection(t *testing.T) {
 			"LITERAL":   "literal-val",
 			"INDIRECT":  "$MY_HOST_TOKEN",
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("buildContainerEnv: %v", err)
 	}
@@ -229,6 +230,94 @@ func TestBuildContainerEnv_PinEnvOverridesWithDollarIndirection(t *testing.T) {
 	}
 }
 
+func TestBuildContainerEnv_ExtensionAuthForwarded(t *testing.T) {
+	// Regression: previously, declaring `auth.env: OPENAI_API_KEY` on
+	// an extension entry rendered a badge in the wizard but NEVER
+	// forwarded the host's value at `docker run -e` time. The plugin
+	// then failed inside the container with "no API key" — silently
+	// for users who hadn't read the runtime-needs notes.
+	t.Setenv("OPENAI_API_KEY", "sk-ext-host")
+	ext := &extensions.Entry{
+		ID:      "codex-plugin-cc",
+		Harness: "claude-code",
+		Kind:    extensions.KindPlugin,
+		Auth:    &extensions.AuthSpec{Env: "OPENAI_API_KEY"},
+	}
+	got, err := buildContainerEnv(config.Pin{Harness: "claude-code"}, []*extensions.Entry{ext})
+	if err != nil {
+		t.Fatalf("buildContainerEnv: %v", err)
+	}
+	envMap := envToMap(got)
+	if envMap["OPENAI_API_KEY"] != "sk-ext-host" {
+		t.Errorf("OPENAI_API_KEY not forwarded from extension auth.env: %v", envMap)
+	}
+}
+
+func TestBuildContainerEnv_ExtensionAuth_SilentWhenUnset(t *testing.T) {
+	// If the user hasn't set the host env var, we silently skip the
+	// extension's auth.env rather than erroring out — they may be
+	// using an alternative auth path (OAuth, ambient identity, etc.).
+	t.Setenv("DEFINITELY_UNSET_VIBRATE_TEST_AUTH", "")
+	ext := &extensions.Entry{
+		ID:      "x",
+		Harness: "claude-code",
+		Kind:    extensions.KindPlugin,
+		Auth:    &extensions.AuthSpec{Env: "DEFINITELY_UNSET_VIBRATE_TEST_AUTH"},
+	}
+	got, err := buildContainerEnv(config.Pin{Harness: "claude-code"}, []*extensions.Entry{ext})
+	if err != nil {
+		t.Fatalf("buildContainerEnv: %v", err)
+	}
+	envMap := envToMap(got)
+	if _, present := envMap["DEFINITELY_UNSET_VIBRATE_TEST_AUTH"]; present {
+		t.Errorf("unset env var should not appear in output: %v", envMap)
+	}
+}
+
+func TestBuildContainerEnv_HarnessAuthBeatsExtensionAuth(t *testing.T) {
+	// Same env name declared by both the harness (AuthEnvVars) and an
+	// extension (auth.env) — the harness value wins because it's a
+	// more fundamental declaration. Pin this so a future refactor
+	// doesn't silently invert the precedence.
+	t.Setenv("ANTHROPIC_API_KEY", "from-harness")
+	ext := &extensions.Entry{
+		ID:      "ext-wants-anthropic",
+		Harness: "claude-code",
+		Kind:    extensions.KindPlugin,
+		// Pathological case — extension declares the same env name
+		// the harness already forwards.
+		Auth: &extensions.AuthSpec{Env: "ANTHROPIC_API_KEY"},
+	}
+	got, _ := buildContainerEnv(config.Pin{Harness: "claude-code"}, []*extensions.Entry{ext})
+	envMap := envToMap(got)
+	if envMap["ANTHROPIC_API_KEY"] != "from-harness" {
+		t.Errorf("harness auth should win over extension auth, got %v", envMap)
+	}
+}
+
+func TestBuildContainerEnv_PinEnvWinsOverExtensionAuth(t *testing.T) {
+	// pin.Env is the user's explicit per-workspace override; it must
+	// win over an extension's auth.env hint.
+	t.Setenv("OPENAI_API_KEY", "from-host-env")
+	ext := &extensions.Entry{
+		ID:      "x",
+		Harness: "claude-code",
+		Kind:    extensions.KindPlugin,
+		Auth:    &extensions.AuthSpec{Env: "OPENAI_API_KEY"},
+	}
+	got, _ := buildContainerEnv(
+		config.Pin{
+			Harness: "claude-code",
+			Env:     map[string]string{"OPENAI_API_KEY": "from-pin"},
+		},
+		[]*extensions.Entry{ext},
+	)
+	envMap := envToMap(got)
+	if envMap["OPENAI_API_KEY"] != "from-pin" {
+		t.Errorf("pin.Env should beat extension auth, got %v", envMap)
+	}
+}
+
 func TestBuildContainerEnv_PinEnvWinsOverHarnessAuth(t *testing.T) {
 	// pin.Env precedence: a user override should win even over a
 	// harness-declared auth env var.
@@ -236,7 +325,7 @@ func TestBuildContainerEnv_PinEnvWinsOverHarnessAuth(t *testing.T) {
 	got, _ := buildContainerEnv(config.Pin{
 		Harness: "claude-code",
 		Env:     map[string]string{"ANTHROPIC_API_KEY": "from-pin"},
-	})
+	}, nil)
 	envMap := envToMap(got)
 	if envMap["ANTHROPIC_API_KEY"] != "from-pin" {
 		t.Errorf("pin.Env should win over harness auth, got %v", envMap)
@@ -249,8 +338,8 @@ func TestBuildContainerEnv_StableOrder(t *testing.T) {
 		Harness: "claude-code",
 		Env:     map[string]string{"A": "1", "B": "2", "C": "3"},
 	}
-	a, _ := buildContainerEnv(pin)
-	b, _ := buildContainerEnv(pin)
+	a, _ := buildContainerEnv(pin, nil)
+	b, _ := buildContainerEnv(pin, nil)
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("buildContainerEnv not deterministic: %v vs %v", a, b)
 	}

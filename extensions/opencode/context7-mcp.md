@@ -1,5 +1,6 @@
 ---
 name: Context7 MCP
+description: Up-to-date library docs MCP
 kind: mcp
 default: true
 size_mb: 5

@@ -1,5 +1,6 @@
 ---
 name: context7
+description: Up-to-date library docs MCP — fetches API references on demand
 kind: mcp
 default: true
 size_mb: 1

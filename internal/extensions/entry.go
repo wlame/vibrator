@@ -217,6 +217,16 @@ type Entry struct {
 	// Name is the display label used in the wizard and `extensions list`.
 	Name string `yaml:"name"`
 
+	// Description is an optional one-line summary shown in the wizard
+	// next to the entry's name — answers "what does this do" without
+	// requiring `vibrate extensions show <id>`. Keep it under ~80
+	// chars (huh's MultiSelect renders one option per row; long
+	// descriptions truncate visually).
+	//
+	// When omitted, the wizard falls back to category + runtime
+	// badges as the only contextual hint.
+	Description string `yaml:"description,omitempty"`
+
 	// Kind is one of: plugin, skill, mcp, subagent, tool. Required.
 	Kind Kind `yaml:"kind"`
 

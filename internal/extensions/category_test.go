@@ -107,6 +107,49 @@ Body.
 	}
 }
 
+func TestEntry_DescriptionParsesFromFrontmatter(t *testing.T) {
+	yaml := `---
+name: With Description
+description: A one-line summary for the wizard
+kind: mcp
+source: https://example.com/desc
+---
+
+# X
+Body.
+`
+	fsys := newFS(map[string]string{"extensions/claude-code/desc.md": yaml})
+	all, err := LoadAll(fsys)
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	e := all["claude-code/desc"]
+	if e.Description != "A one-line summary for the wizard" {
+		t.Errorf("Description = %q, want round-trip from YAML", e.Description)
+	}
+}
+
+func TestEntry_DescriptionOmittedIsEmpty(t *testing.T) {
+	yaml := `---
+name: No Description
+kind: mcp
+source: https://example.com/nodesc
+---
+
+# X
+Body.
+`
+	fsys := newFS(map[string]string{"extensions/claude-code/nodesc.md": yaml})
+	all, err := LoadAll(fsys)
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	e := all["claude-code/nodesc"]
+	if e.Description != "" {
+		t.Errorf("Description = %q, want empty when omitted", e.Description)
+	}
+}
+
 func TestCategoryAndRuntimeNeeds_OmittedFieldsAreZero(t *testing.T) {
 	// Entries without the new blocks must still load — and the new
 	// fields must be zero-valued (no surprise defaults).

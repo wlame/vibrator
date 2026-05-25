@@ -75,13 +75,21 @@ func buildImage(ctx context.Context, dc docker.Client,
 // `docker run` is INTERACTIVE here (-it) because the user is dropping
 // into a shell session. When they exit, docker returns and we return
 // normally.
+//
+// enabledExts is the list of resolved Extension entries (in the same
+// order as pin.Extensions). Used to forward extension-declared
+// `auth.env` host values into the container — without this plumbing,
+// extensions like `codex-plugin-cc` that declare `auth.env:
+// OPENAI_API_KEY` would silently fail at runtime because the host's
+// env value never reaches the container.
 func runContainer(ctx context.Context, dc docker.Client,
 	imageTag, containerName, wsDir string,
-	wsSpec workspace.Spec, pin config.Pin, opts Options,
+	wsSpec workspace.Spec, pin config.Pin,
+	enabledExts []*extensions.Entry, opts Options,
 ) error {
 	wsHash := workspace.Fingerprint(wsSpec)
 
-	envVars, err := buildContainerEnv(pin)
+	envVars, err := buildContainerEnv(pin, enabledExts)
 	if err != nil {
 		return err
 	}
@@ -688,14 +696,24 @@ func readOAuthTokenFile() string {
 }
 
 // buildContainerEnv produces the full set of env vars forwarded into
-// the container at `docker run` time. Order of precedence:
+// the container at `docker run` time. Order of precedence (later wins):
 //
 //  1. Harness AuthEnvVars (host env values passed through)
 //  2. Harness LLMEnvVars (computed from pin.LLM)
-//  3. pin.Env overrides (literal or $NAME indirection from host)
+//  3. Extension auth.env vars (host env values passed through)
+//  4. pin.Env overrides (literal or $NAME indirection from host)
 //
-// Later entries with the same name win.
-func buildContainerEnv(pin config.Pin) ([]docker.EnvVar, error) {
+// Extensions sit between LLM and pin.Env because:
+//   - The harness's own auth is more fundamental than an extension's,
+//     so harness AuthEnvVars take precedence when names collide.
+//   - pin.Env is the user's explicit per-workspace override and wins
+//     over everything else by design.
+//
+// enabledExts is the resolved list of extensions the user enabled for
+// this build. May be nil — in which case the function behaves exactly
+// like the pre-extensions implementation. Tests that don't care
+// about extension auth pass nil and continue working.
+func buildContainerEnv(pin config.Pin, enabledExts []*extensions.Entry) ([]docker.EnvVar, error) {
 	h, ok := harness.ByID(pin.Harness)
 	if !ok {
 		return nil, fmt.Errorf("unknown harness %q", pin.Harness)
@@ -733,7 +751,29 @@ func buildContainerEnv(pin config.Pin) ([]docker.EnvVar, error) {
 		}
 	}
 
-	// 3. pin.Env overrides. Values of the form "$NAME" are resolved
+	// 3. Extension auth.env vars — forward host values verbatim.
+	//    Silent when unset: the wizard's [token: $X] badge is the
+	//    user-facing prompt; failing the launch here would block
+	//    users who chose an alternative auth path (OAuth, ambient
+	//    workload identity, etc.).
+	//
+	//    Skip names the harness AuthEnvVars or LLMEnvVars already
+	//    populated — those are more fundamental and shouldn't be
+	//    silently overwritten by an extension's hint.
+	for _, e := range enabledExts {
+		if e.Auth == nil || e.Auth.Env == "" {
+			continue
+		}
+		name := e.Auth.Env
+		if _, already := final[name]; already {
+			continue
+		}
+		if v := os.Getenv(name); v != "" {
+			final[name] = v
+		}
+	}
+
+	// 4. pin.Env overrides. Values of the form "$NAME" are resolved
 	//    against the host's environment; literal values pass through.
 	for k, v := range pin.Env {
 		if strings.HasPrefix(v, "$") {

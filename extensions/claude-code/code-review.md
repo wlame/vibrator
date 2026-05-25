@@ -1,5 +1,6 @@
 ---
 name: code-review
+description: Slash-command plugin for opinionated, structured code reviews
 kind: plugin
 default: true
 size_mb: 1

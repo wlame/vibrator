@@ -257,7 +257,7 @@ func Run(ctx context.Context, opts Options) error {
 		} else {
 			fmt.Fprintf(opts.Stderr, "→ Image %s present — skipping build\n", imageTag)
 		}
-		return runContainer(ctx, dockerCli, imageTag, containerName, wsDir, wsSpec, pin, opts)
+		return runContainer(ctx, dockerCli, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
 
 	default:
 		return fmt.Errorf("unexpected container status %q for %s", status, containerName)

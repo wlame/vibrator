@@ -68,6 +68,12 @@ func (claudeCode) LLMEnvVars(_, _, _, _ string) map[string]string { return nil }
 // drops the user into the agent's TUI at the workspace.
 func (claudeCode) LaunchCommand() []string { return []string{"claude"} }
 
+// UpdateCommand returns the argv for upgrading Claude Code in place.
+// The official installer (`claude.ai/install.sh` — see Dockerfile)
+// ships a built-in `claude update` that re-downloads the latest
+// release into `~/.local/bin/claude`.
+func (claudeCode) UpdateCommand() []string { return []string{"claude", "update"} }
+
 func init() {
 	harness.Register(New())
 }

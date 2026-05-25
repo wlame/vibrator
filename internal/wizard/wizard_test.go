@@ -1,7 +1,6 @@
 package wizard
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 
@@ -229,33 +228,10 @@ func TestCommitLLM_DropsEmptyAuth(t *testing.T) {
 	}
 }
 
-// --- kindBindings ---------------------------------------------------------
-
-func TestKindBindings_AppendAndFlatten(t *testing.T) {
-	b := &kindBindings{}
-	b.appendByKind(extensions.KindPlugin, "p1")
-	b.appendByKind(extensions.KindMCP, "m1")
-	b.appendByKind(extensions.KindSkill, "s1")
-	b.appendByKind(extensions.KindMCP, "m2")
-	b.appendByKind(extensions.KindTool, "t1")
-
-	// flatten preserves Kind order: plugin, skill, mcp, subagent, tool.
-	got := b.flatten()
-	want := []string{"p1", "s1", "m1", "m2", "t1"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("flatten order = %v, want %v", got, want)
-	}
-}
-
-func TestKindBindings_DedupesAcrossKinds(t *testing.T) {
-	b := &kindBindings{}
-	b.appendByKind(extensions.KindPlugin, "dup")
-	b.appendByKind(extensions.KindSkill, "dup")
-	got := b.flatten()
-	if len(got) != 1 || got[0] != "dup" {
-		t.Errorf("expected single 'dup' after dedupe, got %v", got)
-	}
-}
+// The previous tests covered the kindBindings helper that fed huh's
+// per-kind MultiSelect groups. That whole flow was replaced by the
+// tabbed extensions_picker; selection collection is now exercised by
+// extensions_picker_test.go's TestPickerModel_Collect* tests.
 
 // --- preCheckedExtensionIDs -------------------------------------------------
 

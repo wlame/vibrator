@@ -1,5 +1,6 @@
 ---
 name: Plan agent (built-in)
+description: Built-in read-only planning agent — useful for architectural sessions
 kind: subagent
 default: true
 size_mb: 0

@@ -1,5 +1,6 @@
 ---
 name: GitHub
+description: OpenAI's first-party GitHub plugin for Codex (issues, PRs, repos)
 kind: plugin
 default: true
 size_mb: 1

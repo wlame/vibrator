@@ -51,6 +51,20 @@ func (pi) SupportsLLMProvider() bool { return true }
 // configured provider.
 func (pi) LaunchCommand() []string { return []string{"pi"} }
 
+// UpdateCommand returns the argv for upgrading Pi in place. Pi is an
+// npm package (see Dockerfile); re-running install with @latest picks
+// up the newest release and overwrites the global bin symlink.
+//
+// NOTE: Pi rebranded from `@mariozechner/pi-coding-agent` to
+// `@earendil-works/pi-coding-agent` in 2026; the install command in
+// Dockerfile still uses the legacy name for compatibility. Update
+// here uses the SAME package name to avoid a partial migration where
+// `npm update` would install the rebranded package alongside the old
+// one. Switch both call sites together in a separate change.
+func (pi) UpdateCommand() []string {
+	return []string{"npm", "install", "-g", "@mariozechner/pi-coding-agent@latest"}
+}
+
 // LLMEnvVars maps the LLM choice into Pi's OpenAI-compatible env vars.
 // Pi reads OPENAI_API_KEY + OPENAI_BASE_URL (plus a few provider-
 // specific shortcuts for direct endpoints — kept as authEnvVars).

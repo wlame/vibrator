@@ -1,5 +1,6 @@
 ---
 name: plugin-creator
+description: Helper for scaffolding new Codex plugins
 kind: skill
 default: true
 size_mb: 0

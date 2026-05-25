@@ -1,5 +1,6 @@
 ---
 name: Anthropic provider auth
+description: Forwards $ANTHROPIC_API_KEY so OpenCode can drive Claude models
 kind: tool
 default: true
 size_mb: 0

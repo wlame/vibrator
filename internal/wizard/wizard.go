@@ -144,24 +144,20 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		llmBinds = b
 	}
 
-	var extensionBinds *kindBindings
-	if steps.Extensions && len(in.Extensions) > 0 {
-		catGroups, b := buildExtensionGroups(&pin, in.Extensions, in.HostDetected)
-		groups = append(groups, catGroups...)
-		extensionBinds = b
-	}
-
-	if len(groups) == 0 {
-		// Everything was pre-supplied; nothing to ask.
-		return Result{Pin: pin}, nil
-	}
-
-	form := huh.NewForm(groups...).WithTheme(huh.ThemeCharm())
-	if err := form.RunWithContext(ctx); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return Result{Pin: pin, Cancelled: true}, nil
+	// Run the huh form for the core steps (harness / profile / shell
+	// / LLM). The extensions step is handled SEPARATELY below by a
+	// custom Bubble Tea picker that supports tab navigation — huh
+	// v1.0.0's MultiSelect renders one group per kind, which forces
+	// the user through 5 sequential pages and makes most entries
+	// invisible behind the "Plugins" first step.
+	if len(groups) > 0 {
+		form := huh.NewForm(groups...).WithTheme(huh.ThemeCharm())
+		if err := form.RunWithContext(ctx); err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return Result{Pin: pin, Cancelled: true}, nil
+			}
+			return Result{}, fmt.Errorf("wizard form: %w", err)
 		}
-		return Result{}, fmt.Errorf("wizard form: %w", err)
 	}
 
 	// Post-form commit: fold scratch bindings into `pin`. Done outside
@@ -176,8 +172,22 @@ func Run(ctx context.Context, in Input) (Result, error) {
 			pin.LLM = nil
 		}
 	}
-	if extensionBinds != nil {
-		pin.Extensions = extensionBinds.flatten()
+
+	// Tabbed extension picker — replaces the old per-kind huh groups.
+	if steps.Extensions && len(in.Extensions) > 0 && pin.Harness != "" {
+		res, err := RunPicker(ctx, pickerInput{
+			HarnessID:        pin.Harness,
+			Entries:          in.Extensions,
+			HostDetected:     in.HostDetected,
+			InitialSelection: pin.Extensions,
+		})
+		if err != nil {
+			return Result{}, fmt.Errorf("extension picker: %w", err)
+		}
+		if res.Cancelled {
+			return Result{Pin: pin, Cancelled: true}, nil
+		}
+		pin.Extensions = res.SelectedIDs
 	}
 
 	return Result{Pin: pin}, nil

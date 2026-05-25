@@ -1,5 +1,6 @@
 ---
 name: feature-dev
+description: Plugin with feature-dev workflow agents (explorer / architect / reviewer)
 kind: plugin
 default: true
 size_mb: 2

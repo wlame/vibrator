@@ -76,6 +76,13 @@ func (opencode) SupportsLLMProvider() bool { return true }
 // args) opens the agent in the current workspace.
 func (opencode) LaunchCommand() []string { return []string{"opencode"} }
 
+// UpdateCommand returns the argv for upgrading OpenCode in place.
+// OpenCode is installed from a GitHub Releases tarball (see
+// Dockerfile), but the binary has a built-in `opencode upgrade`
+// subcommand that re-downloads the newest tarball into
+// /usr/local/bin/opencode.
+func (opencode) UpdateCommand() []string { return []string{"opencode", "upgrade"} }
+
 func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
 	env := map[string]string{}
 	switch provider {

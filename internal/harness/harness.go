@@ -65,6 +65,18 @@ type Harness interface {
 	// vars and to manage local-provider lifecycle.
 	SupportsLLMProvider() bool
 
+	// UpdateCommand returns the argv that `vibrate update` runs to
+	// upgrade the harness's own CLI to its latest version, in place.
+	// It's the same command users would run manually inside the
+	// container — `claude update` for Claude Code, `npm install -g
+	// <pkg>@latest` for npm-installed harnesses, etc.
+	//
+	// Return an empty slice when the harness has no idiomatic
+	// self-update path (the orchestrator surfaces a "manual rebuild
+	// required" error in that case). Every built-in harness today
+	// supports a self-update path.
+	UpdateCommand() []string
+
 	// LaunchCommand returns the argv that `vibrate` exec's inside the
 	// container by default — the harness's own CLI entry point. Bare
 	// `vibrate` (and `vibrate run`) launch this directly; `vibrate

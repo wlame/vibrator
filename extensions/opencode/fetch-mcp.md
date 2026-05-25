@@ -1,5 +1,6 @@
 ---
 name: Fetch MCP
+description: Web-fetch MCP — pulls and converts URLs to markdown
 kind: mcp
 default: true
 size_mb: 3

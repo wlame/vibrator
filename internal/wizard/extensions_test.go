@@ -16,6 +16,36 @@ func TestFormatEntryLabel_PlainEntry(t *testing.T) {
 	}
 }
 
+func TestFormatEntryLabel_WithDescription(t *testing.T) {
+	// When Description is set, the label uses it as the prefix detail
+	// and moves the id to a parenthetical trailer. Pin both halves.
+	e := &extensions.Entry{
+		ID:          "x",
+		Name:        "Foo",
+		Description: "Does the thing",
+	}
+	got := formatEntryLabel(e)
+	if !strings.Contains(got, "Foo — Does the thing") {
+		t.Errorf("description not in prefix: %q", got)
+	}
+	if !strings.Contains(got, "(x)") {
+		t.Errorf("id should appear as parenthetical trailer: %q", got)
+	}
+	// Bare " — x" should NOT appear when description path is taken —
+	// id-as-anchor is for the fallback path only.
+	if strings.Contains(got, "Foo — x") {
+		t.Errorf("legacy 'name — id' should not appear when description set: %q", got)
+	}
+}
+
+func TestFormatEntryLabel_NoDescriptionFallsBack(t *testing.T) {
+	e := &extensions.Entry{ID: "x", Name: "Foo"} // no Description
+	got := formatEntryLabel(e)
+	if got != "Foo — x" {
+		t.Errorf("fallback label = %q, want %q", got, "Foo — x")
+	}
+}
+
 func TestFormatEntryLabel_WithCategory(t *testing.T) {
 	e := &extensions.Entry{
 		ID:       "x",
@@ -127,39 +157,7 @@ func TestFormatEntryLabel_AllBadgesAtOnce(t *testing.T) {
 	}
 }
 
-func TestOptionsForKind_SortsByCategoryThenID(t *testing.T) {
-	entries := map[string]*extensions.Entry{
-		"h/z-alpha": {ID: "z-alpha", Name: "Z Alpha", Harness: "h", Kind: extensions.KindMCP, Category: extensions.CategoryCodeIntel},
-		"h/a-beta":  {ID: "a-beta", Name: "A Beta", Harness: "h", Kind: extensions.KindMCP, Category: extensions.CategoryDatabases},
-		"h/b-gamma": {ID: "b-gamma", Name: "B Gamma", Harness: "h", Kind: extensions.KindMCP, Category: extensions.CategoryCodeIntel},
-	}
-	opts := optionsForKind(entries, "h", extensions.KindMCP)
-	// Sort key is the raw category string; alphabetical:
-	//   code-intelligence < databases.
-	// Within code-intelligence: b-gamma < z-alpha (by ID).
-	// Expected order: b-gamma, z-alpha, a-beta.
-	wantIDs := []string{"b-gamma", "z-alpha", "a-beta"}
-	if len(opts) != len(wantIDs) {
-		t.Fatalf("got %d options, want %d", len(opts), len(wantIDs))
-	}
-	for i, opt := range opts {
-		if opt.Value != wantIDs[i] {
-			t.Errorf("opts[%d].Value = %q, want %q", i, opt.Value, wantIDs[i])
-		}
-	}
-}
-
-func TestOptionsForKind_FiltersByHarnessAndKind(t *testing.T) {
-	entries := map[string]*extensions.Entry{
-		"h1/a": {ID: "a", Name: "A", Harness: "h1", Kind: extensions.KindMCP},
-		"h2/b": {ID: "b", Name: "B", Harness: "h2", Kind: extensions.KindMCP},
-		"h1/c": {ID: "c", Name: "C", Harness: "h1", Kind: extensions.KindPlugin},
-	}
-	opts := optionsForKind(entries, "h1", extensions.KindMCP)
-	if len(opts) != 1 {
-		t.Fatalf("got %d, want 1 (only h1/a is MCP for h1)", len(opts))
-	}
-	if opts[0].Value != "a" {
-		t.Errorf("got %q, want a", opts[0].Value)
-	}
-}
+// The previous tests covered `optionsForKind` (the huh-options
+// builder). That function was retired with the huh per-kind groups;
+// the same sort + filter contract lives in `pickerEntriesFor` now,
+// and the equivalent tests landed in extensions_picker_test.go.

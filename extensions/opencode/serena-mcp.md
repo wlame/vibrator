@@ -1,5 +1,6 @@
 ---
 name: Serena MCP
+description: LSP-backed code MCP — symbols, refs, find-implementations
 kind: mcp
 default: true
 size_mb: 120

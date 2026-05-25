@@ -1,5 +1,6 @@
 ---
 name: AGENTS.md Template
+description: Drops an AGENTS.md scaffold into the workspace
 kind: tool
 default: true
 size_mb: 0

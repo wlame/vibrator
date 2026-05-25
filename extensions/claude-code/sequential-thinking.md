@@ -1,5 +1,6 @@
 ---
 name: Sequential Thinking
+description: Lets the agent emit explicit step-by-step reasoning for complex tasks
 kind: mcp
 default: true
 size_mb: 5

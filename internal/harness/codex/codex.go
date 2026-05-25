@@ -46,6 +46,14 @@ func (codex) SupportsLLMProvider() bool { return true }
 // opens the agent in the current workspace.
 func (codex) LaunchCommand() []string { return []string{"codex"} }
 
+// UpdateCommand returns the argv for upgrading Codex in place. Codex
+// installs via `npm install -g @openai/codex` (see Dockerfile); re-
+// running install with the @latest tag picks up the newest release
+// and overwrites the symlink in /usr/local/bin.
+func (codex) UpdateCommand() []string {
+	return []string{"npm", "install", "-g", "@openai/codex@latest"}
+}
+
 // LLMEnvVars maps the LLM choice into Codex's OPENAI_API_KEY +
 // OPENAI_BASE_URL convention. Codex speaks OpenAI's HTTP API, so all
 // providers (including Anthropic, Ollama, LM Studio) are reached via

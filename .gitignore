@@ -23,3 +23,6 @@ core
 *.swp
 .idea/
 .vscode/
+
+# Manual build-matrix testing scratch dir
+test-scenarios/

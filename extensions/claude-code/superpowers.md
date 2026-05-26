@@ -5,17 +5,32 @@ default: false
 size_mb: 8
 category: harness-specific
 install: |
-  # obra/superpowers-marketplace is the canonical install path for
-  # the Superpowers skills bundle. Mirror the marketplace clone +
-  # cache copy pattern used by other plugins so the install is
-  # idempotent across cached Dockerfile layers.
+  # obra/superpowers-marketplace is a manifest ONLY — its
+  # marketplace.json declares the "superpowers" plugin with a
+  # `source: { source: "url", url: "https://github.com/obra/superpowers.git" }`.
+  # The actual plugin code lives in a separate repo (obra/superpowers)
+  # and must be cloned independently for the cache. This differs from
+  # claude-mem / codex-plugin-cc, where the plugin sources live inside
+  # the marketplace repo itself.
   mkdir -p "$HOME/.claude/plugins/marketplaces"
+
+  # 1. Clone the marketplace manifest. Directory basename matches
+  #    the marketplace's "name" field ("superpowers-marketplace") so
+  #    Claude Code's `/plugin marketplace list` recognises it.
   git clone --depth 1 https://github.com/obra/superpowers-marketplace.git \
-    "$HOME/.claude/plugins/marketplaces/obra-superpowers"
-  SP_GIT_SHORT=$(cd "$HOME/.claude/plugins/marketplaces/obra-superpowers" && git rev-parse --short=12 HEAD)
-  SP_DEST="$HOME/.claude/plugins/cache/obra/superpowers/$SP_GIT_SHORT"
+    "$HOME/.claude/plugins/marketplaces/superpowers-marketplace"
+
+  # 2. Clone the actual plugin repo into a scratch dir, then copy its
+  #    contents into the cache under the marketplace + plugin name.
+  #    The plugin's files (.claude-plugin/, skills/, hooks/, ...)
+  #    live at the REPO ROOT, not under any subdirectory.
+  SP_TMP=$(mktemp -d)
+  git clone --depth 1 https://github.com/obra/superpowers.git "$SP_TMP/sp"
+  SP_GIT_SHORT=$(cd "$SP_TMP/sp" && git rev-parse --short=12 HEAD)
+  SP_DEST="$HOME/.claude/plugins/cache/superpowers-marketplace/superpowers/$SP_GIT_SHORT"
   mkdir -p "$SP_DEST"
-  cp -r "$HOME/.claude/plugins/marketplaces/obra-superpowers/plugin/." "$SP_DEST/"
+  cp -r "$SP_TMP/sp/." "$SP_DEST/"
+  rm -rf "$SP_TMP"
 source: https://github.com/obra/superpowers
 ---
 

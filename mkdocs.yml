@@ -1,0 +1,147 @@
+site_name: Vibrator
+site_description: >-
+  A single-binary CLI that runs AI coding agents (Claude Code, Codex, OpenCode,
+  Pi) in isolated Docker containers per workspace.
+site_author: wlame
+site_url: https://wlame.github.io/vibrator/
+
+repo_name: wlame/vibrator
+repo_url: https://github.com/wlame/vibrator
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2026 wlame — MIT licensed
+
+# Documentation source lives in docs/. The static site is built into site/.
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  icon:
+    logo: material/cube-outline
+    repo: fontawesome/brands/github
+  palette:
+    # Light mode.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    # Dark mode.
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+plugins:
+  # `search` ships with MkDocs core — no extra dependency required.
+  - search
+
+markdown_extensions:
+  # Callouts: !!! note / warning / tip, and collapsible ??? details.
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.keys
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - def_list
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/wlame/vibrator
+  generator: false
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quickstart.md
+      - Core concepts: getting-started/concepts.md
+  - Guides:
+      - guides/index.md
+      - The .vb file: guides/configuration.md
+      - Harnesses: guides/harnesses.md
+      - Profiles & features: guides/profiles-and-features.md
+      - Extensions: guides/extensions.md
+      - The ECC bundle: guides/ecc.md
+      - LLM providers: guides/llm-providers.md
+      - Integrations: guides/integrations.md
+      - Authentication: guides/authentication.md
+      - Docker-in-Docker: guides/docker-in-docker.md
+      - Migrating from bash: guides/migrating.md
+  - Lifecycle:
+      - lifecycle/index.md
+      - What happens on build: lifecycle/build.md
+      - What happens on start: lifecycle/startup.md
+      - Runtime detection: lifecycle/runtime-detection.md
+  - CLI reference:
+      - reference/commands/index.md
+      - "vibrate / run / shell": reference/commands/launch.md
+      - "build / build-dockerfile": reference/commands/build.md
+      - "wizard / reconfigure": reference/commands/wizard.md
+      - update: reference/commands/update.md
+      - variants: reference/commands/variants.md
+      - extensions: reference/commands/extensions.md
+      - integrations: reference/commands/integrations.md
+      - prereqs: reference/commands/prereqs.md
+      - hostprobe: reference/commands/hostprobe.md
+      - runtime: reference/commands/runtime.md
+      - migrate-pin: reference/commands/migrate-pin.md
+  - Reference:
+      - reference/index.md
+      - ".vb schema": reference/vb-file.md
+      - Profiles: reference/profiles.md
+      - Features: reference/features.md
+      - Environment variables: reference/environment-variables.md
+      - Naming & labels: reference/naming-and-labels.md
+      - Architecture: reference/architecture.md
+  - Integrations:
+      - integrations/index.md
+      - Serena: integrations/serena.md
+      - claude-mem: integrations/claude-mem.md
+  - FAQ: faq.md

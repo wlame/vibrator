@@ -1,0 +1,11 @@
+# Documentation build dependencies for the MkDocs site (mkdocs.yml).
+#
+# Install with uv (preferred) or pip, then build/serve:
+#   uv pip install -r docs-requirements.txt
+#   mkdocs serve          # live preview at http://127.0.0.1:8000
+#   mkdocs build --strict # produce ./site (fails on broken links/nav)
+#
+# mkdocs-material pulls in mkdocs, pymdown-extensions, and the Mermaid
+# rendering support used by the diagrams in these docs. Pinned to a major
+# line for reproducibility; bump deliberately.
+mkdocs-material>=9.5,<10

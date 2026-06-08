@@ -120,8 +120,8 @@ type pickerModel struct {
 	harnessID string
 	tabs      []pickerTab
 
-	activeTab int       // index into tabs
-	cursors   []int     // cursor row per tab (parallels tabs)
+	activeTab int   // index into tabs
+	cursors   []int // cursor row per tab (parallels tabs)
 	selected  map[string]bool
 
 	// Terminal size; updated on tea.WindowSizeMsg. Renderer uses
@@ -322,6 +322,18 @@ var (
 	pickerNormalRow   = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 	pickerHintStyle   = lipgloss.NewStyle().Faint(true).Italic(true)
 	pickerFooterStyle = lipgloss.NewStyle().Faint(true)
+
+	// pickerDetailStyle renders the "about" blurb for the focused entry.
+	// Left-bordered + indented so it reads as a distinct panel below the
+	// list without a heavy box.
+	pickerDetailStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("250")).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderLeft(true).
+				BorderForeground(lipgloss.Color("#7D56F4")).
+				PaddingLeft(1).
+				MarginLeft(1)
+	pickerDetailMetaStyle = lipgloss.NewStyle().Faint(true)
 )
 
 func (m pickerModel) View() string {
@@ -337,7 +349,60 @@ func (m pickerModel) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.renderList())
 	b.WriteString("\n")
+	b.WriteString(m.renderDetail())
+	b.WriteString("\n")
 	b.WriteString(m.renderFooter())
+	return b.String()
+}
+
+// focusedEntry returns the entry under the cursor in the active tab, or
+// nil when the active tab has no entries. Used by renderDetail.
+func (m pickerModel) focusedEntry() *extensions.Entry {
+	if m.activeTab < 0 || m.activeTab >= len(m.tabs) {
+		return nil
+	}
+	t := m.tabs[m.activeTab]
+	c := m.cursors[m.activeTab]
+	if c < 0 || c >= len(t.entries) {
+		return nil
+	}
+	return t.entries[c]
+}
+
+// renderDetail draws an "about" panel for the focused entry below the
+// list. It exists so the user can make a *conscious* choice: the
+// one-line row label answers "what is this", but a heavier entry (e.g.
+// the ECC bundle) needs a sentence on what it does and its cost before
+// the user toggles it on. Shows the first paragraph of the entry's
+// markdown body, plus size + source. Bounded so it never dominates the
+// screen; full prose still lives in `vibrate extensions show <id>`.
+func (m pickerModel) renderDetail() string {
+	e := m.focusedEntry()
+	if e == nil {
+		return ""
+	}
+
+	width := m.width - 4 // room for the border + indent
+	if m.width == 0 || width < 20 {
+		width = 76
+	}
+
+	var b strings.Builder
+	if note := entryNote(e); note != "" {
+		b.WriteString(pickerDetailStyle.Width(width).Render(note))
+		b.WriteString("\n")
+	}
+
+	var meta []string
+	if e.SizeMB > 0 {
+		meta = append(meta, fmt.Sprintf("~%dMB", e.SizeMB))
+	}
+	if e.Source != "" {
+		meta = append(meta, e.Source)
+	}
+	if len(meta) > 0 {
+		b.WriteString(pickerDetailMetaStyle.Render("  " + strings.Join(meta, "    ")))
+	}
 	return b.String()
 }
 

@@ -416,3 +416,34 @@ func stripANSI(s string) string {
 	}
 	return b.String()
 }
+
+// TestRenderDetail_ShowsFocusedEntryNote verifies the detail pane shows
+// the focused entry's first body paragraph plus size + source — the
+// "conscious choice" affordance for heavy bundles like ECC.
+func TestRenderDetail_ShowsFocusedEntryNote(t *testing.T) {
+	entries := map[string]*extensions.Entry{
+		"claude-code/ecc-developer": {
+			Harness: "claude-code", ID: "ecc-developer", Kind: extensions.KindPlugin,
+			Name: "ECC (developer)", Source: "https://github.com/affaan-m/ECC",
+			SizeMB: 6,
+			Body:   "# ECC\n\nEverything Claude Code is a cross-harness bundle of agents and skills.\n",
+		},
+	}
+	m := newPickerModel(pickerInput{HarnessID: "claude-code", Entries: entries})
+	m.width = 80
+
+	out := m.renderDetail()
+	for _, want := range []string{"cross-harness bundle of agents and skills", "~6MB", "github.com/affaan-m/ECC"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("renderDetail() missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// TestRenderDetail_EmptyWhenNoEntries guards the nil-focus path.
+func TestRenderDetail_EmptyWhenNoEntries(t *testing.T) {
+	m := pickerModel{} // no tabs
+	if got := m.renderDetail(); got != "" {
+		t.Errorf("renderDetail() with no tabs = %q, want empty", got)
+	}
+}

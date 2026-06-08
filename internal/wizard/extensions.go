@@ -8,12 +8,44 @@ package wizard
 // rendering, kind→display-title mapping, host-detection pre-checks).
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/hostprobe"
 )
+
+// markdownLinkRe matches an inline markdown link `[text](url)` so the
+// detail pane can flatten it to just `text` — URLs read as noise in a
+// one-line terminal blurb (the source URL is shown separately).
+var markdownLinkRe = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+
+// entryNote returns the first prose paragraph of the entry's markdown
+// body, used by the picker's detail pane to answer "what does this do"
+// for the focused entry. The leading H1 title and any blank lines are
+// skipped; the first paragraph's lines are joined into one line (the
+// picker wraps it to the terminal width). Inline markdown links are
+// flattened to their text. Returns "" when the body has no prose.
+func entryNote(e *extensions.Entry) string {
+	var para []string
+	started := false
+	for _, raw := range strings.Split(e.Body, "\n") {
+		line := strings.TrimSpace(raw)
+		if !started {
+			// Skip leading blank lines and heading lines until the
+			// first real prose line.
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			started = true
+		} else if line == "" {
+			break // blank line ends the first paragraph
+		}
+		para = append(para, line)
+	}
+	return markdownLinkRe.ReplaceAllString(strings.Join(para, " "), "$1")
+}
 
 // formatEntryLabel composes the human-readable option label.
 // Shape depends on whether the entry declares a Description:

@@ -363,6 +363,20 @@ func TestGolden(t *testing.T) {
 			filename: "backend-codex-zsh.dockerfile",
 		},
 		{
+			name: "dind-claude-code-zsh",
+			spec: dockerfile.Spec{
+				Harness:         hrn(t, "claude-code"),
+				Profile:         "minimal",
+				Shell:           "zsh",
+				Features:        feats(t, "docker-cli"),
+				HostUID:         1000,
+				HostGID:         1000,
+				Username:        "vibrate",
+				VibratorVersion: "test-1.0",
+			},
+			filename: "dind-claude-code-zsh.dockerfile",
+		},
+		{
 			name: "full-claude-code-with-extensions",
 			spec: dockerfile.Spec{
 				Harness:  hrn(t, "claude-code"),

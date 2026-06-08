@@ -593,6 +593,39 @@ func TestBuildSpecs_ExtensionDepsAreFoldedIntoFeatures(t *testing.T) {
 	}
 }
 
+// When --dind is set, buildSpecs must auto-inject the docker-cli feature so
+// the container has the docker binary needed to talk to the mounted socket.
+// The user can still strip it with --no=docker-cli if they supply their own.
+func TestBuildSpecs_DinDInjectsDockerCLIFeature(t *testing.T) {
+	pin := config.Pin{
+		Harness: "claude-code",
+		Profile: "minimal", // minimal has no features — clean baseline
+	}
+	_, ws, err := buildSpecs(pin, Options{DinD: true})
+	if err != nil {
+		t.Fatalf("buildSpecs with DinD: %v", err)
+	}
+	if !containsString(ws.Features, "docker-cli") {
+		t.Errorf("expected docker-cli in resolved Features when DinD=true, got %v", ws.Features)
+	}
+}
+
+// --no=docker-cli must still be able to override the auto-injected feature.
+func TestBuildSpecs_DinDDockerCLICanBeRemovedWithNo(t *testing.T) {
+	pin := config.Pin{
+		Harness: "claude-code",
+		Profile: "minimal",
+		No:      []string{"docker-cli"},
+	}
+	_, ws, err := buildSpecs(pin, Options{DinD: true})
+	if err != nil {
+		t.Fatalf("buildSpecs with DinD + --no=docker-cli: %v", err)
+	}
+	if containsString(ws.Features, "docker-cli") {
+		t.Errorf("--no=docker-cli should override DinD auto-inject, got %v", ws.Features)
+	}
+}
+
 func containsString(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {

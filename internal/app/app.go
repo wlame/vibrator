@@ -601,6 +601,14 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 	for _, e := range catEntries {
 		initial = append(initial, e.Deps.Features...)
 	}
+	// --dind mounts the host docker socket at run time; the container also
+	// needs a docker CLI binary so those socket calls actually work. Auto-
+	// inject the feature here (same tier as profile/harness requirements)
+	// so the user can still override with --no=docker-cli if they supply
+	// their own binary via a custom Dockerfile fragment.
+	if opts.DinD {
+		initial = append(initial, "docker-cli")
+	}
 	resolved, err := feature.Resolve(initial, pin.With, pin.No)
 	if err != nil {
 		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("resolve features: %w", err)

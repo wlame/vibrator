@@ -16,7 +16,7 @@ type runFlags struct {
 	shell      string
 	with       []string
 	no         []string
-	extensions    []string
+	extensions []string
 	username   string
 	hostUID    int
 	hostGID    int
@@ -24,6 +24,7 @@ type runFlags struct {
 	noSave     bool
 	rebuild    bool
 	dind       bool
+	login      bool
 }
 
 var runFlagsState runFlags
@@ -73,6 +74,7 @@ func buildAppOptions(cmd *cobra.Command, target app.LaunchTarget) app.Options {
 		NoSave:          runFlagsState.noSave,
 		Rebuild:         runFlagsState.rebuild,
 		DinD:            runFlagsState.dind,
+		LoginMode:       runFlagsState.login,
 		LaunchTarget:    target,
 		VibratorVersion: Version,
 		Stdout:          cmd.OutOrStdout(),
@@ -111,6 +113,11 @@ func init() {
 	runCmd.Flags().BoolVar(&runFlagsState.dind, "dind", false,
 		"Mount the host's Docker socket so `docker` inside the container drives the host daemon. "+
 			"Automatically installs the docker CLI client in the image (docker-cli feature).")
+	runCmd.Flags().BoolVar(&runFlagsState.login, "login", false,
+		"Run `claude auth login` in the container before launching the harness. "+
+			"Opens the auth URL in your host browser automatically. "+
+			"Auth state is saved to ~/.claude.json so subsequent runs are pre-authenticated. "+
+			"Always runs the auth flow when passed — use it to re-authenticate or switch accounts.")
 
 	rootCmd.AddCommand(runCmd)
 

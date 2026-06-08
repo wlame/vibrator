@@ -104,12 +104,13 @@ type RunSpec struct {
 
 // ExecSpec describes a `docker exec` invocation.
 type ExecSpec struct {
-	Container      string
-	Interactive    bool
-	Env            []EnvVar
-	WorkingDir     string // --workdir (cwd inside the container)
-	Cmd            []string
-	Stdin          io.Reader
+	Container   string
+	Interactive bool // -it: allocate PTY + keep stdin open
+	NoTTY       bool // when true with Interactive, use only -i (no -t); allows stdout interception
+	Env         []EnvVar
+	WorkingDir  string // --workdir (cwd inside the container)
+	Cmd         []string
+	Stdin       io.Reader
 	Stdout, Stderr io.Writer
 }
 
@@ -317,7 +318,11 @@ func (c *CLIClient) Run(ctx context.Context, spec RunSpec) error {
 func (c *CLIClient) Exec(ctx context.Context, spec ExecSpec) error {
 	args := []string{"exec"}
 	if spec.Interactive {
-		args = append(args, "-it")
+		if spec.NoTTY {
+			args = append(args, "-i") // stdin only; stdout remains a pipe Go can intercept
+		} else {
+			args = append(args, "-it")
+		}
 	}
 	for _, e := range spec.Env {
 		args = append(args, "-e", e.Name+"="+e.Value)

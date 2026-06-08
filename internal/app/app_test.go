@@ -13,6 +13,7 @@ import (
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/extensions"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
+	"github.com/wlame/vibrator/internal/prereq"
 )
 
 // --- needsWizard ----------------------------------------------------------
@@ -567,6 +568,130 @@ func TestBuildOptionalMounts_ClaudeMemExtensionMountsCacheRW(t *testing.T) {
 	// the unprivileged container user couldn't write there.
 	if !isDir(wantHost) {
 		t.Errorf("buildOptionalMounts should have created host cache dir %s", wantHost)
+	}
+}
+
+// --- buildClaudeMemEnv -------------------------------------------------------
+
+func TestBuildClaudeMemEnv_ReturnsNilWithoutPrereqs(t *testing.T) {
+	// Pin has no bootstrapped claude-mem prereqs → nothing to forward.
+	got := buildClaudeMemEnv(config.Pin{Harness: "claude-code"})
+	if len(got) != 0 {
+		t.Errorf("expected nil env with no prereqs, got %v", got)
+	}
+}
+
+func TestBuildClaudeMemEnv_ReturnsNilWithoutAdminConfig(t *testing.T) {
+	// Prereqs present but no admin config file → can't learn ServerURL.
+	tmp := t.TempDir()
+	t.Setenv("VIBRATOR_CLAUDE_MEM_CONFIG", filepath.Join(tmp, "missing.toml"))
+
+	pin := config.Pin{
+		Prereqs: map[string]map[string]string{
+			prereq.ClaudeMemPrereqID: {"api_key": "cmem_abc", "team_id": "t1", "project_id": "p1"},
+		},
+	}
+	got := buildClaudeMemEnv(pin)
+	if len(got) != 0 {
+		t.Errorf("expected nil env when admin config missing, got %v", got)
+	}
+}
+
+func TestBuildClaudeMemEnv_ReturnsNilWhenServerURLEmpty(t *testing.T) {
+	// Admin config present but ServerURL is blank → incomplete config.
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "claude-mem.toml")
+	mustWriteFileDirect(cfgPath, `runtime = "server-beta"`+"\n")
+	t.Setenv("VIBRATOR_CLAUDE_MEM_CONFIG", cfgPath)
+
+	pin := config.Pin{
+		Prereqs: map[string]map[string]string{
+			prereq.ClaudeMemPrereqID: {"api_key": "cmem_abc"},
+		},
+	}
+	got := buildClaudeMemEnv(pin)
+	if len(got) != 0 {
+		t.Errorf("expected nil env when ServerURL empty, got %v", got)
+	}
+}
+
+func TestBuildClaudeMemEnv_ForwardsAllFields(t *testing.T) {
+	// Full admin config + full bootstrap result → all CLAUDE_MEM_* vars emitted.
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "claude-mem.toml")
+	mustWriteFileDirect(cfgPath, `runtime = "server-beta"`+"\n"+
+		`server_url = "http://host.docker.internal:37877"`+"\n")
+	t.Setenv("VIBRATOR_CLAUDE_MEM_CONFIG", cfgPath)
+
+	pin := config.Pin{
+		Prereqs: map[string]map[string]string{
+			prereq.ClaudeMemPrereqID: {
+				"api_key":    "cmem_testkey",
+				"team_id":    "team-42",
+				"project_id": "proj-99",
+			},
+		},
+	}
+	got := buildClaudeMemEnv(pin)
+	env := make(map[string]string, len(got))
+	for _, e := range got {
+		env[e.Name] = e.Value
+	}
+
+	wants := map[string]string{
+		"CLAUDE_MEM_RUNTIME":            "server-beta",
+		"CLAUDE_MEM_SERVER_BETA_URL":    "http://host.docker.internal:37877",
+		"CLAUDE_MEM_SERVER_BETA_API_KEY": "cmem_testkey",
+		"CLAUDE_MEM_SERVER_BETA_TEAM_ID": "team-42",
+		"CLAUDE_MEM_SERVER_BETA_PROJECT_ID": "proj-99",
+	}
+	for name, want := range wants {
+		if got := env[name]; got != want {
+			t.Errorf("env %s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestBuildClaudeMemEnv_SkipsMissingOptionalFields(t *testing.T) {
+	// Bootstrap result has only api_key (team/project not yet minted) — the
+	// function must not emit empty-string entries for the absent fields.
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "claude-mem.toml")
+	mustWriteFileDirect(cfgPath, `runtime = "server-beta"`+"\n"+
+		`server_url = "http://host.docker.internal:37877"`+"\n")
+	t.Setenv("VIBRATOR_CLAUDE_MEM_CONFIG", cfgPath)
+
+	pin := config.Pin{
+		Prereqs: map[string]map[string]string{
+			prereq.ClaudeMemPrereqID: {"api_key": "cmem_only"},
+		},
+	}
+	got := buildClaudeMemEnv(pin)
+	env := make(map[string]string, len(got))
+	for _, e := range got {
+		env[e.Name] = e.Value
+	}
+
+	if _, ok := env["CLAUDE_MEM_SERVER_BETA_TEAM_ID"]; ok {
+		t.Error("TEAM_ID should not be emitted when absent from bootstrap result")
+	}
+	if _, ok := env["CLAUDE_MEM_SERVER_BETA_PROJECT_ID"]; ok {
+		t.Error("PROJECT_ID should not be emitted when absent from bootstrap result")
+	}
+	if env["CLAUDE_MEM_SERVER_BETA_API_KEY"] != "cmem_only" {
+		t.Errorf("API_KEY = %q, want cmem_only", env["CLAUDE_MEM_SERVER_BETA_API_KEY"])
+	}
+}
+
+// mustWriteFileDirect writes body to path unconditionally, creating parent dirs.
+// Separate from mustWriteFile (which uses t.Helper and testing.T) so we can
+// call it before the testing.T helper is defined in file order.
+func mustWriteFileDirect(path, body string) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		panic("mustWriteFileDirect mkdir: " + err.Error())
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		panic("mustWriteFileDirect write: " + err.Error())
 	}
 }
 

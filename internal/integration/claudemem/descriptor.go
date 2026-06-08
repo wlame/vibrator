@@ -60,10 +60,134 @@ func descriptor() *integration.Integration {
 					"entry and write a workspace key via the postgres bootstrap.",
 			},
 		},
-		ProbeFn:     probeFn,
-		AdminConfig: &integration.AdminConfigSchema{Path: prereq.ClaudeMemAdminConfigPath()},
-		Workspace:   &workspaceDriver{},
+		ProbeFn:      probeFn,
+		AdminConfig:  &integration.AdminConfigSchema{Path: prereq.ClaudeMemAdminConfigPath()},
+		Workspace:    &workspaceDriver{},
+		LaunchChecks: claudeMemLaunchChecks(),
 	}
+}
+
+// claudeMemLaunchChecks returns the three pre-launch readiness checks for
+// the claude-mem integration. All checks are skipped (OK=true) when the
+// claude-mem extension is not selected for the workspace.
+//
+//  1. admin-config  — ~/.config/vibrator/claude-mem.toml present and has a
+//     server_url. Without it, CLAUDE_MEM_* env vars are never emitted and
+//     the plugin is permanently dormant.
+//
+//  2. server-probe  — the configured server URL answers /healthz. Without
+//     this, settings.json will be written but every observation call will
+//     fail silently.
+//
+//  3. workspace-key — [prereqs.claude-mem-server-beta] in .vb has an
+//     api_key. Without it, the container has no bearer token and all
+//     authenticated requests return 401. Offers an inline bootstrap.
+func claudeMemLaunchChecks() []integration.LaunchCheck {
+	return []integration.LaunchCheck{
+		{
+			ID: "admin-config",
+			Check: func(_ context.Context, lc integration.LaunchCheckContext) integration.LaunchCheckResult {
+				if !hasExt(lc.Extensions, "claude-mem") {
+					return integration.LaunchCheckResult{OK: true}
+				}
+				cfg, err := prereq.LoadClaudeMemAdminConfig()
+				if errors.Is(err, os.ErrNotExist) {
+					return integration.LaunchCheckResult{
+						Message: "claude-mem admin config not found — CLAUDE_MEM_* vars will not be forwarded",
+						Hint:    "the admin config holds the server URL, runtime, and database DSN",
+						FixCmd:  "vibrate integrations claude-mem",
+					}
+				}
+				if err != nil {
+					return integration.LaunchCheckResult{
+						Message: fmt.Sprintf("claude-mem admin config unreadable: %v", err),
+						FixCmd:  "vibrate integrations claude-mem",
+					}
+				}
+				if cfg == nil || strings.TrimSpace(cfg.ServerURL) == "" {
+					return integration.LaunchCheckResult{
+						Message: "claude-mem admin config has no server_url — CLAUDE_MEM_SERVER_BETA_URL will be empty",
+						FixCmd:  "vibrate integrations claude-mem",
+					}
+				}
+				return integration.LaunchCheckResult{OK: true}
+			},
+		},
+		{
+			ID: "server-probe",
+			Check: func(ctx context.Context, lc integration.LaunchCheckContext) integration.LaunchCheckResult {
+				if !hasExt(lc.Extensions, "claude-mem") {
+					return integration.LaunchCheckResult{OK: true}
+				}
+				cfg, err := prereq.LoadClaudeMemAdminConfig()
+				if err != nil || cfg == nil || cfg.ServerURL == "" {
+					return integration.LaunchCheckResult{OK: true} // admin-config check handles this
+				}
+				probeURL := rewriteForHostProbe(cfg.ServerURL) + "/healthz"
+				probe := integration.HTTPProbe{URL: probeURL}
+				if probe.Check(ctx) == nil {
+					return integration.LaunchCheckResult{OK: true}
+				}
+				return integration.LaunchCheckResult{
+					Message: fmt.Sprintf("claude-mem server not reachable at %s", probeURL),
+					Hint:    "memory observations will silently fail until the server is up",
+					FixCmd:  "vibrate integrations claude-mem",
+				}
+			},
+		},
+		{
+			ID: "workspace-key",
+			Check: func(_ context.Context, lc integration.LaunchCheckContext) integration.LaunchCheckResult {
+				if !hasExt(lc.Extensions, "claude-mem") {
+					return integration.LaunchCheckResult{OK: true}
+				}
+				cached := lc.Prereqs[prereq.ClaudeMemPrereqID]
+				if len(cached) > 0 && cached["api_key"] != "" {
+					return integration.LaunchCheckResult{OK: true}
+				}
+				return integration.LaunchCheckResult{
+					Message: "no workspace key for claude-mem — all auth'd requests will return 401",
+					Hint:    "a project-scoped bearer token must be minted against the host postgres",
+					FixCmd:  "vibrate prereqs bootstrap " + prereq.ClaudeMemPrereqID,
+					FixNow: func(ctx context.Context, lc integration.LaunchCheckContext) (string, map[string]string, error) {
+						cfg, err := prereq.LoadClaudeMemAdminConfig()
+						if err != nil {
+							return "", nil, fmt.Errorf("load admin config: %w", err)
+						}
+						if cfg.DatabaseURL == "" {
+							return "", nil, fmt.Errorf(
+								"admin config at %s has no database_url — set it with: vibrate integrations claude-mem",
+								prereq.ClaudeMemAdminConfigPath())
+						}
+						dc, err := docker.NewCLIClient()
+						if err != nil {
+							return "", nil, err
+						}
+						p := prereq.ClaudeMemPrereq(cfg, dc)
+						result, err := p.Bootstrapper.Bootstrap(ctx, prereq.Workspace{
+							Path:        lc.WsDir,
+							ProjectName: lc.ProjectName,
+							Hostname:    lc.Hostname,
+						})
+						if err != nil {
+							return "", nil, err
+						}
+						return prereq.ClaudeMemPrereqID, result, nil
+					},
+				}
+			},
+		},
+	}
+}
+
+// hasExt reports whether id is present in the extensions slice.
+func hasExt(exts []string, id string) bool {
+	for _, e := range exts {
+		if e == id {
+			return true
+		}
+	}
+	return false
 }
 
 // probeFn loads the admin config and returns an HTTP probe at the

@@ -64,6 +64,27 @@ func descriptor() *integration.Integration {
 				},
 			},
 		}},
+		// LaunchCheck: warn only when user explicitly requested host mode
+		// and the server isn't answering. In auto mode the fallback to a
+		// local uvx instance is transparent, so there's nothing to warn about.
+		LaunchChecks: []integration.LaunchCheck{
+			{
+				ID: "server-probe",
+				Check: func(_ context.Context, lc integration.LaunchCheckContext) integration.LaunchCheckResult {
+					if lc.Integrations["serena"] != "host" {
+						return integration.LaunchCheckResult{OK: true}
+					}
+					if Probe(port) {
+						return integration.LaunchCheckResult{OK: true}
+					}
+					return integration.LaunchCheckResult{
+						Message: fmt.Sprintf("Serena host server not reachable on port %d (mode=host, no fallback)", port),
+						Hint:    "claude-exec.sh will keep the http entry but the MCP calls will fail",
+						FixCmd:  "vibrate integrations serena",
+					}
+				},
+			},
+		},
 	}
 }
 

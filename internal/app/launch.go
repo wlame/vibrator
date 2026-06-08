@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/wlame/vibrator/internal/extensions"
-	vibrator "github.com/wlame/vibrator"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
 	"github.com/wlame/vibrator/internal/harness"
+	"github.com/wlame/vibrator/internal/integration"
 	"github.com/wlame/vibrator/internal/localprovider"
 	"github.com/wlame/vibrator/internal/prereq"
 	"github.com/wlame/vibrator/internal/runtime"
@@ -903,65 +903,102 @@ func resolveAPIKey(spec *config.LLMSpec) (string, error) {
 	return "", fmt.Errorf("provider %q has no credential configured", spec.Provider)
 }
 
-// runLaunchPrereqs probes every prereq referenced by the pin's extensions
-// entries. Failure here is fatal — entering a container with broken
-// host wiring just wastes the user's time. The error message
-// references the extensions's setup-doc anchor so the user knows where
-// to look.
+// runIntegrationReadiness evaluates every LaunchCheck declared by registered
+// integrations. It replaces the old hard-fail runLaunchPrereqs with a
+// user-friendly model:
 //
-// This is the wizard's "soft warn" promoted to "hard fail" for launch.
-func runLaunchPrereqs(ctx context.Context, pin config.Pin, stderr io.Writer) error {
-	if len(pin.Extensions) == 0 {
-		return nil
-	}
-	entries, err := extensions.LoadAll(vibrator.ExtensionsFS)
-	if err != nil {
-		return fmt.Errorf("load extensions: %w", err)
+//   - Each failing check prints a warning with a fix hint and the exact
+//     command to run.
+//   - Checks with FixNow set offer an inline "[y/N] Bootstrap now?" prompt
+//     when stdin is a terminal. On confirmation the fix runs, the result is
+//     merged into the pin, and the updated pin (plus a dirty flag) are
+//     returned so the caller can persist it before launching.
+//   - A failing check NEVER aborts the launch — the integration is simply
+//     dormant. The user always reaches their container.
+//
+// Returns (pin, dirty, err). dirty is true when a FixNow ran successfully
+// and the pin was updated; the caller should re-persist to .vb.
+func runIntegrationReadiness(
+	ctx context.Context,
+	pin config.Pin,
+	wsDir string,
+	opts Options,
+) (config.Pin, bool, error) {
+	all := integration.All()
+	if len(all) == 0 {
+		return pin, false, nil
 	}
 
-	// Walk pin.Extensions and collect distinct prereq IDs referenced.
-	prereqIDs := map[string]bool{}
-	for _, id := range pin.Extensions {
-		key := pin.Harness + "/" + id
-		entry, ok := entries[key]
-		if !ok || entry.Prereq == "" {
+	hostname, _ := os.Hostname()
+	lc := integration.LaunchCheckContext{
+		WsDir:        wsDir,
+		ProjectName:  filepath.Base(wsDir),
+		Hostname:     hostname,
+		Extensions:   pin.Extensions,
+		Prereqs:      pin.Prereqs,
+		Integrations: pin.Integrations,
+	}
+
+	pinDirty := false
+
+	for _, integ := range all {
+		if len(integ.LaunchChecks) == 0 {
 			continue
 		}
-		prereqIDs[entry.Prereq] = true
-	}
-	if len(prereqIDs) == 0 {
-		return nil
-	}
+		for _, check := range integ.LaunchChecks {
+			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			result := check.Check(probeCtx, lc)
+			cancel()
 
-	// For each unique prereq id, probe.
-	for id := range prereqIDs {
-		// claude-mem is the only built-in prereq for now. New ones can
-		// drop into this switch as they're added.
-		var p *prereq.Prereq
-		switch id {
-		case prereq.ClaudeMemPrereqID:
-			cfg, err := prereq.LoadClaudeMemAdminConfig()
-			if err != nil {
-				return fmt.Errorf("claude-mem admin config not found (%s) — see extensions/claude-code/claude-mem.md#host-setup", prereq.ClaudeMemAdminConfigPath())
+			if result.OK {
+				continue
 			}
-			p = prereq.ClaudeMemPrereq(cfg, nil)
-		default:
-			fmt.Fprintf(stderr, "  (skipping unknown prereq %q — no probe registered)\n", id)
-			continue
-		}
 
-		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		r := p.Verifier.Verify(probeCtx)
-		cancel()
+			// Print the warning block.
+			fmt.Fprintf(opts.Stderr, "\n  ⚠  [%s] %s\n", integ.ID, result.Message)
+			if result.Hint != "" {
+				fmt.Fprintf(opts.Stderr, "     hint: %s\n", result.Hint)
+			}
+			if result.FixCmd != "" {
+				fmt.Fprintf(opts.Stderr, "     run:  %s\n", result.FixCmd)
+			}
 
-		if !r.OK {
-			return fmt.Errorf(
-				"prereq %q FAILED at launch: %s\nhint: %s\nsee: %s",
-				id, r.Message, r.Hint, p.SetupDoc)
+			// Offer inline fix when available and stdin is a terminal.
+			if result.FixNow != nil && isStdinTTY(opts.Stdin) {
+				fmt.Fprintf(opts.Stderr, "     Bootstrap now? [y/N] ")
+				var answer string
+				fmt.Fscanln(opts.Stdin, &answer)
+				if strings.ToLower(strings.TrimSpace(answer)) == "y" {
+					prereqID, res, fixErr := result.FixNow(ctx, lc)
+					if fixErr != nil {
+						fmt.Fprintf(opts.Stderr, "     ✗ bootstrap failed: %v\n", fixErr)
+					} else if prereqID != "" {
+						if pin.Prereqs == nil {
+							pin.Prereqs = make(map[string]map[string]string)
+						}
+						pin.Prereqs[prereqID] = res
+						lc.Prereqs = pin.Prereqs // keep context fresh for subsequent checks
+						pinDirty = true
+						fmt.Fprintf(opts.Stderr, "     ✓ bootstrap complete — key saved to .vb\n")
+					}
+				}
+			}
 		}
-		fmt.Fprintf(stderr, "  ✓ prereq %s: %s\n", id, r.Message)
 	}
-	return nil
+
+	fmt.Fprintln(opts.Stderr) // blank line after any warnings
+	return pin, pinDirty, nil
+}
+
+// isStdinTTY reports whether in is an *os.File pointing at a character
+// device (a real terminal). Returns false for pipes, buffers, and nil.
+func isStdinTTY(in io.Reader) bool {
+	f, ok := in.(*os.File)
+	if !ok {
+		return false
+	}
+	fi, err := f.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
 // ensureLLMProviderRunning launches the host-side local provider if the

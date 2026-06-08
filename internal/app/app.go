@@ -209,10 +209,19 @@ func Run(ctx context.Context, opts Options) error {
 	// 8. Print the launch plan so the user sees what's about to happen.
 	printLaunchPlan(opts.Stderr, wsDir, imageTag, containerName, &pin)
 
-	// 9. Run launch-time prereq checks. These hard-fail on missing
-	//    requirements (the wizard's "warn-but-allow" doesn't apply here).
-	if err := runLaunchPrereqs(ctx, pin, opts.Stderr); err != nil {
+	// 9. Run integration readiness checks. Warns when an integration the
+	//    workspace uses is not fully configured; offers inline bootstrap for
+	//    fixable gaps. Never aborts the launch — a dormant integration is
+	//    better than blocking the user from reaching their container.
+	var pinDirty bool
+	pin, pinDirty, err = runIntegrationReadiness(ctx, pin, wsDir, opts)
+	if err != nil {
 		return err
+	}
+	if pinDirty {
+		if err := persistPin(pinPath, &pin, opts.Stderr); err != nil {
+			return fmt.Errorf("save .vb after inline bootstrap: %w", err)
+		}
 	}
 
 	// 10. Ensure local LLM provider is reachable, starting it if needed.

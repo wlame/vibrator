@@ -1,0 +1,21 @@
+# golangci-lint configuration (v2 schema — required by golangci-lint-action@v9).
+#
+# The default linter set (errcheck, govet, ineffassign, staticcheck, unused) is
+# kept. The important bit is `exclusions.presets`: golangci-lint v2 no longer
+# applies v1's built-in default exclusions automatically, so we opt back into
+# them. Without `std-error-handling` in particular, errcheck would flag every
+# unchecked `fmt.Fprintf(os.Stderr, ...)` / `os.Stdout` write — of which this
+# codebase has many by design (status output to stderr).
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  exclusions:
+    generated: lax
+    presets:
+      - comments              # ignore findings in commented-out code / examples
+      - common-false-positives
+      - legacy                # the v1 historical default exclusions
+      - std-error-handling    # don't require checking errors from fmt.Print*/os.Std*

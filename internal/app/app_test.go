@@ -415,8 +415,9 @@ func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
+	const wsDir = "/home/alice/project"
 	var stderr bytes.Buffer
-	got := buildClaudeHostMounts("alice", &stderr)
+	got := buildClaudeHostMounts("alice", wsDir, &stderr)
 
 	mounts := make(map[string]docker.Volume, len(got))
 	for _, v := range got {
@@ -432,10 +433,23 @@ func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
 			t.Errorf("unexpected mount %s on bare HOME — should only mount when host source exists", c)
 		}
 	}
+
+	// projects/ must be scoped to the workspace's encoded-cwd subdir, not the whole dir.
+	encoded := claudeEncodedProjectDir(wsDir)
+	wantProjectsContainer := "/home/alice/.claude/projects/" + encoded
+	if _, present := mounts[wantProjectsContainer]; !present {
+		t.Errorf("missing scoped projects mount %s — D5a contract requires auto-create", wantProjectsContainer)
+	}
+	// The unscoped projects/ dir must NOT be mounted.
+	if _, present := mounts["/home/alice/.claude/projects"]; present {
+		t.Errorf("unexpected full projects/ mount — should be scoped to workspace subdir")
+	}
+
+	// Remaining session-persist dirs (D5b) are still mounted wholesale.
 	for _, name := range claudeSessionPersistDirs {
 		c := "/home/alice/.claude/" + name
 		if _, present := mounts[c]; !present {
-			t.Errorf("missing session-persist mount %s — D5 contract requires auto-create", c)
+			t.Errorf("missing session-persist mount %s — D5b contract requires auto-create", c)
 		}
 	}
 }
@@ -450,8 +464,9 @@ func TestBuildClaudeHostMounts_MountsExistingHostState(t *testing.T) {
 	mustMkdirAll(t, filepath.Join(tmp, ".claude", "rules"))
 	mustMkdirAll(t, filepath.Join(tmp, ".claude", "hooks"))
 
+	const wsDir = "/home/alice/project"
 	var stderr bytes.Buffer
-	got := buildClaudeHostMounts("alice", &stderr)
+	got := buildClaudeHostMounts("alice", wsDir, &stderr)
 
 	mounts := make(map[string]docker.Volume, len(got))
 	for _, v := range got {

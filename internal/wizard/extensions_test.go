@@ -16,6 +16,48 @@ func TestFormatEntryLabel_PlainEntry(t *testing.T) {
 	}
 }
 
+func TestEntryNote(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "first paragraph after heading",
+			body: "# Title\n\nFirst paragraph line one.\nLine two.\n\nSecond paragraph.\n",
+			want: "First paragraph line one. Line two.",
+		},
+		{
+			name: "skips multiple leading headings and blanks",
+			body: "\n\n# H1\n\n## H2\n\nThe prose.\n",
+			want: "The prose.",
+		},
+		{
+			name: "flattens inline markdown links, keeps source out",
+			body: "# ECC\n\n[ECC](https://github.com/affaan-m/ECC) is a bundle.\n",
+			want: "ECC is a bundle.",
+		},
+		{
+			name: "empty when body has only a heading",
+			body: "# Just a title\n",
+			want: "",
+		},
+		{
+			name: "empty body",
+			body: "",
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := entryNote(&extensions.Entry{Body: tc.body})
+			if got != tc.want {
+				t.Errorf("entryNote() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestFormatEntryLabel_WithDescription(t *testing.T) {
 	// When Description is set, the label uses it as the prefix detail
 	// and moves the id to a parenthetical trailer. Pin both halves.

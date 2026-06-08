@@ -118,6 +118,43 @@ is lost.
   models, ensure-running before container launch).
 - **`internal/migrate`** — bash `.vb.env` → TOML `.vb` converter.
 
+## ECC bundle (Everything Claude Code)
+
+[ECC](https://github.com/affaan-m/ECC) ("Everything Claude Code", MIT) is a
+cross-harness bundle of subagents, skills, rules, and hooks. vibrator ships it as
+a family of opt-in `ecc-*` extensions — one per ECC profile — that, at image-build
+time, shallow-fetch a pinned ECC commit and run ECC's own manifest-driven
+installer into the harness-native config dir (`~/.claude`, `~/.codex`,
+`~/.opencode`).
+
+Profiles trade capability against agent-context cost — none is on by default, so
+you opt in consciously (the wizard shows an "about" blurb for the focused entry):
+
+| Profile | What it is | claude-code | codex | opencode |
+|---|---|:--:|:--:|:--:|
+| `ecc-minimal`   | lightest, no hook runtime | ✓ | — | ✓ |
+| `ecc-core`      | lean baseline | ✓ | ✓ | ✓ |
+| `ecc-developer` | default engineering preset (**recommended**) | ✓ | ✓ | ✓ |
+| `ecc-security`  | core + security module | ✓ | ✓ | ✓ |
+| `ecc-research`  | core + research/content | ✓ | ✓ | ✓ |
+| `ecc-full`      | everything (heaviest context) | ✓ | ✓ | ✓ |
+
+```bash
+vibrate --harness=claude-code --extensions=ecc-developer
+vibrate extensions show ecc-developer        # full docs for any profile
+```
+
+Notes:
+
+- **codex** has no `ecc-minimal` — with the hook runtime skipped, minimal and
+  core resolve to the same install on codex, so only `ecc-core` is offered.
+- **pi** is not supported: ECC ships no `pi` adapter, so there are no `ecc-*`
+  entries for the pi harness. (If upstream adds one, drop the files under
+  `extensions/pi/` following the same pattern.)
+- **Pinning:** every `ecc-*` entry pins the same ECC commit for reproducibility.
+  Bump it deliberately with a single find-and-replace of `ECC_REF=` across
+  `extensions/*/ecc-*.md`; `embedded_ecc_test.go` fails if the pins drift apart.
+
 ## Architectural decisions
 
 | Decision | Choice |

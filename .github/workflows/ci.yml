@@ -41,10 +41,13 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
+          # v9 requires golangci-lint v2; latest is built with a current Go
+          # toolchain (v1's last release was built with go1.24, which refuses
+          # to run against this module's `go 1.26.2` directive). Config +
+          # timeout live in .golangci.yml.
           version: latest
-          args: --timeout=5m
 
   build:
     name: Build
@@ -76,18 +79,22 @@ jobs:
       - name: Smoke test — help works
         run: ./build/vibrate --help > /dev/null
 
-      - name: Smoke test — runtime detect runs (no daemon expected in CI)
+      - name: Smoke test — runtime detect runs without panicking
         run: |
-          # No docker daemon in CI runner. Tool should exit non-zero with a
-          # clear "no docker runtime detected" message rather than panicking.
+          # GitHub-hosted runners ship a Docker daemon, so `runtime detect` may
+          # legitimately succeed (e.g. "Runtime: native") OR report no runtime —
+          # both are valid. What we actually guard against is a crash: the tool
+          # must print sensible output and never panic.
           set +e
           OUTPUT=$(./build/vibrate runtime detect 2>&1)
           RC=$?
           set -e
           echo "Exit code: $RC"
-          echo "Output: $OUTPUT"
-          test $RC -ne 0
-          echo "$OUTPUT" | grep -qi "no docker runtime"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -qiE "runtime:|no docker runtime"
+          if echo "$OUTPUT" | grep -qi "panic:"; then
+            echo "vibrate runtime detect panicked"; exit 1
+          fi
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4

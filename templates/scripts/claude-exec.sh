@@ -116,6 +116,19 @@ _vb_write_mcp_stdio() {
     fi
 }
 
+# Auto-accept the workspace trust dialog.
+# Claude Code checks projects[<path>].hasTrustDialogAccepted in
+# ~/.claude.json before showing the "do you trust this folder?" prompt.
+# The workspace is the whole point of this container — trust is implicit.
+# The entrypoint guarantees ~/.claude.json exists before we run.
+if [ -n "$WORKSPACE_PATH" ] && [ -f "$CLAUDE_JSON" ] && command -v jq >/dev/null 2>&1; then
+    jq --arg ws "$WORKSPACE_PATH" \
+        '.projects[$ws].hasTrustDialogAccepted = true' \
+        "$CLAUDE_JSON" > "$CLAUDE_JSON.tmp" 2>/dev/null \
+        && mv -f "$CLAUDE_JSON.tmp" "$CLAUDE_JSON" 2>/dev/null
+    _vb_log "workspace trust accepted for $WORKSPACE_PATH"
+fi
+
 # Process the manifest if everything is in place. Skip silently
 # otherwise — fresh containers may not have ~/.claude.json yet, and
 # the harness will create it on first run.

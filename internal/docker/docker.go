@@ -500,6 +500,12 @@ func buildRunArgs(spec RunSpec) []string {
 	}
 	if spec.Interactive {
 		args = append(args, "-it")
+	} else if spec.Stdin != nil {
+		// Attach stdin without allocating a pseudo-TTY. Required for
+		// one-shot containers that read from a pipe (e.g. the psql
+		// bootstrap): without -i the container's stdin is /dev/null even
+		// when the parent process has data to send.
+		args = append(args, "-i")
 	}
 	if spec.Detach {
 		args = append(args, "-d")

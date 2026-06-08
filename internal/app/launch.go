@@ -124,7 +124,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 	// container-side entrypoint script reads these to seed the in-
 	// container ~/.claude/ on first run.
 	if pin.Harness == "claude-code" {
-		volumes = append(volumes, buildClaudeHostMounts(defaultUsername(opts), opts.Stderr)...)
+		volumes = append(volumes, buildClaudeHostMounts(defaultUsername(opts), wsDir, opts.Stderr)...)
 	}
 	// D6 + D7: optional/conditional mounts. Both auto-detect — no CLI
 	// flag needed — and silently no-op when prerequisites are absent.
@@ -293,12 +293,25 @@ func resolveLaunchCmd(pin config.Pin, opts Options) ([]string, error) {
 // Trade-off: shared mutable state. Concurrent host + container claude
 // runs could race on the same JSON files. The bash impl shipped this
 // default-on for ~12 months without major complaints, so we follow.
+//
+// Note: "projects" is NOT in this list — it is mounted at a per-workspace
+// scope by buildClaudeHostMounts to prevent other projects' transcripts
+// from being visible inside the container. See D5 below.
 var claudeSessionPersistDirs = []string{
-	"projects",
 	"file-history",
 	"sessions",
 	"tasks",
 	"paste-cache",
+}
+
+// claudeEncodedProjectDir converts an absolute workspace path to the
+// subdirectory name Claude Code uses under ~/.claude/projects/.
+// Claude Code encodes the path by replacing every "/" with "-", so the
+// leading slash becomes a leading "-":
+//
+//	/Users/bob/src  →  -Users-bob-src
+func claudeEncodedProjectDir(wsDir string) string {
+	return strings.ReplaceAll(wsDir, "/", "-")
 }
 
 // buildClaudeHostMounts produces the volume list that wires host
@@ -312,7 +325,10 @@ var claudeSessionPersistDirs = []string{
 //
 // `containerUser` is the unprivileged user the image was built for;
 // container paths land under /home/<user>/.claude/...
-func buildClaudeHostMounts(containerUser string, stderr io.Writer) []docker.Volume {
+//
+// `wsDir` is the absolute path of the workspace being launched; it is
+// used to scope the projects/ mount to only this workspace's subdir.
+func buildClaudeHostMounts(containerUser, wsDir string, stderr io.Writer) []docker.Volume {
 	var out []docker.Volume
 
 	hostHome, err := os.UserHomeDir()
@@ -367,7 +383,34 @@ func buildClaudeHostMounts(containerUser string, stderr io.Writer) []docker.Volu
 		})
 	}
 
-	// D5: session persistence dirs (rw).
+	// D5a: projects/ — scoped to this workspace's encoded-cwd subdir.
+	// Claude Code stores session transcripts under ~/.claude/projects/<encoded-cwd>/.
+	// Mounting only the workspace-specific subdir prevents other projects'
+	// conversation histories from leaking into the container.
+	// The workspace is mounted at the same absolute path on both sides, so
+	// the encoded name Claude Code computes inside the container matches the
+	// host path exactly.
+	{
+		encoded := claudeEncodedProjectDir(wsDir)
+		hostProjects := filepath.Join(hostClaude, "projects", encoded)
+		if !isDir(hostProjects) {
+			if err := os.MkdirAll(hostProjects, 0o755); err != nil {
+				fmt.Fprintf(stderr, "vibrate: warning: couldn't create %s for session persistence: %v\n",
+					hostProjects, err)
+			}
+		}
+		if isDir(hostProjects) {
+			out = append(out, docker.Volume{
+				Host:      hostProjects,
+				Container: containerClaude + "/projects/" + encoded,
+				ReadOnly:  false,
+			})
+		}
+	}
+
+	// D5b: remaining session persistence dirs (rw) — file-history, sessions,
+	// tasks, paste-cache. These don't have a per-project directory structure
+	// so we mount the whole subdirectory.
 	// Auto-create on host if missing so first-time `vibrate` users
 	// still get their container session persisted somewhere.
 	for _, name := range claudeSessionPersistDirs {

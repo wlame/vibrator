@@ -63,6 +63,14 @@ type Spec struct {
 	VibratorVersion string
 }
 
+// buildID is a session-stamped identifier baked into every generated image.
+// Update this manually at the start of each vibrator dev session so that
+// containers built by outdated images can be identified:
+//
+//	cat /etc/vibrator/build            # inside the container
+//	docker inspect <name> | grep BUILD # from outside
+const buildID = "2026-05-27-1558"
+
 // supportedShells documents which Shell values the generator handles.
 // Adding a new shell = adding an apt-get line in stageBase + a Cmd switch.
 var supportedShells = map[string]struct{}{
@@ -208,6 +216,12 @@ RUN chmod 0755 /usr/local/bin/claude-exec
 # shell entry to refresh MCP transport + env state.
 RUN mkdir -p /etc/vibrator
 COPY integrations.json /etc/vibrator/integrations.json
+`)
+	// Build ID written at image-build time. Check with:
+	//   cat /etc/vibrator/build             (inside container)
+	//   docker inspect <name> | grep BUILD  (outside container)
+	fmt.Fprintf(b, "RUN echo %q > /etc/vibrator/build\n", buildID)
+	b.WriteString(`
 
 # Mirror rc files into /root/ so root sub-invocations (debugging via
 # 'docker exec -u root') get the same prompt + banner, and so zsh
@@ -498,10 +512,12 @@ FROM extensions AS runtime
 	fmt.Fprintf(b, "ENV VIBRATOR_FEATURES_LIST=%q\n", featureIDsCSV(spec.Features))
 	fmt.Fprintf(b, "ENV VIBRATOR_EXTENSIONS_LIST=%q\n", extensionsIDsCSV(spec.Extensions))
 	fmt.Fprintf(b, "ENV VIBRATOR_VERSION=%q\n", versionOrDev(spec.VibratorVersion))
+	fmt.Fprintf(b, "ENV VIBRATOR_BUILD_ID=%q\n", buildID)
 
 	// Labels — used by `vibrate variants list` and image upgrade workflows.
 	b.WriteString("\n# Labels — used by `vibrate variants list` and upgrade workflows.\n")
 	fmt.Fprintf(b, "LABEL vibrator.version=%q\n", versionOrDev(spec.VibratorVersion))
+	fmt.Fprintf(b, "LABEL vibrator.build_id=%q\n", buildID)
 	fmt.Fprintf(b, "LABEL vibrator.harness=%q\n", spec.Harness.ID())
 	fmt.Fprintf(b, "LABEL vibrator.profile=%q\n", spec.Profile)
 	fmt.Fprintf(b, "LABEL vibrator.shell=%q\n", spec.Shell)

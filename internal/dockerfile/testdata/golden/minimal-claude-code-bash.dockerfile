@@ -67,6 +67,8 @@ RUN chmod 0755 /usr/local/bin/claude-exec
 # shell entry to refresh MCP transport + env state.
 RUN mkdir -p /etc/vibrator
 COPY integrations.json /etc/vibrator/integrations.json
+RUN echo "2026-05-27-1558" > /etc/vibrator/build
+
 
 # Mirror rc files into /root/ so root sub-invocations (debugging via
 # 'docker exec -u root') get the same prompt + banner, and so zsh
@@ -225,9 +227,11 @@ ENV VIBRATOR_PROFILE="minimal"
 ENV VIBRATOR_FEATURES_LIST="(none)"
 ENV VIBRATOR_EXTENSIONS_LIST="(none)"
 ENV VIBRATOR_VERSION="test-1.0"
+ENV VIBRATOR_BUILD_ID="2026-05-27-1558"
 
 # Labels — used by `vibrate variants list` and upgrade workflows.
 LABEL vibrator.version="test-1.0"
+LABEL vibrator.build_id="2026-05-27-1558"
 LABEL vibrator.harness="claude-code"
 LABEL vibrator.profile="minimal"
 LABEL vibrator.shell="bash"

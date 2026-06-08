@@ -1,7 +1,6 @@
 package extensions
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -255,13 +254,13 @@ func TestLoadAll_IgnoresReadmeMd(t *testing.T) {
 
 func TestLoadAll_EmptyFS(t *testing.T) {
 	fsys := newFS(nil)
-	got, err := LoadAll(fsys)
-	if err != nil && !errors.Is(err, errors.New("no extensions")) {
-		// Empty FS is fine — just produces empty results. fs.Sub on a
-		// non-existent "extensions" subdir produces no walk targets, no error.
+	// Degenerate case: an FS with no "extensions/" subdir. The real embedded FS
+	// always has the dir, so here we only require that LoadAll returns no
+	// entries (and doesn't panic) — not a specific error value.
+	got, _ := LoadAll(fsys)
+	if len(got) != 0 {
+		t.Errorf("empty FS should produce no entries, got %d", len(got))
 	}
-	_ = got
-	// We don't error on an empty/missing extensions; the loader is lenient.
 }
 
 func TestLoadForHarness(t *testing.T) {

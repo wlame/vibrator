@@ -86,7 +86,7 @@ func runHookReadiness(pin config.Pin, opts Options) (config.Pin, bool) {
 		fmt.Fprintf(opts.Stderr,
 			"       The container will skip them. Install `%s` and rebuild? [y/N] ", g.Feature)
 		var ans string
-		fmt.Fscanln(opts.Stdin, &ans)
+		_, _ = fmt.Fscanln(opts.Stdin, &ans)
 
 		if strings.EqualFold(strings.TrimSpace(ans), "y") {
 			if !sliceHas(pin.With, g.Feature) {

@@ -19,3 +19,10 @@ linters:
       - common-false-positives
       - legacy                # the v1 historical default exclusions
       - std-error-handling    # don't require checking errors from fmt.Print*/os.Std*
+    rules:
+      # QF1001 ("apply De Morgan's law") is a stylistic quickfix; the negated
+      # range / character-class checks in this codebase read more clearly in
+      # their original, un-rewritten form.
+      - linters:
+          - staticcheck
+        text: "QF1001:"

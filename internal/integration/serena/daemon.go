@@ -182,9 +182,8 @@ func Start(port int) (int, error) {
 	pid := cmd.Process.Pid
 	pidPath := filepath.Join(d, "serena.pid")
 	// Write PID after Start() succeeds so a failed start leaves no stale file.
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)+"\n"), 0644); err != nil {
-		// Non-fatal — process is running even without the tracking file.
-	}
+	// Non-fatal — the process is running even without the tracking file.
+	_ = os.WriteFile(pidPath, []byte(strconv.Itoa(pid)+"\n"), 0644)
 	return pid, nil
 }
 

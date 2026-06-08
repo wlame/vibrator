@@ -326,7 +326,7 @@ func Resolve(initial, with, no []string) (ResolveResult, error) {
 	for {
 		changed := false
 		for id := range enabled {
-			f, _ := indexByID[id] // safe: validated above
+			f := indexByID[id] // safe: validated above
 			for _, dep := range f.Deps {
 				if !enabled[dep] {
 					enabled[dep] = true

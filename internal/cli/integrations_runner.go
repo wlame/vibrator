@@ -53,8 +53,8 @@ func runIntegration(cmd *cobra.Command, integ *integration.Integration) error {
 		if err := startIntegration(cmd, integ, c); err != nil {
 			return err
 		}
-		// Re-evaluate state after start.
-		activeRT, _ = detectActiveRuntime(ctx, integ)
+		// Re-evaluate reachability after start. (activeRT isn't read again
+		// past this point, so we don't recompute it.)
 		probe = safeProbe(ctx, integ)
 		reachable = probe != nil && probe.Check(ctx) == nil
 	}

@@ -203,6 +203,19 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
+	// 5b. Hook-tool readiness: warn when host Claude hooks need a tool this
+	//     image won't bake (e.g. node hooks under the minimal profile), and
+	//     optionally install the feature or remember the user's choice. Runs
+	//     before buildSpecs so an accepted "install" feeds feature resolution.
+	if updated, dirty := runHookReadiness(pin, opts); dirty {
+		pin = updated
+		if !opts.NoSave {
+			if err := persistPin(pinPath, &pin, opts.Stderr); err != nil {
+				return fmt.Errorf("save .vb after hook check: %w", err)
+			}
+		}
+	}
+
 	// 6. Resolve dockerfile + workspace specs.
 	dfSpec, wsSpec, err := buildSpecs(pin, opts)
 	if err != nil {
@@ -600,14 +613,17 @@ func defaultGID(opts Options) int {
 	return os.Getgid()
 }
 
-// buildSpecs materializes the dockerfile + workspace specs the rest of
-// the orchestrator works with. Most of the logic mirrors what
-// internal/cli/build.go's resolveSpec does — same precedence rules
-// (flags > pin > defaults).
-func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, error) {
+// resolveExtensionsAndFeatures loads+validates the pin's extension entries and
+// computes the final enabled feature list (profile + harness-required +
+// extension deps + optional docker-cli, with `with`/`no` deltas applied).
+//
+// Shared by buildSpecs and runHookReadiness so both see an identical feature
+// set — the hook check must reason about exactly the features the build will
+// bake, or it would prompt about a tool that's actually present (or miss one).
+func resolveExtensionsAndFeatures(pin config.Pin, opts Options) ([]*extensions.Entry, []string, error) {
 	h, ok := harness.ByID(pin.Harness)
 	if !ok {
-		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("unknown harness %q", pin.Harness)
+		return nil, nil, fmt.Errorf("unknown harness %q", pin.Harness)
 	}
 
 	profileID := pin.Profile
@@ -616,12 +632,7 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 	}
 	p, ok := profile.ByID(profileID)
 	if !ok {
-		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("unknown profile %q", profileID)
-	}
-
-	shell := pin.Shell
-	if shell == "" {
-		shell = "zsh"
+		return nil, nil, fmt.Errorf("unknown profile %q", profileID)
 	}
 
 	// Extensions entries: validate that every requested ID exists. Loaded
@@ -634,13 +645,13 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 	if len(pin.Extensions) > 0 {
 		all, err := extensions.LoadAll(vibrator.ExtensionsFS)
 		if err != nil {
-			return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("load extensions: %w", err)
+			return nil, nil, fmt.Errorf("load extensions: %w", err)
 		}
 		for _, id := range pin.Extensions {
 			key := h.ID() + "/" + id
 			entry, ok := all[key]
 			if !ok {
-				return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf(
+				return nil, nil, fmt.Errorf(
 					"extensions entry %q not found for harness %q", id, h.ID())
 			}
 			catEntries = append(catEntries, entry)
@@ -666,11 +677,37 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 	}
 	resolved, err := feature.Resolve(initial, pin.With, pin.No)
 	if err != nil {
-		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("resolve features: %w", err)
+		return nil, nil, fmt.Errorf("resolve features: %w", err)
+	}
+	return catEntries, resolved.Enabled, nil
+}
+
+// buildSpecs materializes the dockerfile + workspace specs the rest of
+// the orchestrator works with. Most of the logic mirrors what
+// internal/cli/build.go's resolveSpec does — same precedence rules
+// (flags > pin > defaults).
+func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, error) {
+	h, ok := harness.ByID(pin.Harness)
+	if !ok {
+		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("unknown harness %q", pin.Harness)
 	}
 
-	feats := make([]feature.Feature, 0, len(resolved.Enabled))
-	for _, id := range resolved.Enabled {
+	profileID := pin.Profile
+	if profileID == "" {
+		profileID = profile.IDFull
+	}
+	shell := pin.Shell
+	if shell == "" {
+		shell = "zsh"
+	}
+
+	catEntries, enabled, err := resolveExtensionsAndFeatures(pin, opts)
+	if err != nil {
+		return dockerfile.Spec{}, workspace.Spec{}, err
+	}
+
+	feats := make([]feature.Feature, 0, len(enabled))
+	for _, id := range enabled {
 		fe, _ := feature.ByID(id)
 		feats = append(feats, fe)
 	}
@@ -691,7 +728,7 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		Harness:    h.ID(),
 		Profile:    profileID,
 		Shell:      shell,
-		Features:   resolved.Enabled,
+		Features:   enabled,
 		Extensions: pin.Extensions,
 		Username:   defaultUsername(opts),
 	}

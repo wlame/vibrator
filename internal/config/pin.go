@@ -74,6 +74,23 @@ type Pin struct {
 	// host server (http) or a container-local fallback (stdio). Persisted
 	// under the [integrations] table in .vb.
 	Integrations map[string]string `toml:"integrations,omitempty"`
+
+	// Hooks holds per-workspace hook preferences. Persisted under [hooks].
+	// nil when the user has never been prompted about a hook/tool gap.
+	Hooks *HookPrefs `toml:"hooks,omitempty"`
+}
+
+// HookPrefs captures the user's decisions about Claude Code hooks that need a
+// tool the image doesn't install (e.g. node-based hooks under the minimal
+// profile). See internal/hooktools for the detection and the container guard
+// in templates/scripts/entrypoint.sh that skips unrunnable hooks at runtime.
+type HookPrefs struct {
+	// AcknowledgedMissing lists feature IDs the user was warned about — at
+	// launch a hook needed the tool that feature installs, and they chose
+	// NOT to install it. We stop re-prompting for these; the container guard
+	// keeps skipping the affected hooks regardless. Installing the feature
+	// (answering "yes" to the prompt, or adding it to `with`) closes the gap.
+	AcknowledgedMissing []string `toml:"acknowledged_missing,omitempty"`
 }
 
 // Integration hosting modes. Stored as the value in Pin.Integrations and
@@ -164,7 +181,8 @@ func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
 		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 &&
 		p.LLM == nil &&
-		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0
+		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0 &&
+		p.Hooks == nil
 }
 
 // Load reads a .vb file from path and decodes it into a Pin.
@@ -207,7 +225,8 @@ func Save(path string, p *Pin) error {
 		With    []string `toml:"with,omitempty"`
 		No      []string `toml:"no,omitempty"`
 		Extensions []string `toml:"extensions,omitempty"`
-		LLM     *LLMSpec `toml:"llm,omitempty"`
+		LLM     *LLMSpec   `toml:"llm,omitempty"`
+		Hooks   *HookPrefs `toml:"hooks,omitempty"`
 	}{
 		Harness: p.Harness,
 		Profile: p.Profile,
@@ -216,6 +235,7 @@ func Save(path string, p *Pin) error {
 		No:      p.No,
 		Extensions: p.Extensions,
 		LLM:     p.LLM,
+		Hooks:   p.Hooks,
 	}
 	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {
 		return fmt.Errorf("encode pin scalars: %w", err)

@@ -130,6 +130,13 @@ Quick answers to common questions. Each links to the fuller explanation.
     `--docker-socket=...` or `VIBRATOR_DOCKER_SOCKET`. See
     [Runtime detection](lifecycle/runtime-detection.md).
 
+??? question "I get `node: not found` (or python) errors from hooks."
+    A hook in your `~/.claude/settings.json` shells out to a tool that isn't installed in the
+    image — common with the `minimal` profile. `vibrate` detects this at launch and offers to
+    **install the tool** (adds `--with=node`, rebuilds) or **disable those hooks**, and the
+    container also auto-skips any hook whose tool isn't on `PATH`. See
+    [Missing-tool hooks](lifecycle/startup.md#missing-tool-hooks).
+
 ??? question "How do I see what the container setup is doing?"
     Set `VIBRATOR_VERBOSE=1` to print `[vibrator] ...` diagnostics from the entrypoint and
     `claude-exec`. Silence the banner with `VIBRATOR_NO_BANNER=1`.

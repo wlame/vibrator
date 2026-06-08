@@ -127,7 +127,11 @@ to see what each step did. In order:
     `settings.json`'s `enabledPlugins` (step 6's host copy would otherwise hide them).
 13. **De-duplicate integration MCPs** — disable any Claude Code plugin whose name collides
     with an integration-managed MCP, so the host-aware integration is the single source.
-14. **Drop the readiness sentinel** — `touch /tmp/.vibrator-entrypoint-done` (used by
+14. **Skip hooks needing a missing tool** — strip any hook whose command shells out to a
+    tool that isn't on `PATH` (checked with `command -v`), logging which tools were skipped.
+    Stops node/python hooks from erroring on every event under a lean profile. See
+    [Missing-tool hooks](#missing-tool-hooks).
+15. **Drop the readiness sentinel** — `touch /tmp/.vibrator-entrypoint-done` (used by
     [`--login`](../guides/authentication.md#vibrate-login)), then `exec "$@"`.
 
 ---
@@ -171,6 +175,38 @@ After `claude-exec` execs your shell, its rc file (`~/.bashrc` / `~/.zshrc` /
   with `VIBRATOR_NO_BANNER=1`.
 
 ---
+
+## Missing-tool hooks
+
+Claude Code hooks are shell commands in `~/.claude/settings.json`. If a hook shells out to a
+tool the image doesn't install — e.g. a `node`-based formatter hook under the `minimal`
+[profile](../reference/profiles.md) — it fails on **every** matching event with
+`node: not found`. Vibrator handles this on two independent levels:
+
+**At launch (host).** Before building or running, `vibrate` scans your host
+`~/.claude/settings.json` for hooks that need a tool not in the resolved
+[feature set](../reference/features.md). On an interactive run it prompts per gap:
+
+```
+⚠  [hooks] 2 hook(s) call `node`, installed by `node` — not in this image
+     e.g. node /Users/you/.claude/hooks/format.js
+     The container will skip them. Install `node` and rebuild? [y/N]
+```
+
+- **y** → adds the feature to `.vb` `with`, so the next build bakes it and the hooks run.
+- **N** → records the choice in [`.vb` `[hooks]`](../reference/vb-file.md#hooks) so you're
+  not asked again for that tool.
+- Non-interactive runs (CI, pipes) just print a one-line warning and continue.
+
+**At runtime (container).** The [entrypoint](#2-the-entrypoint-entrypointsh) strips any hook
+whose tool isn't actually on `PATH`, so the agent never sees the per-event error. Because it
+checks real availability (`command -v`), a tool installed by some other means is respected.
+This layer also covers hooks installed by plugins/extensions and non-interactive runs. Set
+`VIBRATOR_VERBOSE=1` (or watch for the one-line `hooks: skipped …` summary) to see what was
+removed.
+
+The two layers are independent: the launch prompt offers the *install* path; the entrypoint
+guard is the always-on safety net that silences the noise either way.
 
 ## The `--login` variant
 

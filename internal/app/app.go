@@ -227,37 +227,84 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	status, err := dockerCli.ContainerStatus(ctx, containerName)
+	return resolveAndLaunch(ctx, dockerCli, dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts)
+}
+
+// Indirection seams for resolveAndLaunch. They default to the real
+// implementations in launch.go but can be swapped in tests so the decision
+// logic (which branch runs, whether --rebuild tears the container down)
+// can be exercised without performing a real docker build, run, or exec.
+var (
+	buildImageFn        = buildImage
+	runContainerFn      = runContainer
+	execIntoContainerFn = execIntoContainer
+)
+
+// resolveAndLaunch decides how to bring the workspace up given the current
+// state of its container and image, then launches it. The four outcomes:
+//
+//   - --rebuild set: tear down any existing container, rebuild the image
+//     from scratch (--no-cache), run fresh. Checked first so a running or
+//     stopped container can't short-circuit the rebuild.
+//   - container running: exec into it.
+//   - container stopped (exited/created/dead): start it, then exec.
+//   - no container: build the image if missing, then run.
+//
+// It takes the docker.Client as a parameter (rather than constructing one)
+// so the decision logic can be unit-tested with a mock client.
+func resolveAndLaunch(ctx context.Context, dc docker.Client,
+	dfSpec dockerfile.Spec, wsSpec workspace.Spec, pin config.Pin,
+	wsDir, imageTag, containerName string, opts Options,
+) error {
+	status, err := dc.ContainerStatus(ctx, containerName)
 	if err != nil {
 		return fmt.Errorf("inspect container: %w", err)
+	}
+
+	// --rebuild forces a from-scratch image build and a fresh container.
+	// This must be handled before the reuse switch below: otherwise an
+	// already running/stopped container short-circuits to exec/start and
+	// the flag is silently ignored. Tear down the existing container (if
+	// any), rebuild the image with --no-cache, then run fresh.
+	if opts.Rebuild {
+		if status != "" {
+			fmt.Fprintf(opts.Stderr, "→ --rebuild: removing existing container %s (%s)\n", containerName, status)
+			if err := dc.Remove(ctx, docker.RemoveContainer, containerName, true); err != nil {
+				return fmt.Errorf("remove container for rebuild: %w", err)
+			}
+		}
+		if err := buildImageFn(ctx, dc, dfSpec, imageTag, opts); err != nil {
+			return err
+		}
+		return runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
 	}
 
 	switch status {
 	case "running":
 		fmt.Fprintln(opts.Stderr, "→ Container already running — exec'ing in")
-		return execIntoContainer(ctx, dockerCli, containerName, wsDir, pin, opts)
+		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 
 	case "exited", "created", "dead":
 		fmt.Fprintf(opts.Stderr, "→ Container %s (%s) — starting + exec\n", containerName, status)
-		if err := dockerCli.Start(ctx, containerName); err != nil {
+		if err := dc.Start(ctx, containerName); err != nil {
 			return fmt.Errorf("docker start: %w", err)
 		}
-		return execIntoContainer(ctx, dockerCli, containerName, wsDir, pin, opts)
+		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 
 	case "":
 		// Container doesn't exist. Build image if needed, then run.
-		exists, err := dockerCli.ImageExists(ctx, imageTag)
+		exists, err := dc.ImageExists(ctx, imageTag)
 		if err != nil {
 			return err
 		}
-		if !exists || opts.Rebuild {
-			if err := buildImage(ctx, dockerCli, dfSpec, imageTag, opts); err != nil {
+		if !exists {
+			if err := buildImageFn(ctx, dc, dfSpec, imageTag, opts); err != nil {
 				return err
 			}
 		} else {
 			fmt.Fprintf(opts.Stderr, "→ Image %s present — skipping build\n", imageTag)
 		}
-		return runContainer(ctx, dockerCli, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
+		return runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
 
 	default:
 		return fmt.Errorf("unexpected container status %q for %s", status, containerName)

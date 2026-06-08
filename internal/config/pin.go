@@ -65,6 +65,46 @@ type Pin struct {
 	// resolved at container-run time, NOT at pin-load time. Plain values
 	// are forwarded as-is.
 	Env map[string]string `toml:"env,omitempty"`
+
+	// Integrations records the user's hosting preference per host-side
+	// integration (e.g. "serena", "claude-mem"). Keyed by integration id;
+	// the value is one of the IntegrationMode* constants. A missing key
+	// means IntegrationAuto. This is a design-time choice — the container's
+	// claude-exec wrapper reads it at runtime to decide whether to use the
+	// host server (http) or a container-local fallback (stdio). Persisted
+	// under the [integrations] table in .vb.
+	Integrations map[string]string `toml:"integrations,omitempty"`
+}
+
+// Integration hosting modes. Stored as the value in Pin.Integrations and
+// forwarded into the container so claude-exec can wire the right transport.
+const (
+	// IntegrationAuto probes the host server and falls back to a
+	// container-local instance if it's unreachable. The default.
+	IntegrationAuto = "auto"
+	// IntegrationHost requires the host server: use http and warn loudly
+	// if it's unreachable rather than silently falling back.
+	IntegrationHost = "host"
+	// IntegrationLocal always uses the container-local instance and never
+	// probes the host.
+	IntegrationLocal = "local"
+	// IntegrationOff disables the integration entirely (no MCP wiring).
+	IntegrationOff = "off"
+)
+
+// IntegrationMode returns the configured hosting mode for the given
+// integration id, defaulting to IntegrationAuto when unset or unknown.
+func (p Pin) IntegrationMode(id string) string {
+	switch p.Integrations[id] {
+	case IntegrationHost:
+		return IntegrationHost
+	case IntegrationLocal:
+		return IntegrationLocal
+	case IntegrationOff:
+		return IntegrationOff
+	default:
+		return IntegrationAuto
+	}
 }
 
 // LLMSpec captures the user's LLM-provider choice for harnesses that
@@ -124,7 +164,7 @@ func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
 		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 &&
 		p.LLM == nil &&
-		len(p.Prereqs) == 0 && len(p.Env) == 0
+		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0
 }
 
 // Load reads a .vb file from path and decodes it into a Pin.
@@ -200,6 +240,14 @@ func Save(path string, p *Pin) error {
 		b.WriteString("\n[env]\n")
 		for _, k := range sortedKeys(p.Env) {
 			fmt.Fprintf(&b, "%s = %q\n", k, p.Env[k])
+		}
+	}
+
+	// Integrations table in sorted order (id = "mode").
+	if len(p.Integrations) > 0 {
+		b.WriteString("\n[integrations]\n")
+		for _, k := range sortedKeys(p.Integrations) {
+			fmt.Fprintf(&b, "%s = %q\n", k, p.Integrations[k])
 		}
 	}
 

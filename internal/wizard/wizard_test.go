@@ -67,6 +67,43 @@ func TestPlanSteps_LLM_SkippedWhenAlreadyPinned(t *testing.T) {
 	}
 }
 
+// --- PlanSteps: Serena hosting --------------------------------------------
+
+func TestPlanSteps_SerenaHosting_ShownWhenHarnessUnset(t *testing.T) {
+	// Harness undecided — defer the gate to the form's HideFunc, so the
+	// step is planned.
+	steps := PlanSteps(Input{})
+	if !steps.SerenaHosting {
+		t.Errorf("SerenaHosting should be planned when harness is unset, got false")
+	}
+}
+
+func TestPlanSteps_SerenaHosting_ShownForClaudeCode(t *testing.T) {
+	steps := PlanSteps(Input{Initial: config.Pin{Harness: "claude-code"}})
+	if !steps.SerenaHosting {
+		t.Errorf("SerenaHosting should show for claude-code, got false")
+	}
+}
+
+func TestPlanSteps_SerenaHosting_HiddenForNonSerenaHarness(t *testing.T) {
+	steps := PlanSteps(Input{Initial: config.Pin{Harness: "codex"}})
+	if steps.SerenaHosting {
+		t.Errorf("SerenaHosting should be hidden for codex, got true")
+	}
+}
+
+func TestPlanSteps_SerenaHosting_HiddenWhenAlreadyPinned(t *testing.T) {
+	steps := PlanSteps(Input{
+		Initial: config.Pin{
+			Harness:      "claude-code",
+			Integrations: map[string]string{"serena": "host"},
+		},
+	})
+	if steps.SerenaHosting {
+		t.Errorf("SerenaHosting should be hidden when already pinned, got true")
+	}
+}
+
 // --- EquivalentCommand ----------------------------------------------------
 
 func TestEquivalentCommand_FullPin(t *testing.T) {

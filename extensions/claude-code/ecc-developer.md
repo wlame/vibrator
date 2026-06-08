@@ -63,7 +63,7 @@ Into `~/.claude/` (ECC content namespaced under `rules/ecc/`, `skills/ecc/`):
 | Component | Count | What it is |
 |---|---|---|
 | `agents/`   | 63  | Specialised subagents (planner, code-reviewer, security-reviewer, per-language reviewers, build-error-resolver, e2e-runner, …) |
-| `skills/`   | ~136 (developer subset) | Workflow definitions — the canonical surface (`/tdd`, `/refactor-clean`, research-ops, …) |
+| `skills/`   | 79 (developer subset) | Workflow definitions — the canonical surface (`/tdd`, `/refactor-clean`, research-ops, …) |
 | `commands/` | 79  | Legacy slash-command shims (ECC is migrating these into skills) |
 | `rules/`    | 115 | `common/` always-on principles + per-language packs |
 | `hooks/`    | 4   | Event automations (PreToolUse/PostToolUse/Stop/…) |

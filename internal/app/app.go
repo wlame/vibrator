@@ -33,7 +33,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 
 	vibrator "github.com/wlame/vibrator"
@@ -733,21 +732,4 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		Username:   defaultUsername(opts),
 	}
 	return dfSpec, wsSpec, nil
-}
-
-// hostnameOrDefault returns os.Hostname() with a fallback to
-// "unknown" so probe-derived identifiers (e.g., claude-mem actor_id)
-// don't carry empty strings.
-func hostnameOrDefault() string {
-	h, err := os.Hostname()
-	if err != nil || h == "" {
-		return "unknown"
-	}
-	return h
-}
-
-// platformLabel surfaces "linux/amd64" or similar for `vibrate
-// variants list`'s `Built on` column. Best-effort.
-func platformLabel() string {
-	return runtime.GOOS + "/" + runtime.GOARCH
 }

@@ -161,25 +161,6 @@ func setFrom(items []string) map[string]bool {
 	return m
 }
 
-// dedupe removes duplicates while preserving first-occurrence order.
-// Used by other wizard helpers (LLM commit, etc.) — kept here as
-// the package-wide utility it always was.
-func dedupe(items []string) []string {
-	if len(items) <= 1 {
-		return items
-	}
-	seen := make(map[string]bool, len(items))
-	out := items[:0:len(items)]
-	for _, x := range items {
-		if seen[x] {
-			continue
-		}
-		seen[x] = true
-		out = append(out, x)
-	}
-	return out
-}
-
 // Anchor for go vet — sort is used by the picker (extensions_picker.go)
 // in pickerEntriesFor. Without an import in this file, dropping all
 // dead code would dangling-reference an import that we ALSO need —

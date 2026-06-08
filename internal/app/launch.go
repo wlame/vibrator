@@ -1176,7 +1176,7 @@ func runIntegrationReadiness(
 			if result.FixNow != nil && isStdinTTY(opts.Stdin) {
 				fmt.Fprintf(opts.Stderr, "     Bootstrap now? [y/N] ")
 				var answer string
-				fmt.Fscanln(opts.Stdin, &answer)
+				_, _ = fmt.Fscanln(opts.Stdin, &answer)
 				if strings.ToLower(strings.TrimSpace(answer)) == "y" {
 					prereqID, res, fixErr := result.FixNow(ctx, lc)
 					if fixErr != nil {

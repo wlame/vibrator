@@ -19,10 +19,30 @@ Semantic code analysis MCP server, LSP-backed. Provides symbol lookup,
 references, find-implementations, rename, and diagnostic inspection across
 ~12 languages.
 
-Vibrator's entrypoint optionally probes for a host-side Serena server at
-`host.docker.internal:8765/mcp` first; if it's running, the container uses
-the HTTP transport. Otherwise it falls back to the stdio mode declared here,
-which spawns Serena per-session via `uvx`.
+## Hosting mode
+
+How Serena is served is a per-workspace choice, set in the wizard (the
+"Serena code-intelligence server" step) and stored in `.vb` under
+`[integrations] serena = "<mode>"`:
+
+- **`auto`** (default) — on each container entry the `claude-exec` wrapper
+  probes the host server at `host.docker.internal:8765/mcp`. If it answers,
+  the container uses the HTTP transport; otherwise it falls back to the
+  container-local stdio server declared here (spawned per-session via
+  `uvx`), printing a one-line warning.
+- **`host`** — require the shared host server; if it's unreachable the
+  wrapper warns loudly and does **not** fall back, so the misconfiguration
+  is visible rather than silently masked.
+- **`local`** — always run Serena inside the container; never probe the host.
+- **`off`** — don't wire Serena at all.
+
+The probe + transport switch run on every entry (including `docker exec`
+re-entries), so the choice is honored without rebuilding.
+
+To avoid a redundant, host-blind duplicate, the entrypoint drops any Claude
+Code **plugin** whose id collides with an integration-managed MCP (e.g.
+`serena@claude-plugins-official`) — vibrator's integration wiring is the
+single source of truth for Serena.
 
 ## Why on by default
 

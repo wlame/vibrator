@@ -34,6 +34,52 @@ func TestPin_RoundtripScalarsAndLists(t *testing.T) {
 	}
 }
 
+func TestPin_RoundtripIntegrations(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+
+	want := &Pin{
+		Harness: "claude-code",
+		Integrations: map[string]string{
+			"serena":     "host",
+			"claude-mem": "off",
+		},
+	}
+	if err := Save(path, want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("roundtrip mismatch\n want: %+v\n got:  %+v", want, got)
+	}
+}
+
+func TestPin_IntegrationMode(t *testing.T) {
+	tests := []struct {
+		name string
+		pin  Pin
+		id   string
+		want string
+	}{
+		{"unset defaults to auto", Pin{}, "serena", IntegrationAuto},
+		{"explicit host", Pin{Integrations: map[string]string{"serena": "host"}}, "serena", IntegrationHost},
+		{"explicit local", Pin{Integrations: map[string]string{"serena": "local"}}, "serena", IntegrationLocal},
+		{"explicit off", Pin{Integrations: map[string]string{"serena": "off"}}, "serena", IntegrationOff},
+		{"unknown value falls back to auto", Pin{Integrations: map[string]string{"serena": "bogus"}}, "serena", IntegrationAuto},
+		{"different id unaffected", Pin{Integrations: map[string]string{"serena": "host"}}, "claude-mem", IntegrationAuto},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.pin.IntegrationMode(tc.id); got != tc.want {
+				t.Errorf("IntegrationMode(%q) = %q, want %q", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestPin_RoundtripPrereqsAndEnv(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".vb")

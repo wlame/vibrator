@@ -80,7 +80,16 @@ type Steps struct {
 	Shell   bool
 	LLM     bool
 	Extensions bool
+	// SerenaHosting asks how the Serena MCP should be hosted (host server
+	// vs container-local). Only relevant for harnesses that wire the Serena
+	// integration (currently claude-code).
+	SerenaHosting bool
 }
+
+// serenaHarnessID is the harness whose containers wire the Serena
+// integration. Kept as a named constant so the wizard gating and the
+// integration descriptor stay easy to keep in sync.
+const serenaHarnessID = "claude-code"
 
 // PlanSteps computes which steps the wizard would show given an input.
 // Pure function; no huh, no I/O. The wizard layer consumes this to
@@ -97,6 +106,14 @@ func PlanSteps(in Input) Steps {
 	s.Profile = in.Initial.Profile == ""
 	s.Shell = in.Initial.Shell == ""
 	s.Extensions = true // always show extensions step — empty selection is valid
+
+	// Serena hosting: ask only when the user hasn't already pinned a mode.
+	// Gate on harness when it's known (skip for non-Serena harnesses);
+	// when the harness is itself a pending step, defer the harness check to
+	// the form's HideFunc, which re-reads the choice at runtime.
+	if _, pinned := in.Initial.Integrations["serena"]; !pinned {
+		s.SerenaHosting = in.Initial.Harness == "" || in.Initial.Harness == serenaHarnessID
+	}
 
 	if !s.Harness {
 		// Harness is known; we can decide LLM planning now.
@@ -144,6 +161,13 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		llmBinds = b
 	}
 
+	var serenaMode *string
+	if steps.SerenaHosting {
+		var g *huh.Group
+		g, serenaMode = buildSerenaGroup(&pin)
+		groups = append(groups, g)
+	}
+
 	// Run the huh form for the core steps (harness / profile / shell
 	// / LLM). The extensions step is handled SEPARATELY below by a
 	// custom Bubble Tea picker that supports tab navigation — huh
@@ -171,6 +195,16 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		if !harnessSupportsLLM(pin.Harness) {
 			pin.LLM = nil
 		}
+	}
+
+	// Commit the Serena hosting choice. Guard on harness so a mid-flow
+	// switch to a non-Serena harness (which hid the group) doesn't write a
+	// stray [integrations] entry.
+	if serenaMode != nil && *serenaMode != "" && pin.Harness == serenaHarnessID {
+		if pin.Integrations == nil {
+			pin.Integrations = map[string]string{}
+		}
+		pin.Integrations["serena"] = *serenaMode
 	}
 
 	// Tabbed extension picker — replaces the old per-kind huh groups.
@@ -248,4 +282,30 @@ func buildCoreGroups(pin *config.Pin, steps Steps) []*huh.Group {
 	}
 
 	return groups
+}
+
+// buildSerenaGroup builds the Serena-hosting step and returns the group
+// plus a scratch binding the caller commits into pin.Integrations after
+// the form runs (huh has no per-group commit hook in v1.0.0). The group
+// hides itself unless the chosen harness wires the Serena integration —
+// re-checked at runtime so it reacts to a harness picked earlier in the
+// same form.
+func buildSerenaGroup(pin *config.Pin) (*huh.Group, *string) {
+	mode := config.IntegrationAuto // default selection
+	group := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Serena code-intelligence server").
+			Description("Serena (LSP-backed symbol search) can use a shared host server or run inside the container.").
+			Options(
+				huh.NewOption("Auto-detect (recommended) — host server if running, else container-local", config.IntegrationAuto),
+				huh.NewOption("Host server only — require the shared host Serena; warn if unreachable", config.IntegrationHost),
+				huh.NewOption("Container-local only — always run Serena inside the container", config.IntegrationLocal),
+				huh.NewOption("Off — don't run Serena", config.IntegrationOff),
+			).
+			Value(&mode),
+	).WithHideFunc(func() bool {
+		// Hidden for harnesses that don't wire the Serena integration.
+		return pin.Harness != serenaHarnessID
+	})
+	return group, &mode
 }

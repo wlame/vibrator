@@ -783,6 +783,15 @@ func buildContainerEnv(pin config.Pin, enabledExts []*extensions.Entry) ([]docke
 		}
 	}
 
+	// 5. Per-integration hosting mode. The container's claude-exec wrapper
+	//    reads VIBRATOR_INTEGRATION_MODE_<UPPERID> to decide between the
+	//    host server (http) and a container-local fallback (stdio). Only
+	//    explicit choices are forwarded; an absent var means "auto" in the
+	//    wrapper, so we don't need to emit the default.
+	for id, mode := range pin.Integrations {
+		final[integrationModeEnvVar(id)] = mode
+	}
+
 	// Convert to sorted []docker.EnvVar for stable output (matters in
 	// tests and when debugging exact `docker run` arg lines).
 	names := make([]string, 0, len(final))
@@ -795,6 +804,23 @@ func buildContainerEnv(pin config.Pin, enabledExts []*extensions.Entry) ([]docke
 		out = append(out, docker.EnvVar{Name: n, Value: final[n]})
 	}
 	return out, nil
+}
+
+// integrationModeEnvVar maps an integration id to the env var name that
+// carries its hosting mode into the container. The id is upper-cased and
+// any character that isn't a letter or digit becomes '_' so the result is
+// always a valid shell identifier (e.g. "claude-mem" → ...MODE_CLAUDE_MEM).
+func integrationModeEnvVar(id string) string {
+	var b strings.Builder
+	b.WriteString("VIBRATOR_INTEGRATION_MODE_")
+	for _, r := range strings.ToUpper(id) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 // resolveAPIKey extracts the credential the LLM provider expects.

@@ -28,6 +28,35 @@ _vb_log() {
     return 0
 }
 
+# Always-visible warning (unlike _vb_log it ignores VIBRATOR_VERBOSE).
+# Used when the user's explicit intent can't be honored — e.g. they asked
+# for the host server but it's unreachable — so the situation isn't silent.
+_vb_warn() {
+    printf '[vibrator] warning: %s\n' "$*" >&2
+    return 0
+}
+
+# Resolve the hosting mode for an integration by name. Reads
+# VIBRATOR_INTEGRATION_MODE_<UPPERNAME> (set per-pin at container-run time;
+# see internal/app/launch.go). Hyphens become underscores to match the Go
+# side. Defaults to "auto" when unset/unknown.
+_vb_integration_mode() {
+    var="VIBRATOR_INTEGRATION_MODE_$(printf '%s' "$1" | tr 'a-z-' 'A-Z_')"
+    eval "mode=\${$var:-auto}"
+    case "$mode" in
+        host|local|off|auto) printf '%s' "$mode" ;;
+        *) printf 'auto' ;;
+    esac
+}
+
+# Remove an MCP entry from ~/.claude.json (used for mode=off).
+_vb_remove_mcp() {
+    name="$1"
+    jq --arg n "$name" 'if .mcpServers then .mcpServers |= del(.[$n]) else . end' \
+        "$CLAUDE_JSON" > "$CLAUDE_JSON.tmp" 2>/dev/null \
+        && mv -f "$CLAUDE_JSON.tmp" "$CLAUDE_JSON" 2>/dev/null
+}
+
 MANIFEST=/etc/vibrator/integrations.json
 CLAUDE_JSON="$HOME/.claude.json"
 
@@ -105,16 +134,54 @@ if [ -f "$MANIFEST" ] && [ -f "$CLAUDE_JSON" ] \
         "$MANIFEST" 2>/dev/null | while IFS= read -r entry; do
         name=$(echo "$entry" | jq -r '.mcp.name // empty')
 
-        # MCP wiring: try http, fall back to stdio.
+        # MCP wiring. The user's per-integration hosting mode decides
+        # whether we prefer the host server (http) or a container-local
+        # instance (stdio):
+        #   host  — require http; warn loudly if unreachable (no fallback)
+        #   local — stdio only; never probe the host
+        #   off   — remove the entry entirely
+        #   auto  — probe http, fall back to stdio with a visible warning
         if [ -n "$name" ]; then
             http_url=$(echo "$entry" | jq -r '.mcp.http.url // empty')
             stdio=$(echo "$entry" | jq -c '.mcp.stdio // empty')
+            mode=$(_vb_integration_mode "$name")
+            has_stdio=false
+            [ -n "$stdio" ] && [ "$stdio" != "null" ] && has_stdio=true
 
-            if [ -n "$http_url" ] && _vb_probe_http "$http_url"; then
-                _vb_write_mcp_http "$name" "$http_url"
-            elif [ -n "$stdio" ] && [ "$stdio" != "null" ]; then
-                echo "$stdio" | _vb_write_mcp_stdio "$name"
-            fi
+            case "$mode" in
+                off)
+                    _vb_remove_mcp "$name"
+                    _vb_log "$name: disabled (mode=off)"
+                    ;;
+                local)
+                    if [ "$has_stdio" = true ]; then
+                        echo "$stdio" | _vb_write_mcp_stdio "$name"
+                    else
+                        _vb_warn "$name: mode=local but no stdio command declared — leaving as-is"
+                    fi
+                    ;;
+                host)
+                    if [ -n "$http_url" ] && _vb_probe_http "$http_url"; then
+                        _vb_write_mcp_http "$name" "$http_url"
+                    elif [ -n "$http_url" ]; then
+                        # Honor intent: keep the http entry so the failure is
+                        # visible in the harness rather than silently masked
+                        # by a local fallback the user explicitly opted out of.
+                        _vb_write_mcp_http "$name" "$http_url"
+                        _vb_warn "$name: host server unreachable at $http_url (mode=host — not falling back to local)"
+                    else
+                        _vb_warn "$name: mode=host but no http url declared"
+                    fi
+                    ;;
+                *) # auto
+                    if [ -n "$http_url" ] && _vb_probe_http "$http_url"; then
+                        _vb_write_mcp_http "$name" "$http_url"
+                    elif [ "$has_stdio" = true ]; then
+                        echo "$stdio" | _vb_write_mcp_stdio "$name"
+                        [ -n "$http_url" ] && _vb_warn "$name: host server unreachable at $http_url — using container-local instance"
+                    fi
+                    ;;
+            esac
         fi
 
         # EnvVars wiring: export each key=value into the current shell.

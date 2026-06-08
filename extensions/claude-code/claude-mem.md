@@ -14,6 +14,14 @@ install: |
   # install path (Dockerfile Stage 3) — we deliberately bypass
   # `npx claude-mem install`, whose non-TTY defaults silently say "No" to
   # the "Overwrite existing installation?" prompt.
+  #
+  # Pre-create ~/.claude-mem as the unprivileged user. The D7 bind mount
+  # (internal/app/launch.go) mounts the host cache onto ~/.claude-mem/cache;
+  # if the parent ~/.claude-mem doesn't already exist, the Docker daemon
+  # auto-creates it as ROOT, leaving the worker daemon (running as this user)
+  # unable to write its logs/DB/port file. Creating it here keeps it
+  # user-owned so the worker runtime can start.
+  mkdir -p "$HOME/.claude-mem"
   mkdir -p "$HOME/.claude/plugins/marketplaces"
   git clone --depth 1 https://github.com/thedotmack/claude-mem.git \
     "$HOME/.claude/plugins/marketplaces/thedotmack"

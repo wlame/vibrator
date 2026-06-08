@@ -387,6 +387,31 @@ if [ -f "$INSTALLED_PLUGINS_JSON" ] && command -v jq >/dev/null 2>&1; then
     fi
 fi
 
+# --- 7b. De-duplicate integration-managed MCPs (C10b) ----------------------
+# Some MCP servers are owned by vibrator's integration layer: claude-exec
+# writes a single host-aware ~/.claude.json entry (http when the host
+# server is up, stdio otherwise). If the SAME server is ALSO present as a
+# Claude Code plugin (e.g. `serena@claude-plugins-official`, pulled in by
+# host-config mirroring), the harness loads BOTH — a redundant, host-blind
+# duplicate. The integration is the single source of truth, so disable any
+# enabled plugin whose id collides with an integration MCP name.
+INTEGRATIONS_MANIFEST=/etc/vibrator/integrations.json
+if [ -f "$INTEGRATIONS_MANIFEST" ] && [ -f "$CONTAINER_SETTINGS" ] \
+        && command -v jq >/dev/null 2>&1; then
+    # The plugin key shape is "<id>@<marketplace>"; the part before '@'
+    # is what we compare against the integration MCP names.
+    MANAGED_MCP_NAMES=$(jq -r '[.[].mcp.name // empty] | unique | .[]' \
+        "$INTEGRATIONS_MANIFEST" 2>/dev/null)
+    for _mcp_name in $MANAGED_MCP_NAMES; do
+        jq --arg n "$_mcp_name" \
+            '.enabledPlugins = ((.enabledPlugins // {})
+                | with_entries(select((.key | split("@")[0]) != $n)))' \
+            "$CONTAINER_SETTINGS" > "$CONTAINER_SETTINGS.tmp" 2>/dev/null \
+            && mv "$CONTAINER_SETTINGS.tmp" "$CONTAINER_SETTINGS" \
+            && log "Plugins: dropped plugin '$_mcp_name@*' (owned by integration layer)"
+    done
+fi
+
 # --- exec the user's command -----------------------------------------------
 # `exec "$@"` replaces the entrypoint shell with the user's process so
 # the container's PID 1 is the user's shell, not us — required for

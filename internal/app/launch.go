@@ -20,6 +20,7 @@ import (
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/localprovider"
 	"github.com/wlame/vibrator/internal/prereq"
+	"github.com/wlame/vibrator/internal/runtime"
 	"github.com/wlame/vibrator/internal/workspace"
 )
 
@@ -544,19 +545,25 @@ func buildDockerSocketMount(stderr io.Writer) (docker.Volume, string, bool) {
 		if info.Mode()&os.ModeSocket == 0 {
 			continue
 		}
-		// Resolve the GID. On Linux this is the docker group; on
-		// macOS Docker Desktop the socket is owned by the user's
-		// staff group (the container daemon runs in a VM but the
-		// socket is just a forwarded pipe). Either way, granting the
-		// container user that GID lets it `read+write` the socket.
 		gid := socketGroupGID(path)
-		if gid == "" {
-			fmt.Fprintf(stderr,
-				"vibrate: --dind: found socket %s but couldn't determine its group GID; container user may need `sudo` for docker commands\n",
-				path)
+
+		// For VM-based runtimes (Colima, Rancher Desktop), the macOS socket
+		// path is a proxy socket that only listens on the macOS side. Containers
+		// run inside the Linux VM and cannot connect to a socket that only exists
+		// in the macOS address space. Use /var/run/docker.sock as the host path
+		// instead — Docker daemon (inside the VM) resolves that path to its own
+		// actual socket, so the bind mount lands the real socket in the container.
+		// The sudo wrapper in the docker-cli feature handles group access.
+		mountHostPath := path
+		if det, err := runtime.Detect(runtime.Options{}); err == nil {
+			if det.Runtime == runtime.Colima || det.Runtime == runtime.RancherDesktop {
+				mountHostPath = "/var/run/docker.sock"
+				gid = "" // GID is irrelevant: docker-cli uses a sudo wrapper
+			}
 		}
+
 		return docker.Volume{
-			Host:      path,
+			Host:      mountHostPath,
 			Container: "/var/run/docker.sock",
 			ReadOnly:  false,
 		}, gid, true

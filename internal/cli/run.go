@@ -110,7 +110,7 @@ func init() {
 		"Force a fresh `docker build` even when a matching image exists.")
 	runCmd.Flags().BoolVar(&runFlagsState.dind, "dind", false,
 		"Mount the host's Docker socket so `docker` inside the container drives the host daemon. "+
-			"Requires the container to have the `docker` CLI installed (no built-in feature yet — install via a custom Dockerfile fragment).")
+			"Automatically installs the docker CLI client in the image (docker-cli feature).")
 
 	rootCmd.AddCommand(runCmd)
 

@@ -132,6 +132,34 @@ RUN npm install -g @playwright/mcp \
  && gh --version`,
 	},
 	{
+		ID:          "docker-cli",
+		Name:        "Docker CLI",
+		Description: "docker CLI client only — lets the container user run docker commands against the host daemon when --dind mounts the socket.",
+		SizeMB:      40,
+		// gpg, curl, and ca-certificates are already present in the base stage.
+		// We install docker-ce-cli (CLI only, no daemon) from the official Docker
+		// apt repo so the version stays current and matches what Colima/Docker
+		// Desktop exposes. The daemon itself runs on the host; the container
+		// just needs a client binary that understands the host's API version.
+		Dockerfile: `RUN install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+ && chmod a+r /etc/apt/keyrings/docker.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu noble stable" \
+      > /etc/apt/sources.list.d/docker.list \
+ && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+ && rm -rf /var/lib/apt/lists/*
+# sudo wrapper at /usr/local/bin/docker (earlier in PATH than /usr/bin/docker)
+# so docker always runs as root and can access the socket regardless of group
+# membership. Needed for VM-based runtimes (Colima, Rancher Desktop) where the
+# socket is owned by a group that doesn't map cleanly across the VM boundary.
+# The container user has NOPASSWD:ALL sudo, so no password is prompted.
+RUN printf '#!/bin/sh\nexec sudo /usr/bin/docker "$@"\n' > /usr/local/bin/docker \
+ && chmod 0755 /usr/local/bin/docker \
+ && docker --version`,
+	},
+	{
 		ID:          "audit-toolkit",
 		Name:        "Production audit toolkit",
 		Description: "trivy, syft, grype, semgrep, gitleaks, trufflehog, osv-scanner, checkov, dockle, scc, lizard.",

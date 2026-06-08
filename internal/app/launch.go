@@ -1,12 +1,15 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	gort "runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -157,6 +160,28 @@ func runContainer(ctx context.Context, dc docker.Client,
 	}
 
 	fmt.Fprintf(opts.Stderr, "→ Creating container %s ...\n", containerName)
+
+	// LoginMode: start detached with a long-running no-op CMD so the
+	// entrypoint runs its full setup (config merge, rules, settings) before
+	// we inject the auth login exec. The harness is launched separately via
+	// execIntoContainer after the login step completes.
+	if opts.LoginMode {
+		return dc.Run(ctx, docker.RunSpec{
+			Image:         imageTag,
+			ContainerName: containerName,
+			Hostname:      workspace.Hostname(wsDir),
+			GroupAdd:      dockerGroupAdd,
+			Detach:        true,
+			Init:          true,
+			ShmSize:       "2g",
+			Volumes:       volumes,
+			Env:           envVars,
+			Labels:        labels,
+			AddHosts:      []string{"host.docker.internal:host-gateway"},
+			WorkingDir:    wsDir,
+			Cmd:           []string{"sleep", "infinity"},
+		})
+	}
 
 	// What to exec inside the new container: harness CLI (default) or
 	// shell (vibrate shell). We pass an explicit Cmd to override the
@@ -743,6 +768,190 @@ func readOAuthTokenFile() string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+// ─── --login machinery ───────────────────────────────────────────────────────
+
+// entrypointReadyPath is the sentinel file the entrypoint touches just before
+// exec'ing the user's command. waitForEntrypoint polls for it to avoid racing
+// claude auth login against the config-merge steps (section 2 of entrypoint.sh).
+const entrypointReadyPath = "/tmp/.vibrator-entrypoint-done"
+
+// waitForEntrypoint polls the container until entrypoint.sh drops its
+// readiness sentinel (or times out after ~5 s). Non-fatal on timeout —
+// the login exec simply races the tail of the entrypoint, which is
+// an unlikely and low-risk scenario in practice.
+func waitForEntrypoint(ctx context.Context, dc docker.Client, containerName string) error {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		err := dc.Exec(ctx, docker.ExecSpec{
+			Container: containerName,
+			Cmd:       []string{"test", "-f", entrypointReadyPath},
+			Stdout:    io.Discard,
+			Stderr:    io.Discard,
+		})
+		if err == nil {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("timed out waiting for entrypoint ready signal in %s", containerName)
+}
+
+// claudeAuthURLMarker is the prefix claude auth login prints before the
+// URL the user should open. We scan for this in the docker exec output.
+const claudeAuthURLMarker = "If the browser didn't open, visit: "
+
+// authURLWriter wraps an io.Writer and scans for the claude auth URL.
+// When found, it opens it in the host browser (best-effort, non-blocking).
+// All bytes pass through unchanged so the user still sees the full output.
+type authURLWriter struct {
+	w    io.Writer
+	buf  []byte
+	done bool
+}
+
+func (a *authURLWriter) Write(p []byte) (int, error) {
+	n, err := a.w.Write(p)
+	if a.done {
+		return n, err
+	}
+	a.buf = append(a.buf, p...)
+	if idx := bytes.Index(a.buf, []byte(claudeAuthURLMarker)); idx >= 0 {
+		rest := a.buf[idx+len(claudeAuthURLMarker):]
+		if end := bytes.IndexAny(rest, " \r\n\t"); end >= 0 {
+			url := strings.TrimSpace(string(rest[:end]))
+			if strings.HasPrefix(url, "https://") {
+				a.done = true
+				go openBrowser(url)
+				a.buf = nil
+			}
+		}
+	}
+	// Prevent unbounded buffer growth while scanning.
+	if len(a.buf) > 8192 {
+		a.buf = a.buf[len(a.buf)-4096:]
+	}
+	return n, err
+}
+
+// openBrowser opens url in the host's default browser. Non-blocking and
+// best-effort — a failure (no browser, wrong platform) is silently ignored
+// because the URL is already visible in the terminal.
+func openBrowser(url string) {
+	var cmd string
+	var args []string
+	switch gort.GOOS {
+	case "darwin":
+		cmd, args = "open", []string{url}
+	case "linux":
+		cmd, args = "xdg-open", []string{url}
+	case "windows":
+		cmd, args = "cmd", []string{"/c", "start", url}
+	default:
+		return
+	}
+	_ = exec.Command(cmd, args...).Start()
+}
+
+// runLoginStep runs `claude auth login` interactively (stdin connected, no TTY
+// so stdout stays a pipe Go can scan). It intercepts the OAuth URL and opens
+// the host browser, then writes the resulting auth state back to the host's
+// ~/.claude.json so future launches are pre-authenticated without --login.
+//
+// --login always runs the auth flow. We deliberately do NOT short-circuit when
+// the host is already authenticated: passing --login is an explicit request to
+// (re)authenticate — e.g. to switch accounts — so we honour it every time.
+// Subsequent launches without --login still pick up the saved auth via the
+// entrypoint's host→container config merge.
+func runLoginStep(ctx context.Context, dc docker.Client, containerName, containerUser string, opts Options) error {
+	fmt.Fprintln(opts.Stderr, "→ Running claude auth login (browser will open automatically)…")
+
+	err := dc.Exec(ctx, docker.ExecSpec{
+		Container:   containerName,
+		Interactive: true,
+		NoTTY:       true, // -i only; stdout is a pipe we can scan for the URL
+		Cmd:         []string{"claude", "auth", "login"},
+		Stdin:       opts.Stdin,
+		Stdout:      &authURLWriter{w: opts.Stdout},
+		Stderr:      opts.Stderr,
+	})
+	if err != nil {
+		return fmt.Errorf("claude auth login: %w", err)
+	}
+
+	fmt.Fprintln(opts.Stderr, "→ Login complete — saving auth state to host ~/.claude.json…")
+	if wbErr := writebackAuthToHost(ctx, dc, containerName, containerUser); wbErr != nil {
+		// Non-fatal: auth still works for this session; it just won't persist.
+		fmt.Fprintf(opts.Stderr, "⚠  auth writeback failed (auth works this session only): %v\n", wbErr)
+	}
+	return nil
+}
+
+// writebackAuthToHost reads the container's ~/.claude.json and merges the
+// auth/onboarding fields back into the host's ~/.claude.json. This makes
+// the login state persist across container recreations: on the next launch
+// the entrypoint merges the host config into the container config (D1 mount),
+// so no re-authentication is needed.
+func writebackAuthToHost(ctx context.Context, dc docker.Client, containerName, containerUser string) error {
+	hostHome, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home: %w", err)
+	}
+	hostConfigPath := filepath.Join(hostHome, ".claude.json")
+
+	// Read the container's ~/.claude.json.
+	var containerBuf bytes.Buffer
+	if err := dc.Exec(ctx, docker.ExecSpec{
+		Container: containerName,
+		Cmd:       []string{"cat", "/home/" + containerUser + "/.claude.json"},
+		Stdout:    &containerBuf,
+		Stderr:    io.Discard,
+	}); err != nil {
+		return fmt.Errorf("read container ~/.claude.json: %w", err)
+	}
+
+	var cConfig map[string]json.RawMessage
+	if err := json.Unmarshal(containerBuf.Bytes(), &cConfig); err != nil {
+		return fmt.Errorf("parse container ~/.claude.json: %w", err)
+	}
+
+	// Read (or initialise) the host config.
+	var hConfig map[string]json.RawMessage
+	if data, err := os.ReadFile(hostConfigPath); err == nil {
+		_ = json.Unmarshal(data, &hConfig)
+	}
+	if hConfig == nil {
+		hConfig = make(map[string]json.RawMessage)
+	}
+
+	// Merge only the auth / onboarding fields — same set the entrypoint
+	// extracts when it goes the other direction (host → container).
+	authFields := []string{
+		"oauthAccount",
+		"userID",
+		"hasCompletedOnboarding",
+		"lastOnboardingVersion",
+		"subscriptionNoticeCount",
+		"hasAvailableSubscription",
+		"s1mAccessCache",
+	}
+	changed := false
+	for _, key := range authFields {
+		if v, ok := cConfig[key]; ok && string(v) != "null" {
+			hConfig[key] = v
+			changed = true
+		}
+	}
+	if !changed {
+		return nil // nothing to write back
+	}
+
+	updated, err := json.MarshalIndent(hConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal host config: %w", err)
+	}
+	return os.WriteFile(hostConfigPath, updated, 0o600)
 }
 
 // buildContainerEnv produces the full set of env vars forwarded into

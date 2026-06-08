@@ -412,6 +412,15 @@ if [ -f "$INTEGRATIONS_MANIFEST" ] && [ -f "$CONTAINER_SETTINGS" ] \
     done
 fi
 
+# --- readiness signal -------------------------------------------------------
+# Drop a sentinel file so `vibrate --login` can poll-wait for the full
+# entrypoint setup (config merge, rules copy, settings merge) to finish
+# before injecting `claude auth login` via docker exec. Without this,
+# there is a small race between the login exec and the config-merge step
+# above. The file is created just before exec so only one process ever
+# writes it, and exec replaces us anyway so it is effectively immutable.
+touch /tmp/.vibrator-entrypoint-done 2>/dev/null || true
+
 # --- exec the user's command -----------------------------------------------
 # `exec "$@"` replaces the entrypoint shell with the user's process so
 # the container's PID 1 is the user's shell, not us — required for

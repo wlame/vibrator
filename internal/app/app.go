@@ -111,6 +111,14 @@ type Options struct {
 	// extras, or running one-off commands.
 	LaunchTarget LaunchTarget
 
+	// LoginMode, when true, runs `claude auth login` inside the container
+	// before launching the harness. The container is started detached
+	// (sleep infinity) so the login exec can intercept the auth URL and
+	// open the host browser automatically. Auth state is written back to
+	// the host's ~/.claude.json so subsequent launches are pre-authenticated.
+	// Skipped silently when the host config already has oauthAccount.
+	LoginMode bool
+
 	// DinD enables Docker-in-Docker: the host's docker socket is
 	// bind-mounted into the container and the container user is added
 	// to the docker group so they can `docker` against the host daemon
@@ -247,6 +255,8 @@ var (
 	buildImageFn        = buildImage
 	runContainerFn      = runContainer
 	execIntoContainerFn = execIntoContainer
+	waitForEntrypointFn = waitForEntrypoint
+	runLoginStepFn      = runLoginStep
 )
 
 // resolveAndLaunch decides how to bring the workspace up given the current
@@ -285,18 +295,40 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 		if err := buildImageFn(ctx, dc, dfSpec, imageTag, opts); err != nil {
 			return err
 		}
-		return runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
+		if !opts.LoginMode {
+			return runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
+		}
+		if err := runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts); err != nil {
+			return err
+		}
+		if err := waitForEntrypointFn(ctx, dc, containerName); err != nil {
+			fmt.Fprintf(opts.Stderr, "⚠  entrypoint readiness check timed out: %v\n", err)
+		}
+		if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+			fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
+		}
+		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 	}
 
 	switch status {
 	case "running":
 		fmt.Fprintln(opts.Stderr, "→ Container already running — exec'ing in")
+		if opts.LoginMode {
+			if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+				fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
+			}
+		}
 		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 
 	case "exited", "created", "dead":
 		fmt.Fprintf(opts.Stderr, "→ Container %s (%s) — starting + exec\n", containerName, status)
 		if err := dc.Start(ctx, containerName); err != nil {
 			return fmt.Errorf("docker start: %w", err)
+		}
+		if opts.LoginMode {
+			if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+				fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
+			}
 		}
 		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 
@@ -313,7 +345,21 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 		} else {
 			fmt.Fprintf(opts.Stderr, "→ Image %s present — skipping build\n", imageTag)
 		}
-		return runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
+		// LoginMode: start detached, do login, then exec into the harness.
+		// Normal mode: docker run -it blocks for the entire session.
+		if !opts.LoginMode {
+			return runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts)
+		}
+		if err := runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts); err != nil {
+			return err
+		}
+		if err := waitForEntrypointFn(ctx, dc, containerName); err != nil {
+			fmt.Fprintf(opts.Stderr, "⚠  entrypoint readiness check timed out: %v\n", err)
+		}
+		if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+			fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
+		}
+		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 
 	default:
 		return fmt.Errorf("unexpected container status %q for %s", status, containerName)

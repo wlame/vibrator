@@ -75,7 +75,7 @@ vibrate variants prune --containers --force
 vibrate variants prune --images
 ```
 
-## Related
+## Related pages
 
 - [Naming & labels](../naming-and-labels.md) — the labels these commands filter on.
 - [`vibrate update`](update.md) — note that image-layer updates leave a dangling old image

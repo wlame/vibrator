@@ -48,8 +48,8 @@ acknowledged_missing = ["node"]
 
 | TOML key | Type | Default | Notes |
 |----------|------|---------|-------|
-| `harness` | string | — | Required to launch. One of `claude-code`, `codex`, `opencode`, `pi`. |
-| `profile` | string | `full` | One of `minimal`, `backend`, `frontend`, `full`. |
+| `harness` | string | — | Required to launch. One of `claude-code`, `codex`, `opencode`, `pi` (see [Harnesses](../guides/harnesses.md)). |
+| `profile` | string | `full` | One of `minimal`, `backend`, `frontend`, `full` (see [Profiles](profiles.md)). |
 | `shell` | string | `zsh` | One of `bash`, `zsh`, `fish`. |
 | `with` | list | — | [Feature](features.md) IDs to enable on top of the profile. |
 | `no` | list | — | Feature IDs to disable. |
@@ -136,7 +136,7 @@ Per-workspace hook preferences, written when you respond to a
   [`vibrate prereqs bootstrap`](commands/prereqs.md) / inline launch bootstrap.
 - **Defaults applied on save:** `profile` → `full`, `shell` → `zsh` when unset.
 
-## Related
+## Related pages
 
 - [The `.vb` file](../guides/configuration.md) — practical guide.
 - [Migrating from bash](../guides/migrating.md) — converting `.vb.env`.

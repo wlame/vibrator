@@ -78,7 +78,7 @@ Profiles carry rough size estimates (informational only): `minimal` ~150 MB, `ba
 ~600 MB, `frontend` ~1 GB, `full` ~2 GB. Reach for `minimal` + targeted `--with` when image
 size or build time matters.
 
-## Related
+## Related pages
 
 - [Profiles reference](../reference/profiles.md) — the canonical bundles.
 - [Features reference](../reference/features.md) — every feature, its deps, and what it

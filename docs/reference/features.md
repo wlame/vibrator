@@ -13,17 +13,21 @@ dependents).
 
 | ID | Name | Deps | ≈ Size | Installs |
 |----|------|------|--------|----------|
-| `python` | Python 3.13 | — | 100 MB | `uv` + a prebuilt CPython 3.13; symlinked to `python3`. |
-| `go` | Go toolchain | — | 200 MB | Go (copied from the official `golang` image; multi-arch). |
+| `python` | Python 3.13 | — | 100 MB | `uv` + a prebuilt CPython 3.13 (python-build-standalone); symlinked to `python3`. |
+| `go` | Go toolchain | — | 200 MB | Go (v1.26.2 in the image; copied from the official `golang` image; multi-arch). |
 | `node` | Node.js + Bun | — | 150 MB | Node 22 + Bun; npm/npx shims. Needed by most JS-based MCP servers. |
-| `playwright` | Playwright + Chromium | `node` | 500 MB | Chromium system libs + `@playwright/mcp` + Chromium browser. |
+| `playwright` | Playwright + Chromium | `node` | 500 MB | Chromium system libs + Chromium browser + Playwright MCP. |
 | `postgres-client` | Postgres client | — | 30 MB | `psql`, `pg_dump`, `pg_restore`. |
 | `gh` | GitHub CLI | — | 20 MB | `gh` from the official apt repo. |
 | `docker-cli` | Docker CLI | — | 40 MB | `docker` client (no daemon) + a sudo wrapper. Auto-added by [`--dind`](../guides/docker-in-docker.md). |
-| `audit-toolkit` | Production audit toolkit | `python` | 400 MB | trivy, syft, grype, semgrep, gitleaks, trufflehog, osv-scanner, bandit, pip-audit, detect-secrets, checkov. |
+| `audit-toolkit` | Production audit toolkit | `python` | 400 MB | trivy, syft, grype, semgrep, gitleaks, trufflehog, osv-scanner, checkov, dockle, scc, lizard. |
 | `codex-cli` | OpenAI Codex CLI | `node` | 30 MB | `@openai/codex` (used for cross-model code review). |
 | `ralphex` | ralphex | — | 20 MB | Autonomous coding loop — runs plans task-by-task in fresh sessions. |
 | `aider` | aider AI pair programming | `python` | 80 MB | `aider-chat` via `uv tool install`. Opt-in; in no default profile. |
+
+!!! tip "aider is opt-in"
+    `aider` is in **no** profile. It only enters a build when you explicitly request it with
+    `--with=aider`.
 
 ## Dependency behavior
 
@@ -36,6 +40,11 @@ dependents).
   truly drop it, also drop its dependent. See
   [the resolution subtlety](../guides/profiles-and-features.md#a-subtlety-deps-win-over-no).
 
+!!! warning "`--no` can be silently overridden"
+    Because dependencies win over `--no`, disabling a feature that a harness, extension, or
+    another selected feature still requires has no effect — it stays in the image. Drop the
+    dependent too if you really need it gone.
+
 ## Always-on base toolkit
 
 Independent of features, every image includes a base layer:
@@ -44,7 +53,7 @@ Independent of features, every image includes a base layer:
 your chosen shell, **ripgrep** (`rg`), **fd**, and **fzf**. See
 [Stage 1](../lifecycle/build.md#stage-1-base).
 
-## Related
+## Related pages
 
 - [Profiles](profiles.md) — which features each profile bundles.
 - [Profiles & features](../guides/profiles-and-features.md) — using `--with`/`--no`.

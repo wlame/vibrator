@@ -64,7 +64,7 @@ feature (auto-enabled).
 ## OpenCode { #opencode }
 
 SST's OpenCode. Installed as a self-contained prebuilt binary downloaded from GitHub
-Releases (architecture-aware), so it needs no base feature.
+Releases (architecture-aware, pinned to `0.5.0`), so it needs no base feature.
 
 - **Auth env vars:** `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
   `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`.
@@ -99,7 +99,7 @@ the `Harness` interface plus a registry entry), submitted as a PR. Day-to-day "a
 plugin/MCP", by contrast, is data-driven via the [extensions catalogue](extensions.md) and
 needs no Go code. See [Architecture](../reference/architecture.md).
 
-## Related
+## Related pages
 
 - [Authentication](authentication.md) — getting your keys/tokens into the container.
 - [LLM providers](llm-providers.md) — the provider step for Codex/OpenCode/Pi.

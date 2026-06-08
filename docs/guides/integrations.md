@@ -93,7 +93,7 @@ vibrate integrations serena     # manage the Serena host server
 vibrate integrations claude-mem # configure + run claude-mem
 ```
 
-## Related
+## Related pages
 
 - [Serena](../integrations/serena.md) — code intelligence MCP, with `auto`/`host`/`local`
   fallback.

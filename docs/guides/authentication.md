@@ -65,7 +65,7 @@ token in a file instead of your shell rc.
 
 ## Extension and LLM credentials
 
-- **Extensions** that declare `auth.env` get that host env var
+- **[Extensions](extensions.md)** that declare `auth.env` get that host env var
   [forwarded](../lifecycle/startup.md#forwarded-environment) — e.g. an extension needing
   `OPENAI_API_KEY` picks it up from your host automatically.
 - **LLM providers** for Codex/OpenCode/Pi resolve their key from
@@ -102,7 +102,7 @@ When env var names collide, later sources win:
 **harness auth → LLM-derived → extension `auth.env` → `[env]` overrides**. So your explicit
 `[env]` value always takes precedence, and the harness's own auth beats an extension's hint.
 
-## Related
+## Related pages
 
 - [What happens on start](../lifecycle/startup.md#forwarded-environment) — the full
   forwarding order.

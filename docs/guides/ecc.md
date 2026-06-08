@@ -5,8 +5,8 @@ cross-harness bundle of subagents, skills, rules, and hooks. Vibrator ships it a
 of opt-in [extensions](extensions.md), one per ECC profile, each named `ecc-*`.
 
 When selected, an `ecc-*` extension's build-time install snippet shallow-fetches a
-**pinned ECC commit** and runs ECC's own manifest-driven installer into the harness-native
-config directory (`~/.claude`, `~/.codex`, or `~/.opencode`).
+**pinned ECC commit** and runs ECC's own manifest-driven installer into the
+[harness](harnesses.md)-native config directory (`~/.claude`, `~/.codex`, or `~/.opencode`).
 
 ## Profiles
 
@@ -64,7 +64,7 @@ ECC profiles install a lot of agents, skills, and rules (`ecc-developer` is ~63 
 context budget, so pick the smallest profile that covers your workflow. The wizard shows an
 "about" blurb for the focused entry to help you choose.
 
-## Related
+## Related pages
 
 - [Extensions](extensions.md) — the catalogue mechanics ECC plugs into.
 - [`vibrate extensions show`](../reference/commands/extensions.md#vibrate-extensions-show) —

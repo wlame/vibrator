@@ -38,7 +38,7 @@ the workspace [`.vb`](../vb-file.md). Takes no flags.
 Dockerfile — new base packages, features, extensions, re-fetched bundles — use
 [`vibrate --rebuild`](launch.md#options) instead.
 
-## Related
+## Related pages
 
 - [`vibrate variants`](variants.md) — inspect/clean up images and containers.
 - [Harnesses](../../guides/harnesses.md) — what each harness installs.

@@ -24,7 +24,7 @@ serena = "auto"
 
 | Section | Holds |
 |---------|-------|
-| `harness` / `profile` / `shell` | the core selection |
+| `harness` / `profile` / `shell` | the core selection ([harness](harnesses.md), [profile](../reference/profiles.md)) |
 | `with` / `no` | [feature](../reference/features.md) deltas on the profile |
 | `extensions` | selected [extension](extensions.md) IDs |
 | `[llm]` | [LLM provider](llm-providers.md) choice (provider-agnostic harnesses only) |
@@ -90,7 +90,7 @@ To re-pick harness/profile/extensions through the wizard while **preserving** yo
 `[prereqs.*]` and `[env]`, use [`vibrate reconfigure`](../reference/commands/wizard.md#vibrate-reconfigure)
 rather than editing by hand.
 
-## Related
+## Related pages
 
 - [`.vb` schema reference](../reference/vb-file.md) — every field and its type.
 - [Migrating from bash](migrating.md) — converting a legacy `.vb.env`.

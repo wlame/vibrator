@@ -7,9 +7,10 @@ name: Docs
 # from the Actions tab (workflow_dispatch). The first successful run on the
 # default branch publishes to https://wlame.github.io/vibrator/.
 #
-# One-time setup in the repo: Settings → Pages → Build and deployment →
-# Source = "GitHub Actions". The configure-pages step below also attempts to
-# enable Pages automatically (enablement: true).
+# REQUIRED one-time setup in the repo — the default GITHUB_TOKEN is NOT allowed
+# to enable Pages itself, so do it by hand once:
+#   Settings → Pages → Build and deployment → Source = "GitHub Actions".
+# After that, every run here builds and deploys with no further configuration.
 
 on:
   push:
@@ -57,11 +58,10 @@ jobs:
       - name: Build site
         run: mkdocs build --strict
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
+      # No actions/configure-pages step: MkDocs already encodes the base URL via
+      # `site_url` in mkdocs.yml, so it doesn't need the base-path injection that
+      # step provides — and `enablement: true` there fails because GITHUB_TOKEN
+      # can't create the Pages site (enable it once in repo Settings instead).
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:

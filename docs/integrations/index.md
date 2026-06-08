@@ -79,7 +79,7 @@ An integration can run on the host in one of three ways:
 It then appears in `vibrate integrations`, gets its wiring baked into every new image, and
 its checks run on every launch.
 
-## Related
+## Related pages
 
 - [Integrations guide](../guides/integrations.md) — the conceptual walkthrough.
 - [`vibrate integrations`](../reference/commands/integrations.md) — host-side setup command.

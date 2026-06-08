@@ -19,6 +19,7 @@ Workspace container
 ├── CLAUDE_MEM_RUNTIME=server-beta
 ├── CLAUDE_MEM_SERVER_BETA_URL=http://host.docker.internal:37877
 ├── CLAUDE_MEM_SERVER_BETA_API_KEY=cmem_...
+├── CLAUDE_MEM_SERVER_BETA_TEAM_ID / _PROJECT_ID
 └── ~/.claude-mem/settings.json   (written by the entrypoint)
 ```
 
@@ -45,7 +46,8 @@ This creates `~/.config/vibrator/claude-mem.toml` (path printed in the UI):
 runtime      = "server-beta"
 server_url   = "http://host.docker.internal:37877"
 database_url = "postgres://user:pass@localhost:5432/claude_mem"
-stack_dir    = "~/dev/claude-mem-stack"
+team_name    = "vibrators"            # default
+stack_dir    = "~/dev/claude-mem-stack"  # default
 ```
 
 !!! warning "The DSN never leaves the host"
@@ -60,8 +62,8 @@ Resolved in order: `$VIBRATOR_CLAUDE_MEM_CONFIG` → `$XDG_CONFIG_HOME/vibrator/
 ### Using your own Postgres
 
 Set `database_url` to your existing instance. The bootstrap runs a one-shot
-`postgres:16-alpine` container that rewrites `localhost` → `host.docker.internal` so it can
-reach your host Postgres. You can skip `stack_dir` and run only the server/worker
+`postgres:16-alpine` container that rewrites `localhost`/`127.0.0.1` → `host.docker.internal`
+so it can reach your host Postgres. You can skip `stack_dir` and run only the server/worker
 containers, pointing their `DATABASE_URL` at `host.docker.internal`.
 
 ## Per-workspace bootstrap
@@ -127,8 +129,9 @@ The entrypoint's claude-mem step runs when `CLAUDE_MEM_RUNTIME=server-beta` and
 | HTTP status | Meaning | Logged as |
 |-------------|---------|-----------|
 | 200–202 | auth OK, event accepted | `claude-mem: auth OK` |
-| 400, 422 | auth OK, empty body rejected (expected) | verbose only |
+| 400, 422 | server reachable, token *not* rejected (bad/empty body — expected) | verbose only |
 | 401, 403 | **key rejected** — rotate it | `claude-mem: WARNING — auth REJECTED` |
+| connection refused | server not running | skipped silently |
 
 ## Status check
 
@@ -156,11 +159,11 @@ vibrate --rebuild
 **Bootstrap: "docker: command not found"** — the bootstrap needs Docker running on the host
 (it uses a one-shot `postgres:16-alpine` container).
 
-**Bootstrap: psql connection error** — if Postgres is on `localhost`, the DSN is rewritten to
-`host.docker.internal` automatically; ensure Postgres accepts connections from Docker's
-bridge network (`pg_hba.conf`).
+**Bootstrap: psql connection error** — if Postgres is on `localhost`/`127.0.0.1`, the DSN is
+rewritten to `host.docker.internal` automatically; ensure Postgres accepts connections from
+Docker's bridge network (`pg_hba.conf`).
 
-## Related
+## Related pages
 
 - [Integrations guide](../guides/integrations.md) — hosting modes and readiness checks.
 - [`vibrate prereqs`](../reference/commands/prereqs.md) — status + bootstrap.

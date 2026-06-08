@@ -22,8 +22,9 @@ decision tree.
 vibrate [flags]
 ```
 
-The default action. Equivalent to `vibrate run`. Launches the harness's own CLI — `claude`
-for claude-code, `codex` for codex, `opencode` for opencode, `pi` for pi.
+The default action. Equivalent to `vibrate run`. Launches the
+[harness](../../guides/harnesses.md)'s own CLI — `claude` for claude-code, `codex` for codex,
+`opencode` for opencode, `pi` for pi.
 
 ---
 
@@ -108,7 +109,7 @@ vibrate --dind
 `vibrate` propagates the exit code of the process you ran inside the container — so exiting
 the agent with a non-zero status surfaces it to your host shell.
 
-## Related
+## Related pages
 
 - [The `.vb` file](../vb-file.md) — what gets saved and resolved.
 - [What happens on build](../../lifecycle/build.md) / [on start](../../lifecycle/startup.md).

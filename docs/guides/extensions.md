@@ -1,7 +1,7 @@
 # Extensions
 
-An **extension** is something installed on top of the harness at build time — an MCP
-server, a slash-command skill, a subagent, a runtime tool, or a whole bundle like
+An **extension** is something installed on top of the [harness](harnesses.md) at build time
+— an MCP server, a slash-command skill, a subagent, a runtime tool, or a whole bundle like
 [ECC](ecc.md). The catalogue is curated and **data-driven**: one Markdown file per item,
 with YAML frontmatter, organized per harness under `extensions/<harness>/`. Adding or
 updating an extension is a docs-style change, not Go code.
@@ -120,7 +120,7 @@ The catalogue spans all four harnesses and includes, among many others:
 
 Run `vibrate extensions list <harness>` for the authoritative, current list.
 
-## Related
+## Related pages
 
 - [The ECC bundle](ecc.md) — the big opt-in bundle.
 - [`vibrate extensions`](../reference/commands/extensions.md) — command reference.

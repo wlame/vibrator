@@ -60,7 +60,7 @@ vibrate extensions show ecc-developer
 vibrate extensions show claude-code/serena
 ```
 
-## Related
+## Related pages
 
 - [Extensions guide](../../guides/extensions.md) — how the catalogue works and how to select
   entries.

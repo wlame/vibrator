@@ -109,7 +109,7 @@ With `VIBRATOR_VERBOSE=1`, `claude-exec` prints `serena: switched to http transp
 - `claude-exec` re-probes on every session entry, including `docker exec` re-entries. Start
   the host server, then re-enter: `exit` the session and run `vibrate` again.
 
-## Related
+## Related pages
 
 - [Integrations guide](../guides/integrations.md) — hosting modes and transport switching.
 - [`vibrate integrations`](../reference/commands/integrations.md) — managing the host server.

@@ -49,7 +49,7 @@ The four profiles, smallest to largest:
 - Profile is **not** part of the [variant fingerprint](naming-and-labels.md) — only the
   resolved feature set is. `--profile=full` and the implicit default build the same image.
 
-## Related
+## Related pages
 
 - [Features](features.md) — what each listed feature installs.
 - [Profiles & features](../guides/profiles-and-features.md) — resolution and `--with`/`--no`.

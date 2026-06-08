@@ -13,7 +13,8 @@ These influence how `vibrate` behaves on your machine.
 | `DOCKER_HOST` | Docker socket when it's a `unix://` URL. | — |
 | `COLIMA_PROFILE` | Colima VM profile to probe. | `default` |
 | `SERENA_PORT` | Port the [Serena](../integrations/serena.md) integration uses. | `8765` |
-| `VIBRATOR_CLAUDE_MEM_CONFIG` | Override the [claude-mem](../integrations/claude-mem.md) admin config path. | — |
+| `VIBRATOR_CLAUDE_MEM_CONFIG` | Override the [claude-mem](../integrations/claude-mem.md) admin config path (`~/.config/vibrator/claude-mem.toml`). | — |
+| `VIBRATOR_INTEGRATIONS_DIR` | Override the directory scanned for user-defined integration descriptors. | — |
 | `XDG_CONFIG_HOME` | Base for config dirs (e.g. `claude-mem.toml`). | `~/.config` |
 | `XDG_DATA_HOME` | Base for data dirs (Serena PID/log). | `~/.local/share` |
 
@@ -38,6 +39,11 @@ Listed by source, in precedence order (later wins on name collision).
     `VIBRATOR_INTEGRATION_MODE_<ID>` upper-cases the integration ID and replaces
     non-alphanumerics with `_` — so `claude-mem` becomes
     `VIBRATOR_INTEGRATION_MODE_CLAUDE_MEM`.
+
+!!! warning "The claude-mem DSN never crosses the boundary"
+    The Postgres `database_url` (DSN) from the claude-mem admin config is **host-only**. Only
+    the `CLAUDE_MEM_SERVER_BETA_*` token/IDs above are forwarded into the container — the DSN
+    itself is never set as a container env var.
 
 ## Baked into the image
 
@@ -66,7 +72,11 @@ These control the [entrypoint](../lifecycle/startup.md#2-the-entrypoint-entrypoi
 | `VIBRATOR_VERBOSE=1` | Print `[vibrator] ...` diagnostics for each setup step. |
 | `VIBRATOR_NO_BANNER=1` | Suppress the welcome banner. |
 
-## Related
+!!! tip "Debugging startup"
+    Set `VIBRATOR_VERBOSE=1` before launching to see exactly which env vars and setup steps
+    the entrypoint runs — handy when an integration or forwarded credential isn't behaving.
+
+## Related pages
 
 - [Authentication](../guides/authentication.md) — credential forwarding and precedence.
 - [What happens on start](../lifecycle/startup.md) — when each var is set.

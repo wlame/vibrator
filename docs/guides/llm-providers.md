@@ -82,7 +82,7 @@ Choose `openai-compat` to point at any OpenAI-compatible HTTP API — a self-hos
 a proxy, or a third-party service. You supply the base URL and a credential (env var or
 literal).
 
-## Related
+## Related pages
 
 - [Harnesses](harnesses.md) — which harnesses support the provider step.
 - [Authentication](authentication.md) — how keys are forwarded into the container.

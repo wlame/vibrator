@@ -74,7 +74,7 @@ deliberately blank to be re-asked):
 
 | Step | Shown when | Choices |
 |------|------------|---------|
-| **Harness** | harness unset | `claude-code`, `codex`, `opencode`, `pi` |
+| **[Harness](../../guides/harnesses.md)** | harness unset | `claude-code`, `codex`, `opencode`, `pi` |
 | **Profile** | profile unset | `minimal`, `backend`, `frontend`, `full` |
 | **Shell** | shell unset | `bash`, `zsh`, `fish` |
 | **LLM provider** | LLM unset *and* harness supports it | `openai`, `anthropic`, `ollama`, `lmstudio`, `openai-compat` |
@@ -88,7 +88,7 @@ auth) or a local path (URL + model picker) — see [LLM providers](../../guides/
 On completion the wizard prints a summary and the **equivalent command** — the exact flags
 that reproduce the selection, so you can skip the wizard next time.
 
-## Related
+## Related pages
 
 - [Quick start](../../getting-started/quickstart.md) — the wizard in context.
 - [The `.vb` file](../vb-file.md) — what the wizard writes.

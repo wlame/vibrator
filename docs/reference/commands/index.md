@@ -55,3 +55,9 @@ These flags shape *what* gets built. They are shared by `vibrate`, `run`, `shell
 !!! tip "Resolution order"
     For every field: **CLI flag → `.vb` value → built-in default**. The full decision tree
     is documented in [Lifecycle](../../lifecycle/index.md).
+
+## Related pages
+
+- [`vibrate` / `run` / `shell`](launch.md) — the default launch path.
+- [The `.vb` file](../vb-file.md) — where these flags get pinned.
+- [Lifecycle](../../lifecycle/index.md) — the build/run/exec decision tree.

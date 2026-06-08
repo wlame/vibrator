@@ -76,7 +76,7 @@ vibrate          # resolves from the converted .vb
 If you want to re-pick anything through the wizard while keeping your credentials, use
 [`vibrate reconfigure`](../reference/commands/wizard.md#vibrate-reconfigure).
 
-## Related
+## Related pages
 
 - [`vibrate migrate-pin`](../reference/commands/migrate-pin.md) — the command reference.
 - [The `.vb` file](configuration.md) — the target format explained.

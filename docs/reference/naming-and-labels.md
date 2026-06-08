@@ -17,11 +17,13 @@ harness=<lower>;shell=<lower>;features=<sorted-csv>;extensions=<sorted-csv>;user
 
 Properties:
 
-- **Order-independent** — features and extensions are sorted before hashing, so the same
-  logical selection always yields the same fingerprint regardless of input order.
-- **Case-insensitive** for the small enums (harness, shell, user).
-- **Profile is excluded** — it's just a label for a feature bundle. `--profile=full` and the
-  implicit default resolve to the same features and therefore the same fingerprint.
+- **Order-independent** — [features](features.md) and [extensions](../guides/extensions.md)
+  are sorted before hashing, so the same logical selection always yields the same fingerprint
+  regardless of input order.
+- **Case-insensitive** for the small enums ([harness](../guides/harnesses.md), shell, user).
+- **[Profile](profiles.md) is excluded** — it's just a label for a feature bundle.
+  `--profile=full` and the implicit default resolve to the same features and therefore the
+  same fingerprint.
 - **Username is included** — the image's `USER` stage hard-codes the host UID/GID, so two
   users must get distinct images.
 - A wholly empty spec hashes to the sentinel `00000000`.
@@ -98,7 +100,7 @@ lowercased, non-`[a-z0-9_-]` replaced with `_`, prefixed with `_` if it doesn't 
 letter/underscore, truncated to 32 chars. It falls back to `vibrate` if detection fails or
 you're root (UID 0). Override with `--username`.
 
-## Related
+## Related pages
 
 - [Core concepts: variant](../getting-started/concepts.md#variant).
 - [`vibrate variants`](commands/variants.md) — list/prune by label.

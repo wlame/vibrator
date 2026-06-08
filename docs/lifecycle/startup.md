@@ -40,7 +40,7 @@ into a session and control returns when you exit. The key flags:
 | `--add-host` | `host.docker.internal:host-gateway` | container can reach host services |
 | `--label` | `vibrator.*` | discoverable by [`vibrate variants`](../reference/commands/variants.md) |
 
-The default command is the harness CLI (or your shell for
+The default command is the [harness](../guides/harnesses.md) CLI (or your shell for
 [`vibrate shell`](../reference/commands/launch.md#vibrate-shell)), always prefixed with
 `/usr/local/bin/claude-exec` so the per-session wiring runs first.
 
@@ -77,7 +77,7 @@ collision):
    `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` (forwarded only when set on the host).
 2. **LLM-derived vars** from [`[llm]`](../reference/vb-file.md#llm) (for provider-agnostic
    harnesses) — the harness maps your provider/model/key into the right shape.
-3. **Extension `auth.env` vars** — host values declared by selected extensions.
+3. **[Extension](../guides/extensions.md) `auth.env` vars** — host values declared by selected extensions.
 4. **`[env]` overrides** from `.vb` — literal values, or `$NAME` indirection resolved
    against the host environment at run time.
 5. **`VIBRATOR_INTEGRATION_MODE_<ID>`** — your per-integration
@@ -217,7 +217,7 @@ intercepts the OAuth URL and opens it in your host browser, writes the resulting
 to your host `~/.claude.json`, and finally execs the harness. Every other path
 (`running`, `exited`, plain `run`) gets the login step injected at the right moment.
 
-## Related
+## Related pages
 
 - [What happens on build](build.md) — how the image being run was produced.
 - [Authentication](../guides/authentication.md) — auth env vars, `--login`, GPG, AWS.

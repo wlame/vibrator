@@ -67,3 +67,10 @@ and branches:
 This is the entire reason the first run in a workspace is slow and every run after is
 instant: the expensive `docker build` only happens when the resolved variant has no image
 yet.
+
+## Related pages
+
+- [What happens on build](build.md) — the five-stage Dockerfile generator.
+- [What happens on start](startup.md) — the `docker run`, entrypoint, and `claude-exec` flow.
+- [Runtime detection](runtime-detection.md) — how the Docker socket is found.
+- [Troubleshooting](../troubleshooting.md) — fixes when the lifecycle misbehaves.

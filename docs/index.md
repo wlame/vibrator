@@ -57,9 +57,9 @@ every subsequent `vibrate` in that workspace reuses the container and jumps in i
 
     ---
 
-    [Serena](integrations/serena.md) and [claude-mem](integrations/claude-mem.md) wire
-    host-side services into the container with automatic transport fallback — no manual
-    Docker networking.
+    [Serena](integrations/serena.md) and [claude-mem](integrations/claude-mem.md)
+    [integrations](guides/integrations.md) wire host-side services into the container with
+    automatic transport fallback — no manual Docker networking.
 
 -   :material-key-variant:{ .lg .middle } **Credentials, not secrets**
 
@@ -140,3 +140,10 @@ See [What happens on build](lifecycle/build.md) and
     CLI (no SDK dependency), so any Docker-compatible runtime works —
     [Docker Desktop, OrbStack, Colima, Rancher Desktop, Podman, or native](lifecycle/runtime-detection.md).
     Released under the **MIT** license.
+
+## Related pages
+
+- [About Vibrator](about.md) — what it is, why it exists, and how it compares.
+- [Core concepts](getting-started/concepts.md) — the vocabulary behind the tool.
+- [FAQ](faq.md) — quick answers to common questions.
+- [Troubleshooting](troubleshooting.md) — concrete fixes for common failures.

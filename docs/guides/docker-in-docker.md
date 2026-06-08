@@ -52,7 +52,7 @@ vibrate --with=docker-cli   # bake the client in
 # then run with --dind when you actually need socket access
 ```
 
-## Related
+## Related pages
 
 - [Runtime detection](../lifecycle/runtime-detection.md) — how the socket is found.
 - [`docker-cli` feature](../reference/features.md) — the client binary + sudo wrapper.

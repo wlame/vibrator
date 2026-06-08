@@ -77,7 +77,7 @@ header comment recording the harness, profile, shell, features, extensions, and 
    later `useradd -m` copies them into the user's home automatically.
 3. **Vibrator scripts** — `welcome.sh` into `/opt/vibrator/`, `entrypoint.sh` into
    `/opt/vibrator/`, and the `claude-exec` wrapper into `/usr/local/bin/`.
-4. **Integrations manifest** copied to `/etc/vibrator/integrations.json`.
+4. **[Integrations](../guides/integrations.md) manifest** copied to `/etc/vibrator/integrations.json`.
 5. **Build sentinel** — `echo "<build-id>" > /etc/vibrator/build`, so you can identify the
    image an old container came from (`cat /etc/vibrator/build`).
 6. **Locale + PATH env** — `LANG/LC_ALL=en_US.UTF-8`, `COLORTERM=truecolor`, and uv
@@ -189,7 +189,7 @@ the three build args above. `--no-cache` is added when you pass `--rebuild` (or
 A tagged image like `vb-claude-code-full-you-a1b2c3d4:latest`. From here the orchestrator
 moves on to [running the container](startup.md).
 
-## Related
+## Related pages
 
 - [`vibrate build`](../reference/commands/build.md) — build without running.
 - [`vibrate build-dockerfile`](../reference/commands/build.md#vibrate-build-dockerfile) —

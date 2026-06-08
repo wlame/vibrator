@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-label="Vibrator favicon">
+  <!-- Amber isometric cube on transparent — for the browser tab. -->
+  <g stroke="#ef6c00" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M24 7 L38 15 L24 23 L10 15 Z" fill="#ffb300"/>
+    <path d="M10 15 L24 23 L24 39 L10 31 Z" fill="#fb8c00"/>
+    <path d="M38 15 L24 23 L24 39 L38 31 Z" fill="#f57c00"/>
+  </g>
+  <g stroke="#ef6c00" stroke-width="2.4" stroke-linecap="round">
+    <path d="M3 21 L6 21"/>
+    <path d="M2.5 25.5 L6.5 25.5"/>
+    <path d="M3 30 L6 30"/>
+  </g>
+</svg>

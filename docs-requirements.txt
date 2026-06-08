@@ -9,3 +9,6 @@
 # rendering support used by the diagrams in these docs. Pinned to a major
 # line for reproducibility; bump deliberately.
 mkdocs-material>=9.5,<10
+
+# Image zoom/lightbox for diagrams and screenshots (the `glightbox` plugin).
+mkdocs-glightbox>=0.4,<0.5

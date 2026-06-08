@@ -42,7 +42,7 @@ vibrate runtime detect --colima-profile=work
 vibrate runtime detect --docker-socket=/custom/path/docker.sock
 ```
 
-## Related
+## Related pages
 
 - [Runtime detection](../../lifecycle/runtime-detection.md) — the detection order and the
   list of recognized runtimes.

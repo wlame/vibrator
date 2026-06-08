@@ -66,3 +66,9 @@ exhaustive tables, see the [Reference](../reference/index.md) section instead.
     Convert a legacy `.vb.env` into the current TOML `.vb`.
 
 </div>
+
+## Related pages
+
+- [Reference](../reference/index.md) — the exhaustive tables behind these guides.
+- [CLI reference](../reference/commands/index.md) — every `vibrate` subcommand.
+- [Core concepts](../getting-started/concepts.md) — the vocabulary the guides assume.

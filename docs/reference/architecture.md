@@ -21,7 +21,7 @@ code is a single Go module (`github.com/wlame/vibrator`) with a thin `main` and 
 | `internal/docker` | A `Client` interface over the `docker` CLI (production + mock). |
 | `internal/runtime` | Docker socket auto-detection across runtimes. |
 | `internal/workspace` | Variant fingerprint, image/container/hostname naming. |
-| `internal/integration` | Integration registry + runtimes (process / docker / compose) + serena/claude-mem. |
+| `internal/integration` | Integration registry + runtimes (process / docker / compose) + [serena](../integrations/serena.md)/[claude-mem](../integrations/claude-mem.md). |
 | `internal/hostprobe` | Scans the host for installed harness plugins. |
 | `internal/prereq` | Host-side prereq verifiers/bootstrappers (HTTP/command/file probes; claude-mem). |
 | `internal/localprovider` | Ollama / LM Studio lifecycle. |
@@ -88,7 +88,7 @@ agree.
 | a feature | append a `Feature` (with Dockerfile fragment) to the registry |
 | an integration | add a descriptor that self-registers, with `LaunchChecks` |
 
-## Related
+## Related pages
 
 - [What happens on build](../lifecycle/build.md) / [on start](../lifecycle/startup.md).
 - [Harnesses](../guides/harnesses.md) · [Features](features.md) ·

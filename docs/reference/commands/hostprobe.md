@@ -39,7 +39,7 @@ vibrate hostprobe
 Use it to confirm an extension you've installed on the host is recognized by Vibrator's
 catalogue (and will be offered in the wizard), or to debug a mapping that isn't happening.
 
-## Related
+## Related pages
 
 - [Extensions guide](../../guides/extensions.md) — the catalogue and `host_aliases`
   matching.

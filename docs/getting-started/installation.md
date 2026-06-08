@@ -111,3 +111,9 @@ vibrate completion fish > ~/.config/fish/completions/vibrate.fish
 
 - [Quick start](quickstart.md) — your first `vibrate` run.
 - [Core concepts](concepts.md) — the mental model.
+
+## Related pages
+
+- [Quick start](quickstart.md) — the first-run wizard walkthrough.
+- [Runtime detection](../lifecycle/runtime-detection.md) — how `vibrate` finds your Docker socket.
+- [`vibrate runtime detect`](../reference/commands/runtime.md) — verify the install can reach Docker.

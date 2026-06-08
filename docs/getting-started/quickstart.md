@@ -39,7 +39,7 @@ you like.
 2. Generates a [Dockerfile](../lifecycle/build.md) for your spec and builds the image.
    This is the slow step — once per spec.
 3. Creates the container, mounts your workspace, [forwards your
-   credentials](../lifecycle/startup.md), and execs the harness's CLI.
+   credentials](../lifecycle/startup.md), and execs the [harness](../guides/harnesses.md)'s CLI.
 
 You land inside the container, in your project directory, with a banner showing the
 harness, auth status, profile, and tools available.
@@ -118,3 +118,9 @@ vibrate shell
 
 - [Core concepts](concepts.md) — understand workspaces, variants, and the build pipeline.
 - [The `.vb` file](../guides/configuration.md) — what gets saved and how to hand-edit it.
+
+## Related pages
+
+- [The wizard](../reference/commands/wizard.md) — every step of the setup form.
+- [Profiles & features](../guides/profiles-and-features.md) — shaping what gets built.
+- [Troubleshooting](../troubleshooting.md) — fixes if the first run misbehaves.

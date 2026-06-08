@@ -6,8 +6,8 @@ Quick answers to common questions. Each links to the fuller explanation.
 
 ??? question "What is Vibrator, in one sentence?"
     A single Go binary (`vibrate`) that builds a tailored Docker image per project and runs
-    an AI coding agent — Claude Code, Codex, OpenCode, or Pi — inside it, configured by a
-    `.vb` file. See the [overview](index.md).
+    an AI coding agent — one of four [harnesses](guides/harnesses.md) (Claude Code, Codex,
+    OpenCode, or Pi) — inside it, configured by a `.vb` file. See the [overview](index.md).
 
 ??? question "What's the difference between `vibrate` and `vb`?"
     Nothing — `vb` is a symlink to `vibrate`, installed alongside it. Use either.
@@ -157,6 +157,13 @@ Quick answers to common questions. Each links to the fuller explanation.
 
 ## Still stuck?
 
+- Work through [Troubleshooting](troubleshooting.md) — concrete fixes grouped by symptom.
 - Read the [Lifecycle](lifecycle/index.md) pages — most "why did it do that?" answers live
   there.
 - Open an issue on [GitHub](https://github.com/wlame/vibrator).
+
+## Related pages
+
+- [Troubleshooting](troubleshooting.md) — symptom-by-symptom fixes.
+- [Core concepts](getting-started/concepts.md) — the vocabulary the answers assume.
+- [Quick start](getting-started/quickstart.md) — the first-run walkthrough.

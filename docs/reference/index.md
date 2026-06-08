@@ -43,3 +43,9 @@ Canonical, exhaustive reference material. For task-oriented walkthroughs, see th
     The internal module map and the key design decisions.
 
 </div>
+
+## Related pages
+
+- [Guides](../guides/index.md) — task-oriented walkthroughs of the same material.
+- [CLI reference](commands/index.md) — every `vibrate` subcommand and its flags.
+- [Core concepts](../getting-started/concepts.md) — the vocabulary behind these tables.

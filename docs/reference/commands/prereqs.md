@@ -86,7 +86,7 @@ vibrate prereqs bootstrap claude-mem-server-beta --force
     bootstrap inline — `Bootstrap now? [y/N]`. See
     [claude-mem](../../integrations/claude-mem.md#pre-launch-checks).
 
-## Related
+## Related pages
 
 - [claude-mem integration](../../integrations/claude-mem.md) — the full credential flow.
 - [`vibrate integrations`](integrations.md) — the host-side admin config + stack

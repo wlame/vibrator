@@ -70,9 +70,11 @@ vibrate runtime detect --docker-socket=/custom/path/docker.sock
 export VIBRATOR_DOCKER_SOCKET=/custom/path/docker.sock
 ```
 
-## Related
+## Related pages
 
 - [`vibrate runtime detect`](../reference/commands/runtime.md) — the command reference.
 - [Docker-in-Docker](../guides/docker-in-docker.md) — `--dind` and socket mounting.
 - [Environment variables](../reference/environment-variables.md) — `VIBRATOR_DOCKER_SOCKET`,
   `DOCKER_HOST`, `COLIMA_PROFILE`.
+- [Troubleshooting](../troubleshooting.md) — fixes for "no Docker runtime found" and DinD on
+  VM-based runtimes.

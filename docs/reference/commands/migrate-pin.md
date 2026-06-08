@@ -41,7 +41,7 @@ vibrate migrate-pin
 vibrate migrate-pin --input=old/.vb.env --output=.vb --keep-old
 ```
 
-## Related
+## Related pages
 
 - [Migrating from bash](../../guides/migrating.md) — the full guide.
 - [The `.vb` file](../vb-file.md) — the target format.

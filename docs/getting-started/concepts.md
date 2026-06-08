@@ -110,7 +110,8 @@ control the policy per workspace with a [hosting mode](../guides/integrations.md
 
 When you run `vibrate`:
 
-1. The **workspace** is located and its **`.vb` pin** loaded (or the wizard fills it in).
+1. The **workspace** is located and its **`.vb` pin** loaded (or the
+   [wizard](../reference/commands/wizard.md) fills it in).
 2. The pin's **harness** + **profile** + **extensions** resolve into a final **feature**
    set.
 3. That combination is the **variant**, hashed into a fingerprint that names the
@@ -120,3 +121,9 @@ When you run `vibrate`:
 
 The next two sections go deep on steps 3–5: [What happens on build](../lifecycle/build.md)
 and [What happens on start](../lifecycle/startup.md).
+
+## Related pages
+
+- [Naming & labels](../reference/naming-and-labels.md) — how the variant fingerprint names things.
+- [Profiles & features](../guides/profiles-and-features.md) — how profiles resolve into features.
+- [Architecture](../reference/architecture.md) — the internal module map behind these terms.

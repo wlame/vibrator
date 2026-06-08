@@ -75,7 +75,7 @@ vibrate build-dockerfile --harness=claude-code --extensions=context7,ecc-develop
 The generated header records the exact spec and a reproduction command, so a saved
 Dockerfile documents itself.
 
-## Related
+## Related pages
 
 - [What happens on build](../../lifecycle/build.md) — the five-stage generator explained.
 - [Features](../features.md) and [Profiles](../profiles.md) — what populates the stages.

@@ -15,29 +15,38 @@ copyright: Copyright &copy; 2026 wlame — MIT licensed
 docs_dir: docs
 site_dir: site
 
+# --strict is also enforced in CI; setting it here fails local builds on broken
+# internal links or pages missing from the nav.
+strict: true
+use_directory_urls: true
+
 theme:
   name: material
   language: en
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
   icon:
-    logo: material/cube-outline
     repo: fontawesome/brands/github
   palette:
-    # Light mode.
+    # Light mode — orange/amber: energetic, open-source feel.
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: teal
+      primary: orange
+      accent: amber
       toggle:
-        icon: material/weather-night
+        icon: material/brightness-7
         name: Switch to dark mode
     # Dark mode.
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: teal
+      primary: orange
+      accent: amber
       toggle:
-        icon: material/weather-sunny
+        icon: material/brightness-4
         name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
     - navigation.tabs
     - navigation.tabs.sticky
@@ -53,10 +62,15 @@ theme:
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
+    - content.action.edit
+    - content.action.view
 
 plugins:
-  # `search` ships with MkDocs core — no extra dependency required.
+  # Lean profile: client-side search, tag discovery, and image lightbox.
+  # `search` and `tags` ship with MkDocs/Material — only glightbox is an extra dep.
   - search
+  - tags
+  - glightbox
 
 markdown_extensions:
   # Callouts: !!! note / warning / tip, and collapsible ??? details.
@@ -89,6 +103,9 @@ markdown_extensions:
   - toc:
       permalink: true
 
+extra_css:
+  - assets/stylesheets/extra.css
+
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -97,6 +114,7 @@ extra:
 
 nav:
   - Home: index.md
+  - About: about.md
   - Getting started:
       - getting-started/index.md
       - Installation: getting-started/installation.md
@@ -144,4 +162,5 @@ nav:
       - integrations/index.md
       - Serena: integrations/serena.md
       - claude-mem: integrations/claude-mem.md
+  - Troubleshooting: troubleshooting.md
   - FAQ: faq.md

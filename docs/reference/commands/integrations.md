@@ -5,7 +5,7 @@ that run on your machine and get wired into the container (currently
 [Serena](../../integrations/serena.md) and [claude-mem](../../integrations/claude-mem.md)).
 
 ```bash
-vibrate integrations [INTEGRATION_ID]
+vibrate integrations [list | claude-mem | serena]
 ```
 
 ## Bare invocation
@@ -16,6 +16,15 @@ vibrate integrations
 
 Shows an interactive picker listing every registered integration (built-ins plus any
 user-defined TOML descriptors). Select one to manage it.
+
+## `vibrate integrations list`
+
+```bash
+vibrate integrations list
+```
+
+Non-interactive listing of every registered integration and its status — the same inventory
+the bare picker shows, but printed straight to stdout for scripts and quick inspection.
 
 ## `vibrate integrations claude-mem`
 
@@ -30,8 +39,9 @@ The hand-written setup + management flow for [claude-mem](../../integrations/cla
 2. **Runner** — start/stop the Docker Compose stack, probe the server, bootstrap the
    workspace key, or tail logs.
 
-The Postgres DSN is a **host-only** credential — it never crosses into a container. Only
-the resulting project-scoped bearer token does.
+!!! warning "The Postgres DSN stays on the host"
+    The Postgres DSN (`database_url`) is a **host-only** credential — it never crosses into a
+    container. Only the resulting project-scoped bearer token does.
 
 ## `vibrate integrations serena`
 
@@ -42,7 +52,11 @@ vibrate integrations serena
 Manage the [Serena](../../integrations/serena.md) host server — show status, start/stop it
 as a background process or a Docker container, and tail logs.
 
-## Related
+!!! tip "Serena port"
+    The Serena server listens on the port given by `SERENA_PORT` (default `8765`). Set that
+    var before starting it if the default port is taken.
+
+## Related pages
 
 - [Integrations guide](../../guides/integrations.md) — hosting modes, transport switching,
   and how integrations wire into the container.

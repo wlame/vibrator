@@ -1,0 +1,80 @@
+name: Docs
+
+# Builds the MkDocs (Material) documentation site from docs/ + mkdocs.yml
+# and publishes it to GitHub Pages.
+#
+# Runs on pushes to main that touch the docs, and can be triggered manually
+# from the Actions tab (workflow_dispatch). The first successful run on the
+# default branch publishes to https://wlame.github.io/vibrator/.
+#
+# One-time setup in the repo: Settings → Pages → Build and deployment →
+# Source = "GitHub Actions". The configure-pages step below also attempts to
+# enable Pages automatically (enablement: true).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "docs-requirements.txt"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Permissions required by the GitHub Pages deployment action.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment; don't cancel an in-progress run so a
+# publish always finishes cleanly.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # uv is the project's Python package manager (pip is not used).
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install docs dependencies
+        run: uv pip install --system -r docs-requirements.txt
+
+      # --strict fails the build on broken internal links or pages missing
+      # from the nav, so a bad merge can't silently publish a broken site.
+      - name: Build site
+        run: mkdocs build --strict
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

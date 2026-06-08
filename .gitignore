@@ -10,6 +10,10 @@
 *.out
 coverage.*
 
+# MkDocs build output (the static site is generated, not committed)
+/site/
+.cache/
+
 # Workspace pin (new format) — contains plaintext claude-mem API key after bootstrap
 .vb
 .vb.env

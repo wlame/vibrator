@@ -39,6 +39,9 @@ REGION       = "us-east-1"
 [integrations]
 serena     = "auto"
 claude-mem = "host"
+
+[hooks]
+acknowledged_missing = ["node"]
 ```
 
 ## Top-level fields
@@ -115,6 +118,15 @@ integration ID:
 | `host` | http only; warn if unreachable, no fallback. |
 | `local` | stdio only; never probe the host. |
 | `off` | Disable the integration's MCP wiring. |
+
+## `[hooks]` { #hooks }
+
+Per-workspace hook preferences, written when you respond to a
+[missing-tool hook prompt](../lifecycle/startup.md#missing-tool-hooks) at launch.
+
+| TOML key | Type | Notes |
+|----------|------|-------|
+| `acknowledged_missing` | list | Feature IDs you chose **not** to install for hooks that need them. Vibrator stops re-prompting for these; the container guard keeps skipping the affected hooks. Installing the feature (adding it to `with`) closes the gap and clears the entry. |
 
 ## Discovery and lifecycle
 

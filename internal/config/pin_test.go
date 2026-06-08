@@ -34,6 +34,38 @@ func TestPin_RoundtripScalarsAndLists(t *testing.T) {
 	}
 }
 
+func TestPin_RoundtripHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+
+	want := &Pin{
+		Harness: "claude-code",
+		Hooks: &HookPrefs{
+			AcknowledgedMissing: []string{"node", "python"},
+		},
+	}
+	if err := Save(path, want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("roundtrip mismatch\n want: %+v\n got:  %+v", want, got)
+	}
+}
+
+func TestPin_IsEmptyWithHooks(t *testing.T) {
+	if (Pin{}).IsEmpty() != true {
+		t.Fatal("zero pin should be empty")
+	}
+	p := Pin{Hooks: &HookPrefs{AcknowledgedMissing: []string{"node"}}}
+	if p.IsEmpty() {
+		t.Error("pin with hook prefs should not be empty")
+	}
+}
+
 func TestPin_RoundtripIntegrations(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".vb")

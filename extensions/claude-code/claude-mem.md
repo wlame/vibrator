@@ -3,9 +3,9 @@ id: claude-mem
 name: claude-mem
 kind: plugin
 default: false
-size_mb: 8
+size_mb: 200
 deps:
-  features: [node, postgres-client]
+  features: [node, postgres-client, python]
 prereq: claude-mem-server-beta
 install: |
   # Host-side bootstrap pre-mints a project-scoped API key into .vb; the
@@ -25,14 +25,31 @@ install: |
   mkdir -p "$HOME/.claude/plugins/marketplaces"
   git clone --depth 1 https://github.com/thedotmack/claude-mem.git \
     "$HOME/.claude/plugins/marketplaces/thedotmack"
-  # `git rev-parse --short=12` returns the 12-char short SHA directly,
-  # which is both POSIX-safe (the install RUN block runs under /bin/sh,
-  # often dash, which doesn't support bash's ${VAR:0:N} substring) and
-  # one variable shorter than computing the full SHA then slicing it.
-  CM_GIT_SHORT=$(cd "$HOME/.claude/plugins/marketplaces/thedotmack" && git rev-parse --short=12 HEAD)
-  CM_DEST="$HOME/.claude/plugins/cache/thedotmack/claude-mem/$CM_GIT_SHORT"
+  # Claude resolves a plugin from cache/<marketplace>/<plugin>/<version>/, and
+  # claude-mem's own hooks search `cache/thedotmack/claude-mem/[0-9]*/` — a
+  # version-NUMBER glob, not a git SHA. Install into the version dir read from
+  # the plugin manifest so the directory we populate is the one the hooks run
+  # from. (The previous git-short-SHA dir never matched that glob, so Claude
+  # re-fetched a dependency-less copy at runtime and the worker crashed with
+  # "Cannot find module 'zod/v3'".)
+  CM_SRC="$HOME/.claude/plugins/marketplaces/thedotmack/plugin"
+  CM_VERSION=$(jq -r '.version // empty' "$CM_SRC/.claude-plugin/plugin.json" 2>/dev/null)
+  # Fall back to the 12-char short SHA if the manifest carries no version.
+  # rev-parse is POSIX-safe under dash (no bash ${VAR:0:N} substring needed).
+  [ -n "$CM_VERSION" ] || CM_VERSION=$(cd "$HOME/.claude/plugins/marketplaces/thedotmack" && git rev-parse --short=12 HEAD)
+  CM_DEST="$HOME/.claude/plugins/cache/thedotmack/claude-mem/$CM_VERSION"
   mkdir -p "$CM_DEST"
-  cp -r "$HOME/.claude/plugins/marketplaces/thedotmack/plugin/." "$CM_DEST/"
+  cp -r "$CM_SRC/." "$CM_DEST/"
+
+  # Install the bundled-hook runtime dependencies declared in plugin/package.json
+  # (zod ^4 — which provides the `zod/v3` subpath the worker imports — plus the
+  # tree-sitter grammars). Without this node_modules the stop/worker hook fails
+  # on every event. The plugin ships only a bun.lock, so resolve fresh from
+  # package.json with npm. Native grammar builds use the python + build-essential
+  # in the image; if a native build fails, retry with --ignore-scripts so the
+  # pure-JS deps (zod) still land and the worker stops crashing.
+  ( cd "$CM_DEST" && npm install --omit=dev --no-audit --no-fund ) \
+    || ( cd "$CM_DEST" && npm install --omit=dev --no-audit --no-fund --ignore-scripts )
 auth:
   env: CLAUDE_MEM_SERVER_BETA_API_KEY
 source: https://github.com/thedotmack/claude-mem

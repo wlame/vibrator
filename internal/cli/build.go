@@ -135,24 +135,12 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 			f.profileID, strings.Join(profile.IDs(), ", "))
 	}
 
-	// Feature resolution: union the profile's features with the harness's
-	// required features, then layer --with / --no on top.
-	initial := append([]string{}, p.Features...)
-	initial = append(initial, h.RequiredFeatures()...)
-
-	resolved, err := feature.Resolve(initial, f.with, f.no)
-	if err != nil {
-		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("resolve features: %w", err)
-	}
-
-	// Materialize Feature structs in the resolved order.
-	feats := make([]feature.Feature, 0, len(resolved.Enabled))
-	for _, id := range resolved.Enabled {
-		fe, _ := feature.ByID(id)
-		feats = append(feats, fe)
-	}
-
-	// Extensions selections: validate every requested ID exists for this harness.
+	// Extensions selections: validate every requested ID exists for this
+	// harness. Loaded BEFORE feature resolution so each entry's deps.features
+	// can be folded into the initial set — mirrors app.resolveExtensionsAndFeatures
+	// (the `vibrate run` path). Without it, `vibrate build --extensions=claude-mem`
+	// would emit a Dockerfile whose npm-based install runs without the node
+	// feature, diverging from what bare `vibrate` actually builds.
 	var catEntries []*extensions.Entry
 	if len(f.extensionIDs) > 0 {
 		all, err := extensions.LoadAll(vibrator.ExtensionsFS)
@@ -168,6 +156,27 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 			}
 			catEntries = append(catEntries, entry)
 		}
+	}
+
+	// Feature resolution: union the profile's features with the harness's
+	// required features and the selected extensions' deps, then layer
+	// --with / --no on top.
+	initial := append([]string{}, p.Features...)
+	initial = append(initial, h.RequiredFeatures()...)
+	for _, e := range catEntries {
+		initial = append(initial, e.Deps.Features...)
+	}
+
+	resolved, err := feature.Resolve(initial, f.with, f.no)
+	if err != nil {
+		return dockerfile.Spec{}, workspace.Spec{}, fmt.Errorf("resolve features: %w", err)
+	}
+
+	// Materialize Feature structs in the resolved order.
+	feats := make([]feature.Feature, 0, len(resolved.Enabled))
+	for _, id := range resolved.Enabled {
+		fe, _ := feature.ByID(id)
+		feats = append(feats, fe)
 	}
 
 	dfSpec := dockerfile.Spec{

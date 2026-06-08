@@ -412,6 +412,53 @@ if [ -f "$INTEGRATIONS_MANIFEST" ] && [ -f "$CONTAINER_SETTINGS" ] \
     done
 fi
 
+# --- 7c. Skip hooks needing a missing tool (C12) ---------------------------
+# A Claude hook that shells out to e.g. `node` on an image without node fails
+# on EVERY matching event with a noisy "node: not found". The hook can't do
+# anything useful anyway, so drop it (logging what we skipped) to spare the
+# agent the spam. We check real PATH availability (command -v) rather than the
+# baked feature list, so a tool installed by other means is respected.
+#
+# The host-side launch prompt (internal/app/hooks.go) offers to INSTALL the
+# tool instead; this guard is the always-on safety net that also covers
+# plugin-installed hooks and non-interactive (CI) runs. Keep the tool list in
+# sync with internal/hooktools.toolFeature.
+if command -v jq >/dev/null 2>&1 && [ -f "$CONTAINER_SETTINGS" ]; then
+    _vb_hook_tools=$(jq -r '.hooks // {} | .[]? | .[]? | .hooks[]? | .command // empty' \
+        "$CONTAINER_SETTINGS" 2>/dev/null \
+        | grep -oE '\b(node|npm|npx|bun|python3?|pip3?|uvx?|go|gh|docker|psql|pg_dump|pg_restore|aider|ralphex|codex|playwright)\b' \
+        | sort -u)
+    _vb_missing=""
+    for _t in $_vb_hook_tools; do
+        command -v "$_t" >/dev/null 2>&1 || _vb_missing="$_vb_missing $_t"
+    done
+    _vb_missing=$(printf '%s' "$_vb_missing" | sed 's/^ *//; s/ *$//')
+    if [ -n "$_vb_missing" ]; then
+        # Build a word-boundary alternation of the missing tools, e.g.
+        # \b(node|python3)\b — used by jq's test() to find offending commands.
+        _vb_re="\\b($(printf '%s' "$_vb_missing" | tr ' ' '|'))\\b"
+        # Remove inner hooks whose command references a missing tool, then drop
+        # now-empty groups and events. Falls back to leaving settings untouched
+        # if jq errors (malformed input) — never block startup over a hook.
+        if jq --arg re "$_vb_re" '
+            .hooks = (
+                (.hooks // {})
+                | with_entries(.value |= (
+                      map(.hooks = ((.hooks // []) | map(select((.command // "") | test($re) | not))))
+                      | map(select((.hooks | length) > 0))
+                  ))
+                | with_entries(select((.value | length) > 0))
+            )
+        ' "$CONTAINER_SETTINGS" > "$CONTAINER_SETTINGS.tmp" 2>/dev/null; then
+            mv "$CONTAINER_SETTINGS.tmp" "$CONTAINER_SETTINGS"
+            printf '[vibrator] hooks: skipped hook(s) needing missing tool(s): %s\n' \
+                "$(printf '%s' "$_vb_missing" | tr ' ' ',')" >&2
+        else
+            rm -f "$CONTAINER_SETTINGS.tmp" 2>/dev/null || true
+        fi
+    fi
+fi
+
 # --- readiness signal -------------------------------------------------------
 # Drop a sentinel file so `vibrate --login` can poll-wait for the full
 # entrypoint setup (config merge, rules copy, settings merge) to finish

@@ -514,4 +514,3 @@ func hostname() string {
 	}
 	return h
 }
-

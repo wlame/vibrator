@@ -40,8 +40,8 @@ type UpdateOptions struct {
 //   - Container exited / created /     → docker start, then exec <update-cmd>.
 //     dead / stopped
 //   - Container missing, image exists  → build a new "FROM <image> RUN <update-cmd>"
-//                                         image, re-tag with the same name.
-//                                         Old image becomes dangling.
+//     image, re-tag with the same name.
+//     Old image becomes dangling.
 //   - Neither container nor image      → error — nothing to update.
 //
 // Important: when a container is updated, the change lives ONLY in

@@ -21,7 +21,7 @@ install: |
   claude mcp add slack \
     --scope user \
     --transport stdio \
-    -- npx -y slack-mcp-server@latest
+    -- npx -y slack-mcp-server@1.3.0
 source: https://github.com/korotovsky/slack-mcp-server
 ---
 

@@ -10,7 +10,7 @@ auth:
   env: GITHUB_PERSONAL_ACCESS_TOKEN
 install: |
   # Install the official GitHub MCP server (written in Go, maintained by GitHub).
-  GOBIN=/usr/local/bin go install github.com/github/github-mcp-server@latest
+  GOBIN=/usr/local/bin go install github.com/github/github-mcp-server@v1.2.0
   claude mcp add github \
     --scope user \
     --transport stdio \

@@ -37,6 +37,25 @@ func (codex) RequiredFeatures() []string {
 	return []string{"node"}
 }
 
+// HostMounts wires the host's ~/.codex state into the container. Unlike
+// Claude Code (whose entrypoint merges a *.host.json copy), Codex reads
+// its config natively, so these mount directly onto the container's real
+// config paths — no entrypoint support needed.
+//
+//   - auth.json is mounted READ-WRITE so an OAuth token refreshed inside
+//     the container (or a fresh `codex login`) persists back to the host.
+//   - config.toml is mounted READ-ONLY: it's user-authored, so a buggy
+//     container can read but not corrupt it.
+//
+// Both are MountFileIfExists: a host that has never run Codex gets no
+// mounts and Codex inside the container starts fresh.
+func (codex) HostMounts(_ harness.HostMountContext) []harness.HostMount {
+	return []harness.HostMount{
+		{HostRel: ".codex/auth.json", ContainerRel: ".codex/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
+		{HostRel: ".codex/config.toml", ContainerRel: ".codex/config.toml", ReadOnly: true, Kind: harness.MountFileIfExists},
+	}
+}
+
 // SupportsLLMProvider returns true — Codex defaults to OpenAI but can be
 // pointed at any OpenAI-compatible endpoint (local Ollama, LM Studio,
 // Azure OpenAI, etc.) via OPENAI_BASE_URL.

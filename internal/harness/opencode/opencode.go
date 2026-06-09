@@ -56,6 +56,25 @@ func (opencode) RequiredFeatures() []string {
 	return nil
 }
 
+// HostMounts wires the host's OpenCode state into the container. OpenCode
+// splits its state across two XDG locations, which is why HostConfigDir()
+// alone is insufficient — these descriptors name the exact paths:
+//
+//   - ~/.local/share/opencode/auth.json (the OAuth/credential store the
+//     hostprobe uses as the primary "is it installed?" signal) is mounted
+//     READ-WRITE so a `/connect` login inside the container persists back.
+//   - ~/.config/opencode (user config: opencode.json, agents, …) is
+//     mounted READ-ONLY so the container can't corrupt user-authored
+//     config.
+//
+// OpenCode reads these natively, so no entrypoint support is needed.
+func (opencode) HostMounts(_ harness.HostMountContext) []harness.HostMount {
+	return []harness.HostMount{
+		{HostRel: ".local/share/opencode/auth.json", ContainerRel: ".local/share/opencode/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
+		{HostRel: ".config/opencode", ContainerRel: ".config/opencode", ReadOnly: true, Kind: harness.MountDirIfExists},
+	}
+}
+
 // SupportsLLMProvider returns true — OpenCode is BYO-provider across
 // ~75+ providers (Anthropic, OpenAI, Gemini, Groq, OpenRouter,
 // DeepSeek, and any OpenAI-compatible endpoint).
@@ -67,11 +86,6 @@ func (opencode) SupportsLLMProvider() bool { return true }
 // Codex's OPENAI_API_KEY+OPENAI_BASE_URL. The mapping below mirrors
 // OpenCode's documented conventions as of May 2026.
 //
-// For local providers, OpenCode uses its custom-provider config in
-// ~/.config/opencode/opencode.json (NOT env vars). For v0.1 we set
-// the OpenAI-compat pair as a hint — power users still need the
-// matching opencode.json snippet if they need provider-specific
-// behavior. Future work: bind-mount a generated opencode.json fragment.
 // LaunchCommand returns the argv for OpenCode's TUI. `opencode` (no
 // args) opens the agent in the current workspace.
 func (opencode) LaunchCommand() []string { return []string{"opencode"} }
@@ -83,6 +97,16 @@ func (opencode) LaunchCommand() []string { return []string{"opencode"} }
 // /usr/local/bin/opencode.
 func (opencode) UpdateCommand() []string { return []string{"opencode", "upgrade"} }
 
+// LLMEnvVars maps the LLM choice into OpenCode's provider env vars.
+// OpenCode looks at provider-specific env vars (ANTHROPIC_API_KEY,
+// OPENAI_API_KEY, GEMINI_API_KEY, …); it doesn't have a single unified
+// pair like Codex's OPENAI_API_KEY+OPENAI_BASE_URL. The mapping below
+// mirrors OpenCode's documented conventions.
+//
+// For local providers, OpenCode uses its custom-provider config in
+// ~/.config/opencode/opencode.json (NOT env vars). We set the
+// OpenAI-compat pair as a hint — power users still need the matching
+// opencode.json snippet for provider-specific behavior.
 func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
 	env := map[string]string{}
 	switch provider {
@@ -98,6 +122,27 @@ func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]strin
 	case "anthropic":
 		if apiKey != "" {
 			env["ANTHROPIC_API_KEY"] = apiKey
+		}
+	case "gemini":
+		// OpenCode reads these provider-specific keys natively (they're
+		// declared in AuthEnvVars). Map the resolved key here too so a
+		// .vb that pins one of these providers injects the credential —
+		// without these cases the key would only reach the container
+		// when the matching var happens to be exported on the host.
+		if apiKey != "" {
+			env["GEMINI_API_KEY"] = apiKey
+		}
+	case "groq":
+		if apiKey != "" {
+			env["GROQ_API_KEY"] = apiKey
+		}
+	case "openrouter":
+		if apiKey != "" {
+			env["OPENROUTER_API_KEY"] = apiKey
+		}
+	case "deepseek":
+		if apiKey != "" {
+			env["DEEPSEEK_API_KEY"] = apiKey
 		}
 	case "ollama":
 		env["OPENAI_API_KEY"] = "ollama"

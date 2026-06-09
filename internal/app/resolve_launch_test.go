@@ -20,11 +20,11 @@ import (
 
 // launchProbe records which of the five terminal operations fired.
 type launchProbe struct {
-	built             bool
-	ran               bool
-	execed            bool
-	entrypointWaited  bool
-	loggedIn          bool
+	built            bool
+	ran              bool
+	execed           bool
+	entrypointWaited bool
+	loggedIn         bool
 }
 
 // installLaunchStubs swaps the seams for recording stubs and returns a

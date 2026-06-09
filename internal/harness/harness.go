@@ -92,6 +92,21 @@ type Harness interface {
 	// still run before the agent boots.
 	LaunchCommand() []string
 
+	// HostMounts returns the harness's DECLARATIVE host→container bind
+	// mounts — the host-side config/auth/session state that should be
+	// visible inside the container so settings and logins persist across
+	// runs.
+	//
+	// Harnesses return these as PURE DATA: no filesystem access, no OS
+	// calls. The orchestrator (internal/app) does all probing, directory
+	// creation, path expansion, and the translation to a concrete docker
+	// mount. This keeps harness implementations trivially testable and
+	// keeps the "which harness gets host state" decision out of the
+	// orchestrator (no `if harness == "claude-code"` special cases).
+	//
+	// Return an empty slice for "no host config persistence".
+	HostMounts(ctx HostMountContext) []HostMount
+
 	// LLMEnvVars maps an LLM provider configuration into the container
 	// environment variables this harness expects.
 	//
@@ -108,6 +123,52 @@ type Harness interface {
 	// configuration (claude-code) return an empty map; the existing
 	// AuthEnvVars surface still does its job.
 	LLMEnvVars(provider, model, baseURL, apiKey string) map[string]string
+}
+
+// MountKind tells the orchestrator how to treat a HostMount's source
+// path on the host before binding it into the container.
+type MountKind int
+
+const (
+	// MountFileIfExists binds the source only when it exists and is a
+	// regular file. Used for single config/auth files (e.g. auth.json).
+	// A missing source is a silent no-op.
+	MountFileIfExists MountKind = iota
+
+	// MountDirIfExists binds the source only when it exists and is a
+	// directory. A missing source is a silent no-op.
+	MountDirIfExists
+
+	// MountDirEnsure creates the source directory (and parents) on the
+	// host if missing, then binds it. Used for state dirs the container
+	// must be able to write to on first run (sessions, history, …). A
+	// failed mkdir is logged and the mount is skipped — never fatal.
+	MountDirEnsure
+)
+
+// HostMount is a harness's declarative request to bind a host path into
+// the container. See Harness.HostMounts for the contract.
+//
+// HostRel is interpreted relative to the host user's home directory;
+// ContainerRel relative to the container user's home directory. Both
+// use forward slashes and must stay within their home root — the
+// orchestrator rejects any entry whose cleaned path escapes home (a
+// guard against a "../../etc/…" descriptor).
+type HostMount struct {
+	HostRel      string
+	ContainerRel string
+	ReadOnly     bool
+	Kind         MountKind
+}
+
+// HostMountContext carries the per-launch values a harness needs to
+// compute its mount set without touching the filesystem.
+type HostMountContext struct {
+	// WorkspaceDir is the absolute path of the workspace being launched.
+	// It is mounted at the same path on host and container, so harnesses
+	// that scope state per-project (e.g. Claude Code's projects/<encoded>)
+	// can derive the encoded name from it as a pure string operation.
+	WorkspaceDir string
 }
 
 // Registry holds every built-in harness, ordered for display in the wizard.

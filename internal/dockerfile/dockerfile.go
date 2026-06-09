@@ -7,11 +7,11 @@
 //
 // The Dockerfile has five logical stages:
 //
-//   1. base     — Ubuntu 24.04 LTS + always-on substrate (jq, rg, vim, ...)
-//   2. features — per-feature install fragments from internal/feature
-//   3. harness  — per-harness install from internal/harness
-//   4. extensions  — per-entry install snippets from extensions markdown
-//   5. runtime  — user setup, labels, CMD
+//  1. base     — Ubuntu 24.04 LTS + always-on substrate (jq, rg, vim, ...)
+//  2. features — per-feature install fragments from internal/feature
+//  3. harness  — per-harness install from internal/harness
+//  4. extensions  — per-entry install snippets from extensions markdown
+//  5. runtime  — user setup, labels, CMD
 //
 // All five stages target the same final image; we use multi-stage tagging
 // for clarity in `docker history` and to give layer-cache invalidation
@@ -79,6 +79,16 @@ var supportedShells = map[string]struct{}{
 	"fish": {},
 }
 
+// SupportedShell reports whether s is a shell the generator (and the
+// launch path) accepts. Exported so pin validation can reject a bad
+// `.vb` shell value BEFORE it reaches any exec path — resolveLaunchCmd
+// builds "/bin/"+shell, and container-reuse launches skip Generate's
+// own validation entirely.
+func SupportedShell(s string) bool {
+	_, ok := supportedShells[s]
+	return ok
+}
+
 // Generate emits the full Dockerfile as bytes. Returns an error on invalid
 // spec (unknown shell, missing harness, …) — callers should treat any
 // error as a programming bug and surface to the user.
@@ -92,7 +102,9 @@ func Generate(spec Spec) ([]byte, error) {
 	writeBaseStage(&b, spec)
 	writeFeaturesStage(&b, spec)
 	writeHarnessStage(&b, spec)
-	writeExtensionsStage(&b, spec)
+	if err := writeExtensionsStage(&b, spec); err != nil {
+		return nil, err
+	}
 	writeRuntimeStage(&b, spec)
 
 	return b.Bytes(), nil
@@ -407,7 +419,12 @@ FROM features AS harness
 // writeExtensionsStage emits Stage 4: extensions entry installs. Entries are
 // processed in alphabetical ID order for deterministic output (the extensions
 // loader doesn't impose order; we sort here).
-func writeExtensionsStage(b *bytes.Buffer, spec Spec) {
+//
+// Returns an error when an install snippet collides with the heredoc
+// delimiter; Generate propagates it so the build aborts BEFORE invoking
+// docker rather than baking a Dockerfile with an embedded `# ERROR:`
+// comment that builds a broken image.
+func writeExtensionsStage(b *bytes.Buffer, spec Spec) error {
 	b.WriteString(`# ============================================================================
 # Stage 4 — extensions
 # ============================================================================
@@ -416,7 +433,7 @@ FROM harness AS extensions
 `)
 	if len(spec.Extensions) == 0 {
 		b.WriteString("# (no extensions selected)\n\n")
-		return
+		return nil
 	}
 	// Stable order so the same selection set always produces the same bytes.
 	entries := append([]*extensions.Entry(nil), spec.Extensions...)
@@ -428,13 +445,11 @@ FROM harness AS extensions
 			fmt.Fprintf(b, "# Source: %s\n", e.Source)
 		}
 		if err := writeExtensionInstall(b, e.Install); err != nil {
-			// Stage emission is best-effort here — Generate returns
-			// the buffer regardless. Surface delimiter conflicts as
-			// an inline error so the build fails fast on docker side.
-			fmt.Fprintf(b, "# ERROR: %v\n", err)
+			return fmt.Errorf("extension %q: %w", e.ID, err)
 		}
 		b.WriteString("\n")
 	}
+	return nil
 }
 
 // extensionRunDelimiter is the heredoc tag used by writeExtensionInstall.

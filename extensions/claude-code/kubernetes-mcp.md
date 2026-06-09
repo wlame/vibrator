@@ -19,7 +19,7 @@ install: |
   claude mcp add kubernetes \
     --scope user \
     --transport stdio \
-    -- npx -y kubernetes-mcp-server@latest --read-only
+    -- npx -y kubernetes-mcp-server@0.0.62 --read-only
 source: https://github.com/containers/kubernetes-mcp-server
 ---
 

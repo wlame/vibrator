@@ -122,8 +122,10 @@ Vibrator began as a bash implementation; the current Go rewrite (Go ≥ 1.26, a 
 binary) is **feature-complete**. It's released under the **MIT** license from
 [github.com/wlame/vibrator](https://github.com/wlame/vibrator).
 
-Releases are **tag-driven**: pushing a version tag runs [goreleaser](https://goreleaser.com/),
-which builds cross-platform binaries with checksums and auto-generates the changelog.
+Releases are **created manually in the GitHub UI**: publishing a release fires a CI workflow
+that builds the binaries for Linux and macOS (amd64/arm64) and attaches them — plus a
+`checksums.txt` manifest — as assets on that release. (Windows isn't built; it uses Unix-only
+syscalls, so Windows users run vibrate through WSL2.)
 
 If you're coming from the old bash version, [`vibrate migrate-pin`](reference/commands/migrate-pin.md)
 converts a legacy `.vb.env` file into the current TOML `.vb` format.

@@ -10,9 +10,9 @@ import (
 
 	vibrator "github.com/wlame/vibrator"
 	"github.com/wlame/vibrator/internal/app"
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/profile"
@@ -28,7 +28,7 @@ type buildFlags struct {
 	shell        string
 	with         []string
 	no           []string
-	extensionIDs   []string
+	extensionIDs []string
 	username     string
 	out          string // build-dockerfile only
 	noCache      bool   // build only
@@ -184,7 +184,7 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 		Profile:         f.profileID,
 		Shell:           f.shell,
 		Features:        feats,
-		Extensions:  catEntries,
+		Extensions:      catEntries,
 		Username:        f.username,
 		HostUID:         f.hostUID,
 		HostGID:         f.hostGID,
@@ -192,11 +192,11 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 	}
 
 	wsSpec := workspace.Spec{
-		Harness:  h.ID(),
-		Profile:  f.profileID,
-		Shell:    f.shell,
-		Features: resolved.Enabled,
-		Extensions:  f.extensionIDs,
+		Harness:    h.ID(),
+		Profile:    f.profileID,
+		Shell:      f.shell,
+		Features:   resolved.Enabled,
+		Extensions: f.extensionIDs,
 	}
 
 	return dfSpec, wsSpec, nil

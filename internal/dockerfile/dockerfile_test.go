@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/dockerfile"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
@@ -153,6 +153,7 @@ func TestGenerate_UserCreationHappensBeforeHarnessStage(t *testing.T) {
 //     aliases + welcome banner
 //   - zsh-newuser-install never fires (an empty .zshrc would suffice;
 //     a real one is strictly better)
+//
 // Plus the welcome banner script must be installed in a stable
 // system-wide location so each rc file can source it.
 func TestGenerate_AllShellRcFilesAreCopiedRegardlessOfDefault(t *testing.T) {
@@ -290,9 +291,9 @@ func TestGenerate_ExtensionsEmitAlphabetically(t *testing.T) {
 		{Harness: "claude-code", ID: "alpha", Kind: extensions.KindPlugin, Install: "RUN echo alpha"},
 	}
 	out, err := dockerfile.Generate(dockerfile.Spec{
-		Harness:        hrn(t, "claude-code"),
-		Profile:        "full",
-		Shell:          "zsh",
+		Harness:    hrn(t, "claude-code"),
+		Profile:    "full",
+		Shell:      "zsh",
 		Extensions: entries,
 	})
 	if err != nil {
@@ -385,10 +386,10 @@ func TestGolden(t *testing.T) {
 				Features: feats(t, "python", "node", "ralphex"),
 				Extensions: []*extensions.Entry{
 					{Harness: "claude-code", ID: "context7", Kind: extensions.KindMCP,
-						Source: "https://github.com/upstash/context7",
+						Source:  "https://github.com/upstash/context7",
 						Install: "claude mcp add context7 --scope user --transport http https://mcp.context7.com/mcp"},
 					{Harness: "claude-code", ID: "sequential-thinking", Kind: extensions.KindMCP,
-						Source: "https://github.com/modelcontextprotocol/servers",
+						Source:  "https://github.com/modelcontextprotocol/servers",
 						Install: "npm install -g @modelcontextprotocol/server-sequential-thinking\nclaude mcp add sequential-thinking --scope user --transport stdio -- mcp-server-sequential-thinking"},
 				},
 				HostUID:         1000,
@@ -397,6 +398,39 @@ func TestGolden(t *testing.T) {
 				VibratorVersion: "test-1.0",
 			},
 			filename: "full-claude-code-with-extensions.dockerfile",
+		},
+		{
+			// OpenCode installs from a pinned GitHub Releases tarball
+			// (multi-line RUN). Golden guards against the generator
+			// mangling that fragment.
+			name: "frontend-opencode-bash",
+			spec: dockerfile.Spec{
+				Harness:         hrn(t, "opencode"),
+				Profile:         "frontend",
+				Shell:           "bash",
+				Features:        feats(t, "node", "playwright"),
+				HostUID:         1000,
+				HostGID:         1000,
+				Username:        "vibrate",
+				VibratorVersion: "test-1.0",
+			},
+			filename: "frontend-opencode-bash.dockerfile",
+		},
+		{
+			// Pi installs via npm and verifies `pi --version` (no
+			// `|| true`). Golden guards the harness fragment.
+			name: "minimal-pi-zsh",
+			spec: dockerfile.Spec{
+				Harness:         hrn(t, "pi"),
+				Profile:         "minimal",
+				Shell:           "zsh",
+				Features:        feats(t, "node"),
+				HostUID:         1000,
+				HostGID:         1000,
+				Username:        "vibrate",
+				VibratorVersion: "test-1.0",
+			},
+			filename: "minimal-pi-zsh.dockerfile",
 		},
 	}
 

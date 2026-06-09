@@ -167,7 +167,7 @@ Notes:
 | Profiles | minimal / backend / frontend / full (default: full) |
 | Variant identity | SHA-256 prefix over the spec's canonical form |
 | Container reuse | Single-path workspace mount, label-driven discovery |
-| Release | goreleaser to GitHub Releases (binaries + checksums) |
+| Release | Manual GitHub UI release → CI builds + attaches per-platform binaries + checksums |
 
 ---
 
@@ -228,7 +228,7 @@ just uninstall      # remove the binary, alias, and completion
 just tidy           # go mod tidy
 just clean          # remove ./build/ and ./dist/
 
-just release-snapshot         # local goreleaser dry-run → ./dist/
+just dist                     # build release binaries + checksums → ./dist/
 
 VERSION=0.2.0 just build      # release build with embedded version
 INTEGRATION=1 just integration  # actually run integration tests
@@ -240,21 +240,29 @@ just versions       # print just / go / vibrator versions for bug reports
 
 ### Releasing
 
-Releases are driven by tag pushes:
+Releases are created **manually in the GitHub UI**, and CI attaches the
+binaries:
 
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
+1. Go to **Releases → Draft a new release**.
+2. Create (or choose) a tag like `v0.3.0`, write the release notes, and click
+   **Publish release**.
+3. Publishing fires [`.github/workflows/release.yml`](./.github/workflows/release.yml),
+   which builds the `vibrate` binary for `linux × {amd64, arm64}` and
+   `darwin × {amd64, arm64}` and uploads them — plus `checksums.txt` — as
+   assets on that release. Your notes are left untouched; CI only adds the
+   binaries. Re-publishing (or re-running the job) replaces the assets in place.
 
-`.github/workflows/release.yml` then runs goreleaser, which builds
-binaries for `linux × {amd64, arm64}` and `darwin × {amd64, arm64}`,
-publishes them to a (draft) GitHub Release alongside `checksums.txt`,
-and auto-generates a changelog from the commit history since the
-previous tag.
+Assets are named `vibrate_<version>_<os>_<arch>` (e.g.
+`vibrate_0.3.0_darwin_arm64`), with the version baked into the binary so
+`vibrate --version` matches the tag.
 
-Verify locally first with `just release-snapshot` — same pipeline, but
-nothing is tagged or pushed.
+Verify the exact artifacts locally first with `VERSION=0.3.0 just dist` — same
+build, targets, and checksums as CI, written to `./dist/`, but nothing is
+tagged, pushed, or uploaded.
+
+> **Windows is not built.** vibrate uses Unix-only syscalls (`syscall.Setsid`,
+> `syscall.Stat_t`) and does not cross-compile to `windows/*`; Windows users run
+> it through WSL2 with the `linux/amd64` binary.
 
 ### Useful `just` flags
 

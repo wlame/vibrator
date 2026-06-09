@@ -217,17 +217,31 @@ uninstall dest="/usr/local/bin":
 # Composite check — what CI runs on every PR
 ci: lint test build
 
-# Run goreleaser in snapshot mode — builds cross-platform binaries to ./dist/
-# without tagging or publishing. Requires `goreleaser` on PATH.
-# Install: https://goreleaser.com/install/
-release-snapshot:
+# Build the release artifacts locally — the exact raw per-platform binaries +
+# checksums.txt that CI attaches to a published GitHub Release (see
+# .github/workflows/release.yml). Outputs to ./dist/. Nothing is tagged or
+# pushed. Pass VERSION (without a leading "v") to stamp a real version:
+#   VERSION=0.3.0 just dist
+dist:
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! command -v goreleaser >/dev/null 2>&1; then
-      echo "goreleaser not installed — see https://goreleaser.com/install/"
-      exit 1
-    fi
-    goreleaser release --snapshot --clean
+    rm -rf dist && mkdir -p dist
+    # Same targets, ldflags, and naming as the release workflow. Pure-Go
+    # (CGO disabled) cross-compiles cleanly from any host. Windows is omitted —
+    # the code uses Unix-only syscalls and does not build for windows/*.
+    platforms="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64"
+    for p in $platforms; do
+      goos="${p%/*}"
+      goarch="${p#*/}"
+      ext=""
+      [[ "$goos" == "windows" ]] && ext=".exe"
+      out="dist/vibrate_{{version}}_${goos}_${goarch}${ext}"
+      echo "Building ${out}"
+      CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+        {{go}} build -trimpath -ldflags '{{ldflags}}' -o "${out}" {{cmd}}
+    done
+    ( cd dist && sha256sum vibrate_* > checksums.txt )
+    echo "✓ Release artifacts in ./dist/ (version: {{version}})"
 
 # Remove build artifacts
 clean:

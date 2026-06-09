@@ -100,7 +100,7 @@ func TestLaunchTarget_EffectiveNormalization(t *testing.T) {
 		in   LaunchTarget
 		want LaunchTarget
 	}{
-		{"", LaunchHarness},     // zero value → harness
+		{"", LaunchHarness}, // zero value → harness
 		{LaunchHarness, LaunchHarness},
 		{LaunchShell, LaunchShell},
 		// Unknown values pass through; resolveLaunchCmd errors on them

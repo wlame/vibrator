@@ -222,8 +222,8 @@ body
 
 func TestLoadAll_IgnoresNonMarkdown(t *testing.T) {
 	fsys := newFS(map[string]string{
-		"extensions/claude-code/x.md":     validEntryYAML("X", "plugin", "https://x"),
-		"extensions/claude-code/.gitkeep": "",
+		"extensions/claude-code/x.md":      validEntryYAML("X", "plugin", "https://x"),
+		"extensions/claude-code/.gitkeep":  "",
 		"extensions/claude-code/notes.txt": "scratch",
 	})
 	got, err := LoadAll(fsys)

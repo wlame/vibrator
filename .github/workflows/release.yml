@@ -1,36 +1,49 @@
 name: Release
 
-# Triggered when a version tag is pushed (e.g., v0.2.0). Tag the
-# release branch with `git tag vX.Y.Z && git push origin vX.Y.Z`;
-# goreleaser does the rest.
+# Builds the vibrate binary for every supported platform and attaches the
+# binaries (plus a checksum manifest) to a GitHub Release.
 #
-# The workflow:
-#   - sets up Go (from go.mod)
-#   - runs goreleaser to build cross-platform binaries
-#   - publishes them as a (draft) GitHub Release with checksums
+# Model: you create the release MANUALLY in the GitHub UI (Releases → "Draft a
+# new release" → pick/create a tag like v0.3.0, write the notes, "Publish").
+# Publishing fires this workflow, which builds the binaries and uploads them as
+# assets on that same release. CI never edits your release notes — it only adds
+# the binary assets.
 #
-# We don't auto-publish — the draft gives a chance to review the
-# generated changelog and binary set before flipping to public.
+# Re-running (re-publishing the release, or "Re-run jobs") replaces the assets
+# in place thanks to `gh release upload --clobber`.
+#
+# Platforms: Linux + macOS on amd64/arm64. Windows is intentionally NOT built —
+# the code uses Unix-only syscalls (syscall.Setsid in the Serena daemon,
+# syscall.Stat_t for host UID/GID), so it does not cross-compile to windows/*.
+# Windows users run vibrate through WSL2, which uses the linux/amd64 binary. The
+# build loop already handles a `.exe` suffix, so adding windows/* here is a
+# one-line change once those call sites grow `_windows.go` stubs.
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  release:
+    types: [published]
 
 permissions:
-  # goreleaser needs write access to releases (binaries, notes).
+  # gh release upload writes assets to the release.
   contents: write
-  # If we later add GHCR image publishing, also: packages: write
+
+# One publish at a time per tag; don't cancel an in-flight upload.
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
-  goreleaser:
-    name: GoReleaser
+  build-and-attach:
+    name: Build & attach binaries
     runs-on: ubuntu-latest
+    env:
+      # The release tag, e.g. v0.3.0.
+      TAG: ${{ github.event.release.tag_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # goreleaser uses git history for the auto-changelog.
+          # Full history so the build sees the tag (and any future changelog use).
           fetch-depth: 0
 
       - name: Set up Go
@@ -39,13 +52,43 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
+      # Pure-Go (CGO disabled) builds cross-compile to every target from a
+      # single Linux runner. Version + ldflags match the justfile and the old
+      # goreleaser config, so the baked `vibrate --version` is consistent.
+      - name: Build cross-platform binaries
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"                       # strip leading v: v0.3.0 -> 0.3.0
+          ldflags="-s -w -X github.com/wlame/vibrator/internal/cli.Version=${version}"
+          mkdir -p dist
+
+          # Supported platforms × amd64/arm64. (Windows omitted — see header.)
+          platforms="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64"
+          for p in $platforms; do
+            goos="${p%/*}"
+            goarch="${p#*/}"
+            ext=""
+            [ "$goos" = "windows" ] && ext=".exe"
+            out="dist/vibrate_${version}_${goos}_${goarch}${ext}"
+            echo "Building ${out}"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+              go build -trimpath -ldflags "${ldflags}" -o "${out}" ./cmd/vibrate
+          done
+
+      # SHA-256 manifest over the raw binaries (same algorithm goreleaser used).
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum vibrate_* > checksums.txt
+          echo "--- checksums.txt ---"
+          cat checksums.txt
+
+      - name: Attach binaries to the release
         env:
-          # Default token has releases:write via the workflow permission
-          # above. No separate PAT needed.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" dist/* \
+            --clobber \
+            --repo "${GITHUB_REPOSITORY}"

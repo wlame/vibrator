@@ -5,12 +5,12 @@
 //
 // # Decision tree
 //
-//   .vb exists? → resolve spec → image exists? → container exists?
-//                                                  ├─ running → docker exec
-//                                                  ├─ stopped → docker start + exec
-//                                                  ├─ image only → docker run
-//                                                  └─ none → build → run
-//   .vb missing → wizard → save .vb → build → run
+//	.vb exists? → resolve spec → image exists? → container exists?
+//	                                               ├─ running → docker exec
+//	                                               ├─ stopped → docker start + exec
+//	                                               ├─ image only → docker run
+//	                                               └─ none → build → run
+//	.vb missing → wizard → save .vb → build → run
 //
 // Each step is a small function in this package; Run wires them in
 // order. The cobra subcommand layer (internal/cli) imports app and
@@ -36,10 +36,10 @@ import (
 	"strings"
 
 	vibrator "github.com/wlame/vibrator"
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/hostprobe"
@@ -80,15 +80,15 @@ func (lt LaunchTarget) effective() LaunchTarget {
 // `vibrate build`'s flags plus a few orchestrator-only knobs.
 type Options struct {
 	// CLI flag overrides — non-empty wins over .vb values.
-	Harness    string
-	Profile    string
-	Shell      string
-	With       []string
-	No         []string
+	Harness      string
+	Profile      string
+	Shell        string
+	With         []string
+	No           []string
 	ExtensionIDs []string
-	Username   string
-	HostUID    int
-	HostGID    int
+	Username     string
+	HostUID      int
+	HostGID      int
 
 	// NoWizard, when true, skips the interactive wizard entirely. Falls
 	// back to flags/defaults — useful for scripted invocations and CI.
@@ -453,10 +453,10 @@ func runWizard(ctx context.Context, initial config.Pin, wsDir string) (wizard.Re
 	}
 
 	return wizard.Run(ctx, wizard.Input{
-		Initial:        initial,
-		WorkspaceDir:   wsDir,
-		HostDetected:   detected,
-		Extensions: entries,
+		Initial:      initial,
+		WorkspaceDir: wsDir,
+		HostDetected: detected,
+		Extensions:   entries,
 	})
 }
 
@@ -470,6 +470,12 @@ func validatePin(pin config.Pin) error {
 	if _, ok := harness.ByID(pin.Harness); !ok {
 		return fmt.Errorf("unknown harness %q (valid: %s)",
 			pin.Harness, strings.Join(harness.IDs(), ", "))
+	}
+	// The shell value from .vb reaches `docker exec` argv ("/bin/"+shell)
+	// even on container-reuse paths that never run the Dockerfile
+	// generator's own validation — so reject bad values here, up front.
+	if pin.Shell != "" && !dockerfile.SupportedShell(pin.Shell) {
+		return fmt.Errorf("unsupported shell %q in .vb (valid: bash, zsh, fish)", pin.Shell)
 	}
 	return nil
 }
@@ -716,7 +722,7 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 		Profile:         profileID,
 		Shell:           shell,
 		Features:        feats,
-		Extensions:  catEntries,
+		Extensions:      catEntries,
 		Username:        defaultUsername(opts),
 		HostUID:         defaultUID(opts),
 		HostGID:         defaultGID(opts),

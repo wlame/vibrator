@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -55,7 +56,10 @@ func (p HTTPProbe) Check(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", p.URL, err)
 	}
+	// Drain and close the body so the underlying connection is returned to
+	// the pool, enabling reuse on the next polling iteration.
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode >= 500 {
 		return fmt.Errorf("GET %s: status %d", p.URL, resp.StatusCode)
 	}

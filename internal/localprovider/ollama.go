@@ -14,8 +14,9 @@ import (
 // ollamaProvider talks to the Ollama HTTP API.
 //
 // Ollama API endpoints used:
-//   GET  /api/tags                — list locally-downloaded models
-//   POST /api/pull (body: {"name": "<model>"}) — pull a model
+//
+//	GET  /api/tags                — list locally-downloaded models
+//	POST /api/pull (body: {"name": "<model>"}) — pull a model
 //
 // Background-startup pattern: `ollama serve` runs in the foreground;
 // we exec it with os/exec.Cmd.Start() so the process detaches from
@@ -126,7 +127,13 @@ func ollamaEnsureModel(ctx context.Context, url, model string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	// Use a dedicated client rather than the shared http.DefaultClient.
+	// We deliberately set NO client-level Timeout: a model pull streams a
+	// multi-GB download and a fixed total timeout would abort large pulls
+	// mid-stream. Cancellation is driven by ctx, which the caller scopes
+	// to the launch lifetime.
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("ollama: pull %s: %w", model, err)
 	}

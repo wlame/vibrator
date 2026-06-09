@@ -47,7 +47,7 @@ install: |
 
   # 4. Cost dashboard — Python web UI at port 8753
   pip install --user pi-cost-dashboard || \
-    pip install --user git+https://github.com/mrexodia/pi-cost-dashboard
+    pip install --user git+https://github.com/mrexodia/pi-cost-dashboard@74c2d52b5614c737b0b8bad8396d29f4369f5d66
 
   # 5. UI polish + whimsy
   pi install git:github.com/mitsuhiko/agent-stuff  # frontend-design, commit, mermaid, summarize, whimsical

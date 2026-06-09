@@ -84,6 +84,31 @@ func TestRegistry_AllHaveHostConfigDir(t *testing.T) {
 	}
 }
 
+// Every harness's HostMounts descriptors must be well-formed: a non-empty
+// host- and container-relative path, a valid MountKind, and — critically —
+// neither path may climb out of its home root via "..". The orchestrator
+// (internal/app) also guards against escape at mount time, but catching a
+// bad descriptor here keeps a harness-authoring mistake from silently
+// being skipped at launch.
+func TestRegistry_HostMountsAreWellFormed(t *testing.T) {
+	ctx := harness.HostMountContext{WorkspaceDir: "/home/alice/project"}
+	for _, h := range harness.Registry {
+		for i, m := range h.HostMounts(ctx) {
+			if m.HostRel == "" || m.ContainerRel == "" {
+				t.Errorf("harness %q HostMounts[%d] has an empty path: %+v", h.ID(), i, m)
+			}
+			if m.Kind < harness.MountFileIfExists || m.Kind > harness.MountDirEnsure {
+				t.Errorf("harness %q HostMounts[%d] has invalid Kind %d", h.ID(), i, m.Kind)
+			}
+			for _, rel := range []string{m.HostRel, m.ContainerRel} {
+				if rel == ".." || strings.HasPrefix(rel, "../") || strings.HasPrefix(rel, "/") {
+					t.Errorf("harness %q HostMounts[%d] path %q must be relative and stay within home", h.ID(), i, rel)
+				}
+			}
+		}
+	}
+}
+
 // Harness IDs must match extensions/<id>/ directory names. Verified against
 // the embedded extensions in the root vibrator package — checked there to
 // avoid an import cycle.

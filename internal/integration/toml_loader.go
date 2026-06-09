@@ -2,7 +2,9 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -68,9 +70,9 @@ type tomlWiring struct {
 }
 
 type tomlMCPWiring struct {
-	Name  string         `toml:"name"`
-	HTTP  *tomlMCPHTTP   `toml:"http"`
-	Stdio *tomlMCPStdio  `toml:"stdio"`
+	Name  string        `toml:"name"`
+	HTTP  *tomlMCPHTTP  `toml:"http"`
+	Stdio *tomlMCPStdio `toml:"stdio"`
 }
 
 type tomlMCPHTTP struct {
@@ -136,7 +138,7 @@ func LoadFromDir(dir string) (int, error) {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return 0, nil
 		}
 		return 0, fmt.Errorf("read %s: %w", dir, err)

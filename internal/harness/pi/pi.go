@@ -14,8 +14,14 @@ func (pi) Name() string { return "Pi (pi-coding-agent)" }
 
 func (pi) Dockerfile() string {
 	// pi-coding-agent ships as an npm package. RequiredFeatures pulls in node.
+	//
+	// `pi --version` runs WITHOUT a `|| true` fallthrough on purpose: if
+	// the install produces no working `pi` binary (e.g. the package
+	// rebrands and the bin name changes) the build must fail here rather
+	// than bake a broken image that only errors when the user launches.
+	// This matches claude-code and codex, which also verify their binary.
 	return `RUN npm install -g @mariozechner/pi-coding-agent \
- && pi --version || true`
+ && pi --version`
 }
 
 func (pi) AuthEnvVars() []string {
@@ -35,6 +41,22 @@ func (pi) AuthEnvVars() []string {
 
 func (pi) HostConfigDir() string {
 	return "$HOME/.pi"
+}
+
+// HostMounts wires the host's ~/.pi state into the container. Pi keeps
+// its config (agent settings, ~/.pi/agent/mcp.json) and any credential
+// state under a single ~/.pi tree, so this is a coarse whole-directory
+// passthrough — mounted READ-WRITE so in-container config/login changes
+// persist back to the host. MountDirIfExists makes it a no-op for a host
+// that has never run Pi.
+//
+// Coarse on purpose: Pi's on-disk layout is less settled than the other
+// harnesses', so a single dir mount avoids missing a state file. Split
+// into finer-grained ro/rw mounts once the layout stabilizes.
+func (pi) HostMounts(_ harness.HostMountContext) []harness.HostMount {
+	return []harness.HostMount{
+		{HostRel: ".pi", ContainerRel: ".pi", ReadOnly: false, Kind: harness.MountDirIfExists},
+	}
 }
 
 func (pi) RequiredFeatures() []string {

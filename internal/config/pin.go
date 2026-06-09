@@ -45,8 +45,8 @@ type Pin struct {
 
 	// With and No are deltas relative to the chosen profile's feature bundle.
 	// Resolving them happens in internal/feature, not here.
-	With    []string `toml:"with,omitempty"`
-	No      []string `toml:"no,omitempty"`
+	With       []string `toml:"with,omitempty"`
+	No         []string `toml:"no,omitempty"`
 	Extensions []string `toml:"extensions,omitempty"`
 
 	// LLM is the chosen LLM provider + model + auth shape. nil for harnesses
@@ -219,23 +219,23 @@ func Save(path string, p *Pin) error {
 	// included here so the encoder emits [llm] and [llm.auth] subtables
 	// in deterministic field order — no manual assembly needed.
 	scalars := struct {
-		Harness string   `toml:"harness,omitempty"`
-		Profile string   `toml:"profile,omitempty"`
-		Shell   string   `toml:"shell,omitempty"`
-		With    []string `toml:"with,omitempty"`
-		No      []string `toml:"no,omitempty"`
-		Extensions []string `toml:"extensions,omitempty"`
-		LLM     *LLMSpec   `toml:"llm,omitempty"`
-		Hooks   *HookPrefs `toml:"hooks,omitempty"`
+		Harness    string     `toml:"harness,omitempty"`
+		Profile    string     `toml:"profile,omitempty"`
+		Shell      string     `toml:"shell,omitempty"`
+		With       []string   `toml:"with,omitempty"`
+		No         []string   `toml:"no,omitempty"`
+		Extensions []string   `toml:"extensions,omitempty"`
+		LLM        *LLMSpec   `toml:"llm,omitempty"`
+		Hooks      *HookPrefs `toml:"hooks,omitempty"`
 	}{
-		Harness: p.Harness,
-		Profile: p.Profile,
-		Shell:   p.Shell,
-		With:    p.With,
-		No:      p.No,
+		Harness:    p.Harness,
+		Profile:    p.Profile,
+		Shell:      p.Shell,
+		With:       p.With,
+		No:         p.No,
 		Extensions: p.Extensions,
-		LLM:     p.LLM,
-		Hooks:   p.Hooks,
+		LLM:        p.LLM,
+		Hooks:      p.Hooks,
 	}
 	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {
 		return fmt.Errorf("encode pin scalars: %w", err)

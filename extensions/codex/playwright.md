@@ -12,7 +12,7 @@ install: |
   # Microsoft's official Playwright MCP. The npm package
   # @playwright/mcp ships the server; the playwright feature provisions
   # Chromium and its system deps in the base image.
-  codex mcp add playwright -- npx -y @playwright/mcp@latest
+  codex mcp add playwright -- npx -y @playwright/mcp@0.0.75
 source: https://github.com/microsoft/playwright-mcp
 host_aliases: [playwright]
 ---

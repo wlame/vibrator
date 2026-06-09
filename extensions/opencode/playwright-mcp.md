@@ -11,12 +11,12 @@ runtime_needs:
 install: |
   mkdir -p "$HOME/.config/opencode"
   jq --arg name "playwright" \
-     --argjson entry '{"type":"local","command":["npx","-y","@playwright/mcp@latest"],"enabled":true}' \
+     --argjson entry '{"type":"local","command":["npx","-y","@playwright/mcp@0.0.75"],"enabled":true}' \
      '.mcp[$name] = $entry' \
      "$HOME/.config/opencode/config.json" 2>/dev/null \
      > "$HOME/.config/opencode/config.json.tmp" \
      && mv "$HOME/.config/opencode/config.json.tmp" "$HOME/.config/opencode/config.json" \
-     || echo '{"$schema":"https://opencode.ai/config.json","mcp":{"playwright":{"type":"local","command":["npx","-y","@playwright/mcp@latest"],"enabled":true}}}' > "$HOME/.config/opencode/config.json"
+     || echo '{"$schema":"https://opencode.ai/config.json","mcp":{"playwright":{"type":"local","command":["npx","-y","@playwright/mcp@0.0.75"],"enabled":true}}}' > "$HOME/.config/opencode/config.json"
 source: https://github.com/microsoft/playwright-mcp
 ---
 

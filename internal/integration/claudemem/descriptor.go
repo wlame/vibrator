@@ -234,8 +234,10 @@ func rewriteForHostProbe(url string) string {
 // case "config not loaded".
 type dynamicComposeRuntime struct{}
 
-func (d *dynamicComposeRuntime) Kind() string  { return "compose" }
-func (d *dynamicComposeRuntime) Label() string { return "Docker Compose stack (multi-container, persistent)" }
+func (d *dynamicComposeRuntime) Kind() string { return "compose" }
+func (d *dynamicComposeRuntime) Label() string {
+	return "Docker Compose stack (multi-container, persistent)"
+}
 
 func (d *dynamicComposeRuntime) Status(ctx context.Context) (integration.RuntimeStatus, error) {
 	return composeForCurrentConfig().Status(ctx)

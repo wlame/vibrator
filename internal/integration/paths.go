@@ -8,9 +8,9 @@ import (
 // UserIntegrationsDir returns the directory holding user-defined TOML
 // integration descriptors. Resolution order:
 //
-//   1. $VIBRATOR_INTEGRATIONS_DIR (test/override hook)
-//   2. $XDG_CONFIG_HOME/vibrator/integrations
-//   3. $HOME/.config/vibrator/integrations
+//  1. $VIBRATOR_INTEGRATIONS_DIR (test/override hook)
+//  2. $XDG_CONFIG_HOME/vibrator/integrations
+//  3. $HOME/.config/vibrator/integrations
 //
 // Returns "" when no home or config dir is resolvable — the loader
 // treats that as "no user integrations" and silently skips loading.

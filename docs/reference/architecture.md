@@ -63,7 +63,7 @@ login) are indirection seams, so the decision logic can be unit-tested against a
 | Variant identity | SHA-256 prefix over the canonical spec | Order-independent, reproducible image/container naming. |
 | Container reuse | Single-path workspace mount + label-driven discovery | Paths match host; objects are discoverable and prunable. |
 | Determinism | Byte-identical Dockerfile per spec | Golden tests, content fingerprints, inspectable builds. |
-| Release | goreleaser → GitHub Releases | Cross-platform binaries + checksums from tag pushes. |
+| Release | Manual GitHub UI release → CI attaches assets | Per-platform binaries + checksums uploaded on publish; notes stay hand-written. |
 
 ## Embedded assets
 

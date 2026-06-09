@@ -49,7 +49,7 @@ install: |
   data.setdefault("mcpServers", {})
   data["mcpServers"]["serena"] = {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/oraios/serena", "serena-mcp-server"]
+      "args": ["--from", "git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78", "serena-mcp-server"]
   }
   cfg.write_text(json.dumps(data, indent=2))
   PY

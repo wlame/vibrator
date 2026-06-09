@@ -120,9 +120,9 @@ func TestFileVerify_PresentAndAbsent(t *testing.T) {
 	absent := filepath.Join(dir, "nope.txt")
 
 	cases := []struct {
-		name      string
-		f         FileVerify
-		wantOK    bool
+		name   string
+		f      FileVerify
+		wantOK bool
 	}{
 		{"present-and-must-exist", FileVerify{Path: present, MustExist: true}, true},
 		{"present-but-must-be-absent", FileVerify{Path: present, MustExist: false}, false},

@@ -9,7 +9,7 @@ deps:
 install: |
   claude mcp add serena \
     --scope user \
-    -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd
+    -- uvx --from git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78 serena start-mcp-server --project-from-cwd
 source: https://github.com/oraios/serena
 ---
 

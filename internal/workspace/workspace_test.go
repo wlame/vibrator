@@ -8,16 +8,16 @@ import (
 
 func TestFingerprint_StableAcrossOrder(t *testing.T) {
 	a := Spec{
-		Harness:  "claude-code",
-		Shell:    "zsh",
-		Features: []string{"python", "go", "node"},
-		Extensions:  []string{"claude-mem", "context7"},
+		Harness:    "claude-code",
+		Shell:      "zsh",
+		Features:   []string{"python", "go", "node"},
+		Extensions: []string{"claude-mem", "context7"},
 	}
 	b := Spec{
-		Harness:  "claude-code",
-		Shell:    "zsh",
-		Features: []string{"node", "python", "go"}, // reordered
-		Extensions:  []string{"context7", "claude-mem"},
+		Harness:    "claude-code",
+		Shell:      "zsh",
+		Features:   []string{"node", "python", "go"}, // reordered
+		Extensions: []string{"context7", "claude-mem"},
 	}
 	if Fingerprint(a) != Fingerprint(b) {
 		t.Errorf("reordered features/extensions produced different fingerprints: %s vs %s",
@@ -29,7 +29,7 @@ func TestFingerprint_DifferentInputsDiffer(t *testing.T) {
 	base := Spec{Harness: "claude-code", Shell: "zsh", Features: []string{"python"}}
 
 	cases := []struct {
-		name  string
+		name   string
 		mutate func(Spec) Spec
 	}{
 		{"harness change", func(s Spec) Spec { s.Harness = "codex"; return s }},
@@ -254,11 +254,11 @@ func TestSanitizeTagSegment(t *testing.T) {
 func TestImageName_FormatExample(t *testing.T) {
 	// Concrete end-to-end example matching what the README documents.
 	spec := Spec{
-		Harness:  "claude-code",
-		Profile:  "backend",
-		Shell:    "zsh",
-		Features: []string{"python", "go", "node"},
-		Extensions:  []string{"claude-mem", "context7"},
+		Harness:    "claude-code",
+		Profile:    "backend",
+		Shell:      "zsh",
+		Features:   []string{"python", "go", "node"},
+		Extensions: []string{"claude-mem", "context7"},
 	}
 	fp := Fingerprint(spec)
 	img := ImageName(spec, fp)

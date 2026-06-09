@@ -15,7 +15,7 @@ install: |
   claude mcp add aws-docs \
     --scope user \
     --transport stdio \
-    -- uvx awslabs.aws-documentation-mcp-server@latest
+    -- uvx awslabs.aws-documentation-mcp-server@1.1.24
 source: https://github.com/awslabs/mcp
 ---
 

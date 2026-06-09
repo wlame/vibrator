@@ -15,9 +15,9 @@ import (
 //
 //  1. ~/.claude/plugins/installed_plugins.json
 //     The authoritative manifest on recent versions. Schema:
-//        { "version": 2,
-//          "plugins": { "<id>@<marketplace>": [ {...}, ... ], ... }
-//        }
+//     { "version": 2,
+//     "plugins": { "<id>@<marketplace>": [ {...}, ... ], ... }
+//     }
 //     Keys are split on "@" — the part before the @ is the plugin id.
 //
 //  2. ~/.claude/settings.json

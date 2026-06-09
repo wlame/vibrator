@@ -22,8 +22,8 @@ install: |
   const cfg = path.join(process.env.HOME, '.pi/agent/mcp.json');
   const data = fs.existsSync(cfg) ? JSON.parse(fs.readFileSync(cfg, 'utf8')) : { mcpServers: {} };
   data.mcpServers ||= {};
-  data.mcpServers.playwright = { command: 'npx', args: ['-y', '@playwright/mcp@latest', '--isolated'] };
-  data.mcpServers['chrome-devtools'] = { command: 'npx', args: ['-y', 'chrome-devtools-mcp@latest'] };
+  data.mcpServers.playwright = { command: 'npx', args: ['-y', '@playwright/mcp@0.0.75', '--isolated'] };
+  data.mcpServers['chrome-devtools'] = { command: 'npx', args: ['-y', 'chrome-devtools-mcp@1.2.0'] };
   fs.writeFileSync(cfg, JSON.stringify(data, null, 2));
   JS
 

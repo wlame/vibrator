@@ -33,11 +33,11 @@ import (
 // build. Spec values are normalized (sorted, lower-cased where appropriate)
 // before fingerprinting.
 type Spec struct {
-	Harness  string   // e.g. "claude-code"
-	Profile  string   // user-facing label only — NOT part of fingerprint
-	Shell    string   // "bash" | "zsh" | "fish"
-	Features []string // resolved final feature list (after profile + with + no)
-	Extensions  []string // resolved extensions selections (per-harness IDs)
+	Harness    string   // e.g. "claude-code"
+	Profile    string   // user-facing label only — NOT part of fingerprint
+	Shell      string   // "bash" | "zsh" | "fish"
+	Features   []string // resolved final feature list (after profile + with + no)
+	Extensions []string // resolved extensions selections (per-harness IDs)
 
 	// Username is the unprivileged user baked into the image. Affects
 	// fingerprint AND appears as a visible segment in the image tag, so

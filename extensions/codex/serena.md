@@ -11,7 +11,7 @@ install: |
   # Codex MCP add — writes the [mcp_servers.serena] table to ~/.codex/config.toml.
   # uvx fetches Serena from git on first run; the binary then runs as a stdio
   # subprocess per Codex session.
-  codex mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd
+  codex mcp add serena -- uvx --from git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78 serena start-mcp-server --project-from-cwd
 source: https://github.com/oraios/serena
 host_aliases: [serena]
 ---

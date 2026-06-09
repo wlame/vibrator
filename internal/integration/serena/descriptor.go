@@ -56,9 +56,12 @@ func descriptor() *integration.Integration {
 				// Stdio fallback: when the host server is unreachable
 				// the container spawns Serena locally via uvx. Same
 				// command the old claude-exec.sh hardcoded.
+				// Pinned to a specific commit for supply-chain safety;
+				// must stay in sync with uvxSource in daemon.go — bump
+				// both to the same SHA together.
 				Stdio: &integration.MCPStdio{
 					Command: []string{
-						"uvx", "--from", "git+https://github.com/oraios/serena",
+						"uvx", "--from", "git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78",
 						"serena", "start-mcp-server", "--project-from-cwd",
 					},
 				},
@@ -142,7 +145,7 @@ func (p *processRuntime) Start(_ context.Context) error {
 	return err
 }
 
-func (p *processRuntime) Stop(_ context.Context) error {
+func (p *processRuntime) Stop(ctx context.Context) error {
 	state, err := Read(p.port)
 	if err != nil {
 		return err
@@ -150,7 +153,7 @@ func (p *processRuntime) Stop(_ context.Context) error {
 	if state.Status != StatusRunning {
 		return nil
 	}
-	return Stop(state)
+	return Stop(ctx, state)
 }
 
 func (p *processRuntime) Logs(_ context.Context, maxBytes int64) (string, error) {

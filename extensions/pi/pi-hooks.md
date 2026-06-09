@@ -48,10 +48,10 @@ the four classic Claude Code productivity features:
 npm install -g typescript typescript-language-server
 
 # Python
-pip install python-lsp-server ruff python-lsp-ruff
+pip install python-lsp-server==1.14.0 ruff==0.15.16 python-lsp-ruff==2.3.1
 
 # Go
-go install golang.org/x/tools/gopls@latest
+go install golang.org/x/tools/gopls@v0.22.0
 ```
 
 `lsp` auto-detects which server to invoke from the file extension.

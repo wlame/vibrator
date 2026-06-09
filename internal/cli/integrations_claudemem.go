@@ -93,7 +93,7 @@ func cmAdminConfigForm(cmd *cobra.Command, c colors) error {
 			Value(&b.TeamName),
 		huh.NewInput().
 			Title("Stack directory").
-			Description("Path to the cloned claude-mem-stack repo (contains docker-compose.yml).\n" +
+			Description("Path to the cloned claude-mem-stack repo (contains docker-compose.yml).\n"+
 				"vibrator runs `docker compose up -d` here.").
 			Value(&b.StackDir),
 	)).WithTheme(huh.ThemeCharm())

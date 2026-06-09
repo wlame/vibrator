@@ -34,8 +34,8 @@ import (
 
 	"github.com/charmbracelet/huh"
 
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/hostprobe"
 )
@@ -75,10 +75,10 @@ type Result struct {
 // Exposed for unit-testing the gating decisions independently from the
 // huh form layer.
 type Steps struct {
-	Harness bool
-	Profile bool
-	Shell   bool
-	LLM     bool
+	Harness    bool
+	Profile    bool
+	Shell      bool
+	LLM        bool
 	Extensions bool
 	// SerenaHosting asks how the Serena MCP should be hosted (host server
 	// vs container-local). Only relevant for harnesses that wire the Serena

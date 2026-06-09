@@ -14,11 +14,11 @@ func TestPin_RoundtripScalarsAndLists(t *testing.T) {
 	path := filepath.Join(dir, ".vb")
 
 	want := &Pin{
-		Harness: "claude-code",
-		Profile: "backend",
-		Shell:   "zsh",
-		With:    []string{"playwright", "audit-toolkit"},
-		No:      []string{"aider"},
+		Harness:    "claude-code",
+		Profile:    "backend",
+		Shell:      "zsh",
+		With:       []string{"playwright", "audit-toolkit"},
+		No:         []string{"aider"},
 		Extensions: []string{"claude-mem", "context7", "serena"},
 	}
 	if err := Save(path, want); err != nil {

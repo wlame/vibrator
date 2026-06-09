@@ -22,7 +22,7 @@ install: |
   claude mcp add sentry \
     --scope user \
     --transport stdio \
-    -- sh -c 'SENTRY_ACCESS_TOKEN="$SENTRY_AUTH_TOKEN" npx -y @sentry/mcp-server@latest'
+    -- sh -c 'SENTRY_ACCESS_TOKEN="$SENTRY_AUTH_TOKEN" npx -y @sentry/mcp-server@0.36.0'
 source: https://github.com/getsentry/sentry-mcp
 ---
 

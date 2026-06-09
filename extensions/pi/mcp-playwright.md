@@ -13,7 +13,7 @@ install: |
   # tools (click, type, navigate, snapshot, screenshot, etc.). The
   # browser binaries are large (~280 MB) — gated to the playwright
   # feature.
-  npx -y @playwright/mcp@latest --help >/dev/null
+  npx -y @playwright/mcp@0.0.75 --help >/dev/null
   npx playwright install --with-deps chromium
   mkdir -p ~/.pi/agent
   node - <<'JS'
@@ -26,7 +26,7 @@ install: |
   data.mcpServers ||= {};
   data.mcpServers.playwright = {
     command: 'npx',
-    args: ['-y', '@playwright/mcp@latest', '--isolated']
+    args: ['-y', '@playwright/mcp@0.0.75', '--isolated']
   };
   fs.writeFileSync(cfgPath, JSON.stringify(data, null, 2));
   JS

@@ -147,4 +147,3 @@ func extractTemplatesTo(dst string) error {
 		return nil
 	})
 }
-

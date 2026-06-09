@@ -27,7 +27,7 @@ install: |
   const data = fs.existsSync(cfg) ? JSON.parse(fs.readFileSync(cfg, 'utf8')) : { mcpServers: {} };
   data.mcpServers ||= {};
   # Suggested archetype: arxiv-mcp-server is a community package
-  data.mcpServers.arxiv = { command: 'npx', args: ['-y', 'arxiv-mcp-server@latest'] };
+  data.mcpServers.arxiv = { command: 'npx', args: ['-y', 'arxiv-mcp-server@0.1.5'] };
   data.mcpServers.fetch = { command: 'npx', args: ['-y', '@modelcontextprotocol/server-fetch'] };
   # W&B MCP — community package, may need substitution if unavailable
   data.mcpServers.wandb = {

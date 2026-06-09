@@ -16,7 +16,7 @@
 // — is what causes the integration to appear in the global registry at
 // program start.
 //
-// Design philosophy
+// # Design philosophy
 //
 // Most integrations only need 3 dimensions (Runtimes, Probe, Wiring) and
 // can be described declaratively. A small number — claude-mem in

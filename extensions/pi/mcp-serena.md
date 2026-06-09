@@ -11,7 +11,7 @@ install: |
   # via LSP-backed MCP tools. Pi consumes it through pi-mcp-adapter.
   # Requires pi-mcp-adapter to already be installed (default in vibrator).
   pip install --user uv
-  uvx --from git+https://github.com/oraios/serena serena-mcp-server --help >/dev/null
+  uvx --from git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78 serena-mcp-server --help >/dev/null
   # Register with pi-mcp-adapter
   mkdir -p ~/.pi/agent
   python - <<'PY'
@@ -21,7 +21,7 @@ install: |
   data.setdefault("mcpServers", {})
   data["mcpServers"]["serena"] = {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/oraios/serena", "serena-mcp-server"],
+      "args": ["--from", "git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78", "serena-mcp-server"],
       "directTools": ["find_symbol", "find_referencing_symbols", "get_symbols_overview"]
   }
   cfg.write_text(json.dumps(data, indent=2))

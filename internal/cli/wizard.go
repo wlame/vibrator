@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 
 	vibrator "github.com/wlame/vibrator"
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/hostprobe"
 	"github.com/wlame/vibrator/internal/wizard"
 )
@@ -75,10 +75,10 @@ func runWizardStandalone(cmd *cobra.Command, _ []string) error {
 
 	// Run the wizard.
 	result, err := wizard.Run(context.Background(), wizard.Input{
-		Initial:        initial,
-		WorkspaceDir:   cwd,
-		HostDetected:   hostDetected,
-		Extensions: entries,
+		Initial:      initial,
+		WorkspaceDir: cwd,
+		HostDetected: hostDetected,
+		Extensions:   entries,
 	})
 	if err != nil {
 		return err

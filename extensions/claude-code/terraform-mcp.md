@@ -14,7 +14,7 @@ install: |
   # from source so we get a static binary on the image's PATH; the
   # Go toolchain is already cached when the `go` feature is on, so
   # this adds about 30 MB after the binary is stripped.
-  GOBIN=/usr/local/bin go install github.com/hashicorp/terraform-mcp-server/cmd/terraform-mcp-server@latest
+  GOBIN=/usr/local/bin go install github.com/hashicorp/terraform-mcp-server/cmd/terraform-mcp-server@v0.5.2
   claude mcp add terraform \
     --scope user \
     --transport stdio \

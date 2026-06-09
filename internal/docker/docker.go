@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -78,23 +79,23 @@ type BuildSpec struct {
 type RunSpec struct {
 	Image         string            // image:tag — required
 	ContainerName string            // --name — optional but recommended
-	Interactive  bool              // -it
-	Detach       bool              // -d
-	Remove       bool              // --rm
-	Network      string            // --network (e.g. "host" or "bridge")
-	Privileged   bool              // --privileged (escape hatch only)
-	Init         bool              // --init (zombie reaper)
-	ShmSize      string            // --shm-size (e.g. "2g")
-	SecurityOpts []string          // --security-opt entries
-	CapAdd       []string          // --cap-add (e.g. SYS_ADMIN for dind)
-	GroupAdd     []string          // --group-add (e.g. host's docker GID for socket access)
-	AddHosts     []string          // --add-host entries (e.g. "host.docker.internal:host-gateway")
-	Volumes      []Volume          // -v repeated
-	Env          []EnvVar          // -e repeated
-	Labels       map[string]string // --label repeated
-	WorkingDir   string            // --workdir (cwd inside the container)
-	Hostname     string            // --hostname (RFC 1123 — letters, digits, hyphens; max 63 chars)
-	Cmd          []string          // command + args inside the container
+	Interactive   bool              // -it
+	Detach        bool              // -d
+	Remove        bool              // --rm
+	Network       string            // --network (e.g. "host" or "bridge")
+	Privileged    bool              // --privileged (escape hatch only)
+	Init          bool              // --init (zombie reaper)
+	ShmSize       string            // --shm-size (e.g. "2g")
+	SecurityOpts  []string          // --security-opt entries
+	CapAdd        []string          // --cap-add (e.g. SYS_ADMIN for dind)
+	GroupAdd      []string          // --group-add (e.g. host's docker GID for socket access)
+	AddHosts      []string          // --add-host entries (e.g. "host.docker.internal:host-gateway")
+	Volumes       []Volume          // -v repeated
+	Env           []EnvVar          // -e repeated
+	Labels        map[string]string // --label repeated
+	WorkingDir    string            // --workdir (cwd inside the container)
+	Hostname      string            // --hostname (RFC 1123 — letters, digits, hyphens; max 63 chars)
+	Cmd           []string          // command + args inside the container
 
 	// I/O streams. nil stdin/stdout/stderr connect to the real process
 	// streams when Interactive is true. Otherwise nil = discard.
@@ -104,13 +105,13 @@ type RunSpec struct {
 
 // ExecSpec describes a `docker exec` invocation.
 type ExecSpec struct {
-	Container   string
-	Interactive bool // -it: allocate PTY + keep stdin open
-	NoTTY       bool // when true with Interactive, use only -i (no -t); allows stdout interception
-	Env         []EnvVar
-	WorkingDir  string // --workdir (cwd inside the container)
-	Cmd         []string
-	Stdin       io.Reader
+	Container      string
+	Interactive    bool // -it: allocate PTY + keep stdin open
+	NoTTY          bool // when true with Interactive, use only -i (no -t); allows stdout interception
+	Env            []EnvVar
+	WorkingDir     string // --workdir (cwd inside the container)
+	Cmd            []string
+	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 }
 
@@ -182,11 +183,11 @@ type ImageInfo struct {
 
 // ContainerInfo is a minimal summary of a docker container.
 type ContainerInfo struct {
-	Name     string
-	ID       string
-	Image    string
-	Status   string // "running", "exited", etc.
-	Labels   map[string]string
+	Name      string
+	ID        string
+	Image     string
+	Status    string // "running", "exited", etc.
+	Labels    map[string]string
 	CreatedAt string
 }
 
@@ -569,12 +570,6 @@ func sortedMapKeys[V any](m map[string]V) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	// Use a simple insertion sort for tiny maps; for larger ones swap to
-	// sort.Strings. For the sizes vibrator deals with, the difference is noise.
-	for i := 1; i < len(keys); i++ {
-		for j := i; j > 0 && keys[j-1] > keys[j]; j-- {
-			keys[j-1], keys[j] = keys[j], keys[j-1]
-		}
-	}
+	sort.Strings(keys)
 	return keys
 }

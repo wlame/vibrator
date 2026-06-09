@@ -41,7 +41,7 @@ install: |
   data = json.loads(cfg.read_text())
   data["mcpServers"]["serena"] = {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/oraios/serena", "serena-mcp-server"],
+      "args": ["--from", "git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78", "serena-mcp-server"],
       "directTools": ["find_symbol", "find_referencing_symbols", "get_symbols_overview"]
   }
   cfg.write_text(json.dumps(data, indent=2))
@@ -49,7 +49,7 @@ install: |
 
   # 4. Pi hooks (LSP routed to gopls, checkpoint, permission)
   pi install npm:pi-hooks
-  go install golang.org/x/tools/gopls@latest
+  go install golang.org/x/tools/gopls@v0.22.0
 
   # 5. Skills bundle — commit, github, update-changelog, tmux
   pi install git:github.com/mitsuhiko/agent-stuff

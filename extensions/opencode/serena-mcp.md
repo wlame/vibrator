@@ -12,12 +12,12 @@ runtime_needs:
 install: |
   mkdir -p "$HOME/.config/opencode"
   jq --arg name "serena" \
-     --argjson entry '{"type":"local","command":["uvx","--from","git+https://github.com/oraios/serena","serena","start-mcp-server","--project-from-cwd"],"enabled":true}' \
+     --argjson entry '{"type":"local","command":["uvx","--from","git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78","serena","start-mcp-server","--project-from-cwd"],"enabled":true}' \
      '.mcp[$name] = $entry' \
      "$HOME/.config/opencode/config.json" 2>/dev/null \
      > "$HOME/.config/opencode/config.json.tmp" \
      && mv "$HOME/.config/opencode/config.json.tmp" "$HOME/.config/opencode/config.json" \
-     || echo '{"$schema":"https://opencode.ai/config.json","mcp":{"serena":{"type":"local","command":["uvx","--from","git+https://github.com/oraios/serena","serena","start-mcp-server","--project-from-cwd"],"enabled":true}}}' > "$HOME/.config/opencode/config.json"
+     || echo '{"$schema":"https://opencode.ai/config.json","mcp":{"serena":{"type":"local","command":["uvx","--from","git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78","serena","start-mcp-server","--project-from-cwd"],"enabled":true}}}' > "$HOME/.config/opencode/config.json"
 source: https://github.com/oraios/serena
 ---
 

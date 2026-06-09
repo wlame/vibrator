@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,10 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
+	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/integration"
 	"github.com/wlame/vibrator/internal/localprovider"
@@ -123,11 +125,13 @@ func runContainer(ctx context.Context, dc docker.Client,
 	volumes := []docker.Volume{
 		{Host: wsDir, Container: wsDir},
 	}
-	// Host claude config / settings / rules / session state. The
-	// container-side entrypoint script reads these to seed the in-
-	// container ~/.claude/ on first run.
-	if pin.Harness == "claude-code" {
-		volumes = append(volumes, buildClaudeHostMounts(defaultUsername(opts), wsDir, opts.Stderr)...)
+	// Host config / auth / session state for the chosen harness. Each
+	// harness declares its own mounts via Harness.HostMounts; the
+	// orchestrator does the filesystem probing and conversion here. No
+	// per-harness special-casing — adding host persistence to a new
+	// harness is implementing the interface method, not editing app.
+	if h, ok := harness.ByID(pin.Harness); ok {
+		volumes = append(volumes, hostMountsToVolumes(h, defaultUsername(opts), wsDir, opts.Stderr)...)
 	}
 	// D6 + D7: optional/conditional mounts. Both auto-detect — no CLI
 	// flag needed — and silently no-op when prerequisites are absent.
@@ -213,10 +217,10 @@ func runContainer(ctx context.Context, dc docker.Client,
 		// a cryptic "Target.attachToBrowserTarget failed" on the first
 		// page that allocates ~50MB of canvas). 2GB matches the bash
 		// impl and is comfortably above any single-page workload.
-		ShmSize:     "2g",
-		Volumes:     volumes,
-		Env:         envVars,
-		Labels:      labels,
+		ShmSize: "2g",
+		Volumes: volumes,
+		Env:     envVars,
+		Labels:  labels,
 		// host network keeps host.docker.internal cheap and lets
 		// in-container tools reach host services without --add-host.
 		// We use bridge instead of host to keep Linux/macOS behavior
@@ -309,51 +313,17 @@ func resolveLaunchCmd(pin config.Pin, opts Options) ([]string, error) {
 	return nil, fmt.Errorf("unknown launch target %q", opts.LaunchTarget)
 }
 
-// claudeSessionPersistDirs are the per-CC subdirectories that hold
-// in-progress conversations, file history, etc. Bind-mounting them
-// means a container-side claude session shows up in the host's claude
-// history list (and vice versa) — the same "session continuity" the
-// bash impl gave users by default.
+// hostMountsToVolumes resolves a harness's declarative HostMounts into
+// concrete docker volumes. This is the one place that touches the
+// filesystem on behalf of every harness: it expands each mount's
+// host-relative path against the host home and its container-relative
+// path against /home/<containerUser>, probes (or creates) the source per
+// MountKind, and rejects any descriptor whose cleaned path escapes its
+// home root.
 //
-// Trade-off: shared mutable state. Concurrent host + container claude
-// runs could race on the same JSON files. The bash impl shipped this
-// default-on for ~12 months without major complaints, so we follow.
-//
-// Note: "projects" is NOT in this list — it is mounted at a per-workspace
-// scope by buildClaudeHostMounts to prevent other projects' transcripts
-// from being visible inside the container. See D5 below.
-var claudeSessionPersistDirs = []string{
-	"file-history",
-	"sessions",
-	"tasks",
-	"paste-cache",
-}
-
-// claudeEncodedProjectDir converts an absolute workspace path to the
-// subdirectory name Claude Code uses under ~/.claude/projects/.
-// Claude Code encodes the path by replacing every "/" with "-", so the
-// leading slash becomes a leading "-":
-//
-//	/Users/bob/src  →  -Users-bob-src
-func claudeEncodedProjectDir(wsDir string) string {
-	return strings.ReplaceAll(wsDir, "/", "-")
-}
-
-// buildClaudeHostMounts produces the volume list that wires host
-// ~/.claude state into the container. All mounts are conditional on
-// the host source existing — a fresh host with no claude install
-// gets no extra mounts and the entrypoint gracefully no-ops.
-//
-// Session-persist dirs (D5) are auto-created on the host if missing
-// so the container can write to them on first run (matching the bash
-// impl's `mkdir -p` before mount).
-//
-// `containerUser` is the unprivileged user the image was built for;
-// container paths land under /home/<user>/.claude/...
-//
-// `wsDir` is the absolute path of the workspace being launched; it is
-// used to scope the projects/ mount to only this workspace's subdir.
-func buildClaudeHostMounts(containerUser, wsDir string, stderr io.Writer) []docker.Volume {
+// A harness with no host persistence returns no HostMounts and this
+// yields no volumes — no special-casing anywhere.
+func hostMountsToVolumes(h harness.Harness, containerUser, wsDir string, stderr io.Writer) []docker.Volume {
 	var out []docker.Volume
 
 	hostHome, err := os.UserHomeDir()
@@ -361,103 +331,68 @@ func buildClaudeHostMounts(containerUser, wsDir string, stderr io.Writer) []dock
 		return out
 	}
 	containerHome := "/home/" + containerUser
-	containerClaude := containerHome + "/.claude"
-	hostClaude := filepath.Join(hostHome, ".claude")
 
-	// D1: ~/.claude.json → ~/.claude.host.json:ro
-	// Entrypoint extracts OAuth + onboarding fields from this. Read-only
-	// because the container should NEVER modify the host's master config.
-	if exists(filepath.Join(hostHome, ".claude.json")) {
-		out = append(out, docker.Volume{
-			Host:      filepath.Join(hostHome, ".claude.json"),
-			Container: containerHome + "/.claude.host.json",
-			ReadOnly:  true,
-		})
-	}
-
-	// D2: ~/.claude/settings.json → ~/.claude/settings.host.json:ro
-	// Entrypoint copies this with macOS-path rewrite and re-merges
-	// baked plugin hooks. Read-only for the same reason as D1.
-	if exists(filepath.Join(hostClaude, "settings.json")) {
-		out = append(out, docker.Volume{
-			Host:      filepath.Join(hostClaude, "settings.json"),
-			Container: containerClaude + "/settings.host.json",
-			ReadOnly:  true,
-		})
-	}
-
-	// D3: ~/.claude/rules → ~/.claude/rules-host:ro
-	// Entrypoint copies *.md from rules-host into the container's rules
-	// dir on every entry, so editing rules on host takes effect next run.
-	if isDir(filepath.Join(hostClaude, "rules")) {
-		out = append(out, docker.Volume{
-			Host:      filepath.Join(hostClaude, "rules"),
-			Container: containerClaude + "/rules-host",
-			ReadOnly:  true,
-		})
-	}
-
-	// D4: ~/.claude/hooks → ~/.claude/hooks (rw)
-	// Hook scripts the user wrote on host. Writable so the user can
-	// edit hooks inside the container and changes persist back to host.
-	if isDir(filepath.Join(hostClaude, "hooks")) {
-		out = append(out, docker.Volume{
-			Host:      filepath.Join(hostClaude, "hooks"),
-			Container: containerClaude + "/hooks",
-			ReadOnly:  false,
-		})
-	}
-
-	// D5a: projects/ — scoped to this workspace's encoded-cwd subdir.
-	// Claude Code stores session transcripts under ~/.claude/projects/<encoded-cwd>/.
-	// Mounting only the workspace-specific subdir prevents other projects'
-	// conversation histories from leaking into the container.
-	// The workspace is mounted at the same absolute path on both sides, so
-	// the encoded name Claude Code computes inside the container matches the
-	// host path exactly.
-	{
-		encoded := claudeEncodedProjectDir(wsDir)
-		hostProjects := filepath.Join(hostClaude, "projects", encoded)
-		if !isDir(hostProjects) {
-			if err := os.MkdirAll(hostProjects, 0o755); err != nil {
-				fmt.Fprintf(stderr, "vibrate: warning: couldn't create %s for session persistence: %v\n",
-					hostProjects, err)
-			}
+	for _, m := range h.HostMounts(harness.HostMountContext{WorkspaceDir: wsDir}) {
+		hostPath, hostOK := joinUnderRoot(hostHome, m.HostRel)
+		containerPath, ctrOK := joinUnderRoot(containerHome, m.ContainerRel)
+		if !hostOK || !ctrOK {
+			// A descriptor that escapes home is a programming bug in the
+			// harness, not user input — skip it loudly rather than mount
+			// something outside the intended root.
+			fmt.Fprintf(stderr, "vibrate: warning: skipping host mount %q→%q for %s (path escapes home)\n",
+				m.HostRel, m.ContainerRel, h.ID())
+			continue
 		}
-		if isDir(hostProjects) {
-			out = append(out, docker.Volume{
-				Host:      hostProjects,
-				Container: containerClaude + "/projects/" + encoded,
-				ReadOnly:  false,
-			})
-		}
-	}
 
-	// D5b: remaining session persistence dirs (rw) — file-history, sessions,
-	// tasks, paste-cache. These don't have a per-project directory structure
-	// so we mount the whole subdirectory.
-	// Auto-create on host if missing so first-time `vibrate` users
-	// still get their container session persisted somewhere.
-	for _, name := range claudeSessionPersistDirs {
-		hostPath := filepath.Join(hostClaude, name)
-		if !isDir(hostPath) {
-			if err := os.MkdirAll(hostPath, 0o755); err != nil {
-				// Non-fatal — log and skip this mount. A failed mkdir
-				// here usually means host perms are weird, not a
-				// vibrator bug; user can `mkdir -p` themselves.
-				fmt.Fprintf(stderr, "vibrate: warning: couldn't create %s for session persistence: %v\n",
-					hostPath, err)
+		switch m.Kind {
+		case harness.MountFileIfExists:
+			if !isRegularFile(hostPath) {
 				continue
 			}
+		case harness.MountDirIfExists:
+			if !isDir(hostPath) {
+				continue
+			}
+		case harness.MountDirEnsure:
+			if !isDir(hostPath) {
+				if err := os.MkdirAll(hostPath, 0o755); err != nil {
+					// Non-fatal: a failed mkdir usually means odd host
+					// perms, not a vibrator bug. Log and skip the mount.
+					fmt.Fprintf(stderr, "vibrate: warning: couldn't create %s for session persistence: %v\n",
+						hostPath, err)
+					continue
+				}
+			}
 		}
+
 		out = append(out, docker.Volume{
 			Host:      hostPath,
-			Container: containerClaude + "/" + name,
-			ReadOnly:  false,
+			Container: containerPath,
+			ReadOnly:  m.ReadOnly,
 		})
 	}
-
 	return out
+}
+
+// joinUnderRoot joins a forward-slash relative path onto an absolute
+// root, returning (cleanedAbsolutePath, true) only when the result stays
+// within root. A rel that climbs out via ".." yields ("", false). This
+// is the guard that keeps a harness's HostMount descriptors from naming
+// a path outside the user's (or container's) home dir.
+func joinUnderRoot(root, rel string) (string, bool) {
+	joined := filepath.Join(root, filepath.FromSlash(rel))
+	cleaned := filepath.Clean(joined)
+	if cleaned != root && !strings.HasPrefix(cleaned, root+string(os.PathSeparator)) {
+		return "", false
+	}
+	return cleaned, true
+}
+
+// isRegularFile reports whether path exists and is a regular file (not a
+// directory or socket). Same "any error = skip" semantics as isDir.
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // buildOptionalMounts produces volumes that aren't tied to the claude
@@ -588,9 +523,14 @@ var dockerSocketCandidates = []string{
 func buildDockerSocketMount(stderr io.Writer) (docker.Volume, string, bool) {
 	candidates := []string{}
 	// $DOCKER_HOST takes top priority. Format is `unix:///path/to/sock`
-	// so strip the prefix when present.
+	// so strip the prefix when present. Clean the path and require it
+	// to be absolute — a relative or dot-segment path would make the
+	// bind-mount source depend on the current working directory.
 	if dh := os.Getenv("DOCKER_HOST"); strings.HasPrefix(dh, "unix://") {
-		candidates = append(candidates, strings.TrimPrefix(dh, "unix://"))
+		p := filepath.Clean(strings.TrimPrefix(dh, "unix://"))
+		if filepath.IsAbs(p) {
+			candidates = append(candidates, p)
+		}
 	}
 	home, _ := os.UserHomeDir()
 	for _, c := range dockerSocketCandidates {
@@ -793,7 +733,12 @@ func waitForEntrypoint(ctx context.Context, dc docker.Client, containerName stri
 		if err == nil {
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		// Sleep, but bail immediately if the caller cancels (Ctrl-C).
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 	return fmt.Errorf("timed out waiting for entrypoint ready signal in %s", containerName)
 }
@@ -916,10 +861,18 @@ func writebackAuthToHost(ctx context.Context, dc docker.Client, containerName, c
 		return fmt.Errorf("parse container ~/.claude.json: %w", err)
 	}
 
-	// Read (or initialise) the host config.
+	// Read (or initialise) the host config. A host file that exists but
+	// fails to parse ABORTS the writeback: silently continuing would
+	// rewrite ~/.claude.json with only the auth fields, erasing every
+	// other setting the user has (theme, keybindings, MCP servers, ...).
 	var hConfig map[string]json.RawMessage
 	if data, err := os.ReadFile(hostConfigPath); err == nil {
-		_ = json.Unmarshal(data, &hConfig)
+		if uerr := json.Unmarshal(data, &hConfig); uerr != nil {
+			return fmt.Errorf("host %s is not valid JSON — refusing writeback so it isn't overwritten: %w",
+				hostConfigPath, uerr)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("read host %s: %w", hostConfigPath, err)
 	}
 	if hConfig == nil {
 		hConfig = make(map[string]json.RawMessage)

@@ -248,11 +248,11 @@ func TestClaudeMemBootstrap_HappyPath(t *testing.T) {
 	mock := docker.NewMock()
 	psql := &fakePSQL{
 		responses: []string{
-			"",                                       // team SELECT → not found
-			"team-uuid-aaa",                          // team INSERT → created
-			"",                                       // project SELECT → not found
-			"project-uuid-bbb",                       // project INSERT → created
-			"",                                       // key rotation (no rows returned)
+			"",                 // team SELECT → not found
+			"team-uuid-aaa",    // team INSERT → created
+			"",                 // project SELECT → not found
+			"project-uuid-bbb", // project INSERT → created
+			"",                 // key rotation (no rows returned)
 		},
 	}
 	mock.RunHandler = psql.handle

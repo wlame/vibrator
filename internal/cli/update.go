@@ -15,17 +15,17 @@ import (
 // Behaviour summary (full details in app.Update's doc):
 //
 //   - Container exists                  →  exec the harness's update command
-//                                          inside it (start the container first
-//                                          if it's stopped). Change lives in
-//                                          the container only — restart-safe
-//                                          but lost on container removal.
+//     inside it (start the container first
+//     if it's stopped). Change lives in
+//     the container only — restart-safe
+//     but lost on container removal.
 //   - Container missing + image exists  →  build a tiny one-layer image (FROM
-//                                          <current-image> RUN <update-cmd>) and
-//                                          re-tag it with the same name. Old
-//                                          image becomes dangling; cache keeps
-//                                          everything below the new layer.
+//     <current-image> RUN <update-cmd>) and
+//     re-tag it with the same name. Old
+//     image becomes dangling; cache keeps
+//     everything below the new layer.
 //   - Neither exists                    →  error — run `vibrate` first to
-//                                          bootstrap the workspace.
+//     bootstrap the workspace.
 //
 // `vibrate update` takes no flags today. The harness, profile, and
 // other spec come from the workspace .vb pin. To force a full

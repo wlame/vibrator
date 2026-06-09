@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -113,8 +114,15 @@ func (d *DockerRuntime) Start(ctx context.Context) error {
 	for _, v := range d.Volumes {
 		args = append(args, "-v", expandHome(v))
 	}
-	for k, v := range d.Env {
-		args = append(args, "-e", k+"="+v)
+	// Sort env keys so the docker run argument list is deterministic
+	// regardless of map iteration order.
+	envKeys := make([]string, 0, len(d.Env))
+	for k := range d.Env {
+		envKeys = append(envKeys, k)
+	}
+	sort.Strings(envKeys)
+	for _, k := range envKeys {
+		args = append(args, "-e", k+"="+d.Env[k])
 	}
 	for _, h := range d.AddHosts {
 		args = append(args, "--add-host", h)

@@ -12,6 +12,7 @@ import (
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/extensions"
+	"github.com/wlame/vibrator/internal/harness"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
 	"github.com/wlame/vibrator/internal/prereq"
 )
@@ -215,8 +216,8 @@ func TestBuildContainerEnv_PinEnvOverridesWithDollarIndirection(t *testing.T) {
 	got, err := buildContainerEnv(config.Pin{
 		Harness: "claude-code",
 		Env: map[string]string{
-			"LITERAL":   "literal-val",
-			"INDIRECT":  "$MY_HOST_TOKEN",
+			"LITERAL":  "literal-val",
+			"INDIRECT": "$MY_HOST_TOKEN",
 		},
 	}, nil)
 	if err != nil {
@@ -407,9 +408,27 @@ func TestSanitizeUsername(t *testing.T) {
 	}
 }
 
-// --- buildClaudeHostMounts ------------------------------------------------
+// --- hostMountsToVolumes (claude-code harness) ----------------------------
 
-func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
+// claudeEncoded mirrors claudecode.encodedProjectDir (the "/"→"-" path
+// encoding) so the test can predict the scoped projects mount name
+// without importing the unexported helper.
+func claudeEncoded(wsDir string) string { return strings.ReplaceAll(wsDir, "/", "-") }
+
+// claudeSessionDirs is the D5b contract the test asserts against; it
+// mirrors claudecode.sessionPersistDirs.
+var claudeSessionDirs = []string{"file-history", "sessions", "tasks", "paste-cache"}
+
+func claudeHarness(t *testing.T) harness.Harness {
+	t.Helper()
+	h, ok := harness.ByID("claude-code")
+	if !ok {
+		t.Fatal("claude-code harness not registered")
+	}
+	return h
+}
+
+func TestHostMountsToVolumes_SkipsMissingPaths(t *testing.T) {
 	// HOME points at an empty tempdir → no host-state files exist → no
 	// config/settings/rules/hooks mounts. Session-persist dirs DO get
 	// auto-created (D5 contract), so we still see those mounts.
@@ -418,7 +437,7 @@ func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
 
 	const wsDir = "/home/alice/project"
 	var stderr bytes.Buffer
-	got := buildClaudeHostMounts("alice", wsDir, &stderr)
+	got := hostMountsToVolumes(claudeHarness(t), "alice", wsDir, &stderr)
 
 	mounts := make(map[string]docker.Volume, len(got))
 	for _, v := range got {
@@ -436,18 +455,16 @@ func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
 	}
 
 	// projects/ must be scoped to the workspace's encoded-cwd subdir, not the whole dir.
-	encoded := claudeEncodedProjectDir(wsDir)
-	wantProjectsContainer := "/home/alice/.claude/projects/" + encoded
+	wantProjectsContainer := "/home/alice/.claude/projects/" + claudeEncoded(wsDir)
 	if _, present := mounts[wantProjectsContainer]; !present {
 		t.Errorf("missing scoped projects mount %s — D5a contract requires auto-create", wantProjectsContainer)
 	}
-	// The unscoped projects/ dir must NOT be mounted.
 	if _, present := mounts["/home/alice/.claude/projects"]; present {
 		t.Errorf("unexpected full projects/ mount — should be scoped to workspace subdir")
 	}
 
 	// Remaining session-persist dirs (D5b) are still mounted wholesale.
-	for _, name := range claudeSessionPersistDirs {
+	for _, name := range claudeSessionDirs {
 		c := "/home/alice/.claude/" + name
 		if _, present := mounts[c]; !present {
 			t.Errorf("missing session-persist mount %s — D5b contract requires auto-create", c)
@@ -455,7 +472,7 @@ func TestBuildClaudeHostMounts_SkipsMissingPaths(t *testing.T) {
 	}
 }
 
-func TestBuildClaudeHostMounts_MountsExistingHostState(t *testing.T) {
+func TestHostMountsToVolumes_MountsExistingHostState(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
@@ -467,7 +484,7 @@ func TestBuildClaudeHostMounts_MountsExistingHostState(t *testing.T) {
 
 	const wsDir = "/home/alice/project"
 	var stderr bytes.Buffer
-	got := buildClaudeHostMounts("alice", wsDir, &stderr)
+	got := hostMountsToVolumes(claudeHarness(t), "alice", wsDir, &stderr)
 
 	mounts := make(map[string]docker.Volume, len(got))
 	for _, v := range got {
@@ -482,7 +499,8 @@ func TestBuildClaudeHostMounts_MountsExistingHostState(t *testing.T) {
 		{"/home/alice/.claude.host.json", filepath.Join(tmp, ".claude.json"), true},
 		{"/home/alice/.claude/settings.host.json", filepath.Join(tmp, ".claude", "settings.json"), true},
 		{"/home/alice/.claude/rules-host", filepath.Join(tmp, ".claude", "rules"), true},
-		{"/home/alice/.claude/hooks", filepath.Join(tmp, ".claude", "hooks"), false},
+		// hooks is now READ-ONLY (container-escape hardening).
+		{"/home/alice/.claude/hooks", filepath.Join(tmp, ".claude", "hooks"), true},
 	}
 	for _, c := range cases {
 		v, ok := mounts[c.container]
@@ -496,6 +514,35 @@ func TestBuildClaudeHostMounts_MountsExistingHostState(t *testing.T) {
 		if v.ReadOnly != c.wantRO {
 			t.Errorf("mount %s ReadOnly = %v, want %v", c.container, v.ReadOnly, c.wantRO)
 		}
+	}
+}
+
+// A MountFileIfExists descriptor must NOT mount when the host source is a
+// directory (and vice versa) — the kind guards against type confusion.
+func TestHostMountsToVolumes_FileKindIgnoresDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	// Create ~/.claude.json as a DIRECTORY — a MountFileIfExists mount
+	// must skip it rather than bind a dir where a file is expected.
+	mustMkdirAll(t, filepath.Join(tmp, ".claude.json"))
+
+	var stderr bytes.Buffer
+	got := hostMountsToVolumes(claudeHarness(t), "alice", "/home/alice/project", &stderr)
+	for _, v := range got {
+		if v.Container == "/home/alice/.claude.host.json" {
+			t.Errorf("MountFileIfExists bound a directory source: %+v", v)
+		}
+	}
+}
+
+// joinUnderRoot must reject a descriptor that climbs out of its home root.
+func TestJoinUnderRoot_RejectsEscape(t *testing.T) {
+	root := "/home/alice"
+	if _, ok := joinUnderRoot(root, "../bob/.ssh"); ok {
+		t.Error("joinUnderRoot accepted a path escaping root")
+	}
+	if p, ok := joinUnderRoot(root, ".claude/settings.json"); !ok || p != "/home/alice/.claude/settings.json" {
+		t.Errorf("joinUnderRoot(%q) = (%q, %v), want (/home/alice/.claude/settings.json, true)", ".claude/settings.json", p, ok)
 	}
 }
 
@@ -639,10 +686,10 @@ func TestBuildClaudeMemEnv_ForwardsAllFields(t *testing.T) {
 	}
 
 	wants := map[string]string{
-		"CLAUDE_MEM_RUNTIME":            "server-beta",
-		"CLAUDE_MEM_SERVER_BETA_URL":    "http://host.docker.internal:37877",
-		"CLAUDE_MEM_SERVER_BETA_API_KEY": "cmem_testkey",
-		"CLAUDE_MEM_SERVER_BETA_TEAM_ID": "team-42",
+		"CLAUDE_MEM_RUNTIME":                "server-beta",
+		"CLAUDE_MEM_SERVER_BETA_URL":        "http://host.docker.internal:37877",
+		"CLAUDE_MEM_SERVER_BETA_API_KEY":    "cmem_testkey",
+		"CLAUDE_MEM_SERVER_BETA_TEAM_ID":    "team-42",
 		"CLAUDE_MEM_SERVER_BETA_PROJECT_ID": "proj-99",
 	}
 	for name, want := range wants {
@@ -720,8 +767,8 @@ func TestBuildSpecs_ExtensionDepsAreFoldedIntoFeatures(t *testing.T) {
 	// `backend` profile has no node; filesystem-mcp's deps.features = [node]
 	// — so a successful merge means the resolved feature list includes node.
 	pin := config.Pin{
-		Harness: "claude-code",
-		Profile: "backend",
+		Harness:    "claude-code",
+		Profile:    "backend",
 		Extensions: []string{"filesystem-mcp"},
 	}
 	_, ws, err := buildSpecs(pin, Options{})

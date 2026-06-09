@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wlame/vibrator/internal/extensions"
 	"github.com/wlame/vibrator/internal/config"
+	"github.com/wlame/vibrator/internal/extensions"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
 	"github.com/wlame/vibrator/internal/hostprobe"
 )
@@ -108,11 +108,11 @@ func TestPlanSteps_SerenaHosting_HiddenWhenAlreadyPinned(t *testing.T) {
 
 func TestEquivalentCommand_FullPin(t *testing.T) {
 	got := EquivalentCommand(config.Pin{
-		Harness: "claude-code",
-		Profile: "full",
-		Shell:   "zsh",
-		With:    []string{"playwright"},
-		No:      []string{"aider"},
+		Harness:    "claude-code",
+		Profile:    "full",
+		Shell:      "zsh",
+		With:       []string{"playwright"},
+		No:         []string{"aider"},
 		Extensions: []string{"context7", "claude-mem", "serena"},
 	})
 	// Must contain all the flags in stable order.

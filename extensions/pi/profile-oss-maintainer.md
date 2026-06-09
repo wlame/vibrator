@@ -29,7 +29,7 @@ install: |
     directTools: ['search_repositories', 'get_file_contents', 'create_or_update_file', 'create_pull_request']
   };
   data.mcpServers.linear = {
-    command: 'npx', args: ['-y', 'linear-mcp@latest'],
+    command: 'npx', args: ['-y', 'linear-mcp@1.2.0'],
     env: { LINEAR_API_KEY: '${LINEAR_API_KEY}' }
   };
   fs.writeFileSync(cfg, JSON.stringify(data, null, 2));

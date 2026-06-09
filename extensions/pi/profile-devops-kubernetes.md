@@ -22,8 +22,8 @@ install: |
   const cfg = path.join(process.env.HOME, '.pi/agent/mcp.json');
   const data = fs.existsSync(cfg) ? JSON.parse(fs.readFileSync(cfg, 'utf8')) : { mcpServers: {} };
   data.mcpServers ||= {};
-  data.mcpServers.kubernetes = { command: 'npx', args: ['-y', 'kubernetes-mcp-server@latest'] };
-  data.mcpServers.terraform = { command: 'npx', args: ['-y', 'terraform-mcp-server@latest'] };
+  data.mcpServers.kubernetes = { command: 'npx', args: ['-y', 'kubernetes-mcp-server@0.0.62'] };
+  data.mcpServers.terraform = { command: 'npx', args: ['-y', 'terraform-mcp-server@0.13.0'] };
   data.mcpServers.helm = { command: 'npx', args: ['-y', 'helm-mcp@latest'] };
   data.mcpServers['aws-docs'] = { command: 'npx', args: ['-y', '@awslabs/mcp-aws-docs@latest'] };
   fs.writeFileSync(cfg, JSON.stringify(data, null, 2));

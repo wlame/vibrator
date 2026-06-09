@@ -4,7 +4,11 @@
 package serena
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,8 +29,11 @@ const (
 	// containerImage is the base image: has uv + uvx pre-installed.
 	containerImage = "ghcr.io/astral-sh/uv:python3.12-bookworm-slim"
 
-	// uvxSource is the git reference passed to uvx --from.
-	uvxSource = "git+https://github.com/oraios/serena"
+	// uvxSource is the git reference passed to uvx --from. Pinned to a
+	// specific commit for supply-chain safety (an unpinned ref would pull
+	// whatever HEAD serves at install time). Must stay in sync with the
+	// inline literal in descriptor.go — bump both to the same SHA together.
+	uvxSource = "git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78"
 )
 
 // Status represents the observed state of the Serena daemon.
@@ -84,7 +91,10 @@ func Probe(port int) bool {
 	if err != nil {
 		return false
 	}
-	resp.Body.Close()
+	// Drain and close the body so the underlying connection is returned to
+	// the pool, enabling reuse on the next polling iteration.
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return resp.StatusCode < 500
 }
 
@@ -104,7 +114,7 @@ func Read(port int) (ProcessState, error) {
 	base := ProcessState{PIDPath: pidPath, LogFile: logPath, Port: port}
 
 	data, err := os.ReadFile(pidPath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		base.Status = StatusStopped
 		return base, nil
 	}
@@ -188,8 +198,9 @@ func Start(port int) (int, error) {
 }
 
 // Stop sends SIGTERM to the tracked process, waits up to 5 s, then
-// SIGKILL. Removes the PID file on success.
-func Stop(state ProcessState) error {
+// SIGKILL. Removes the PID file on success. ctx is honoured between
+// poll ticks — a cancellation causes an immediate return of ctx.Err().
+func Stop(ctx context.Context, state ProcessState) error {
 	if state.PID == 0 {
 		return fmt.Errorf("no PID to stop (status: %v)", state.Status)
 	}
@@ -200,8 +211,12 @@ func Stop(state ProcessState) error {
 	}
 
 	_ = proc.Signal(syscall.SIGTERM)
-	for i := 0; i < 25; i++ { // 5 s total
-		time.Sleep(200 * time.Millisecond)
+	for i := 0; i < 25; i++ { // 5 s total (25 × 200 ms)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
 		if err := proc.Signal(syscall.Signal(0)); err != nil {
 			// Gone.
 			_ = os.Remove(state.PIDPath)
@@ -282,7 +297,7 @@ func TailLog(maxBytes int64) (string, error) {
 		return "", err
 	}
 	f, err := os.Open(logPath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return "", nil
 	}
 	if err != nil {

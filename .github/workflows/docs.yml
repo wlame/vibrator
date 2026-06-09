@@ -1,16 +1,17 @@
 name: Docs
 
-# Builds the MkDocs (Material) documentation site from docs/ + mkdocs.yml
-# and publishes it to GitHub Pages.
+# Builds the MkDocs (Material) documentation site from docs/ + mkdocs.yml and
+# publishes it to the `gh-pages` branch, which GitHub Pages serves.
 #
 # Runs on pushes to main that touch the docs, and can be triggered manually
-# from the Actions tab (workflow_dispatch). The first successful run on the
-# default branch publishes to https://wlame.github.io/vibrator/.
+# from the Actions tab (workflow_dispatch).
 #
-# REQUIRED one-time setup in the repo — the default GITHUB_TOKEN is NOT allowed
-# to enable Pages itself, so do it by hand once:
-#   Settings → Pages → Build and deployment → Source = "GitHub Actions".
-# After that, every run here builds and deploys with no further configuration.
+# REQUIRED one-time setup in the repo (do it by hand once):
+#   Settings → Pages → Build and deployment → Source = "Deploy from a branch"
+#   → Branch = "gh-pages" / "(root)".
+# The first run below creates the gh-pages branch; after you point Pages at it,
+# every subsequent run republishes with no further configuration. The site is
+# served at https://wlame.github.io/vibrator/.
 
 on:
   push:
@@ -22,24 +23,27 @@ on:
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
-# Permissions required by the GitHub Pages deployment action.
+# gh-deploy force-pushes the built site to the gh-pages branch, so the workflow
+# needs write access to repository contents.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# Allow only one concurrent deployment; don't cancel an in-progress run so a
-# publish always finishes cleanly.
+# Allow only one concurrent publish; don't cancel an in-progress run so a
+# deploy always finishes cleanly.
 concurrency:
-  group: pages
+  group: docs-gh-pages
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build
+  deploy:
+    name: Build & publish to gh-pages
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 gives gh-deploy the full history it needs to update the
+      # gh-pages branch in place.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,28 +57,8 @@ jobs:
       - name: Install docs dependencies
         run: uv pip install --system -r docs-requirements.txt
 
-      # --strict fails the build on broken internal links or pages missing
-      # from the nav, so a bad merge can't silently publish a broken site.
-      - name: Build site
-        run: mkdocs build --strict
-
-      # No actions/configure-pages step: MkDocs already encodes the base URL via
-      # `site_url` in mkdocs.yml, so it doesn't need the base-path injection that
-      # step provides — and `enablement: true` there fails because GITHUB_TOKEN
-      # can't create the Pages site (enable it once in repo Settings instead).
-      - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    name: Deploy
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # gh-deploy builds the site and force-pushes it to the gh-pages branch.
+      # --strict aborts on broken internal links or pages missing from the nav,
+      # so a bad merge can't silently publish a broken site.
+      - name: Build & deploy to gh-pages
+        run: mkdocs gh-deploy --force --strict

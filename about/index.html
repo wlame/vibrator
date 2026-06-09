@@ -2480,8 +2480,10 @@ grants host-root-equivalent access. Only enable it for trusted workspaces.</p>
 <p>Vibrator began as a bash implementation; the current Go rewrite (Go ≥ 1.26, a single static
 binary) is <strong>feature-complete</strong>. It's released under the <strong>MIT</strong> license from
 <a href="https://github.com/wlame/vibrator">github.com/wlame/vibrator</a>.</p>
-<p>Releases are <strong>tag-driven</strong>: pushing a version tag runs <a href="https://goreleaser.com/">goreleaser</a>,
-which builds cross-platform binaries with checksums and auto-generates the changelog.</p>
+<p>Releases are <strong>created manually in the GitHub UI</strong>: publishing a release fires a CI workflow
+that builds the binaries for Linux and macOS (amd64/arm64) and attaches them — plus a
+<code>checksums.txt</code> manifest — as assets on that release. (Windows isn't built; it uses Unix-only
+syscalls, so Windows users run vibrate through WSL2.)</p>
 <p>If you're coming from the old bash version, <a href="../reference/commands/migrate-pin/"><code>vibrate migrate-pin</code></a>
 converts a legacy <code>.vb.env</code> file into the current TOML <code>.vb</code> format.</p>
 <div class="admonition tip">

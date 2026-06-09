@@ -1,0 +1,14 @@
+/* Organization baseline — keep shallow. Vibrator docs, orange/amber scheme. */
+:root {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Slightly rounded code blocks read better against the warm palette. */
+.md-code__content {
+  border-radius: 4px;
+}
+
+/* Keep inline `code` legible in both light and dark slate schemes. */
+[data-md-color-scheme="slate"] {
+  --md-code-bg-color: hsla(232, 15%, 18%, 1);
+}

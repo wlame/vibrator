@@ -65,7 +65,6 @@ type Resolved struct {
 func ResolveAll(raws []string, wsDir string) ([]Resolved, error) {
 	wsAbs, _ := filepath.Abs(wsDir)
 	seen := make(map[string]bool) // path -> readOnly
-	byPath := make(map[string]bool)
 	var out []Resolved
 
 	for _, raw := range raws {
@@ -99,7 +98,6 @@ func ResolveAll(raws []string, wsDir string) ([]Resolved, error) {
 			continue // exact duplicate
 		}
 		seen[abs] = spec.ReadOnly
-		byPath[abs] = true
 		out = append(out, Resolved{Path: abs, ReadOnly: spec.ReadOnly})
 	}
 	return out, nil

@@ -184,6 +184,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 `)
 
+	// --- latest git (always present) ---
+	// Ubuntu's git is already installed in the apt block above (a safe
+	// baseline), but it lags upstream. The official git-core PPA tracks the
+	// newest stable git, so we add it and upgrade — every image ships a
+	// current git regardless of profile/harness. The agent relies on git for
+	// repo operations, so "git is missing/old" should never be a failure mode.
+	b.WriteString(`# --- latest git from the official git-core PPA ---
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends software-properties-common \
+ && add-apt-repository -y ppa:git-core/ppa \
+ && apt-get update && apt-get install -y --no-install-recommends git \
+ && apt-get purge -y software-properties-common && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/* \
+ && git --version
+
+`)
+
 	// --- always-on docker CLI client ---
 	// The docker CLI (client only, no daemon) is baked into the base image
 	// for EVERY variant. This is deliberate: it makes Docker-in-Docker a

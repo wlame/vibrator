@@ -101,9 +101,11 @@ func TestGenerate_ContainsExpectedSections(t *testing.T) {
 	mustContain(t, s, "https://claude.ai/install.sh")
 	mustContain(t, s, "CMD [\"/usr/local/bin/claude-exec\", \"/bin/zsh\"]")
 	mustContain(t, s, "LABEL vibrator.harness=\"claude-code\"")
-	// htop and the docker CLI are baked into the base for EVERY image.
+	// htop, the docker CLI, and the latest git are baked into the base for
+	// EVERY image.
 	mustContain(t, s, "htop")
 	mustContain(t, s, "docker-ce-cli")
+	mustContain(t, s, "ppa:git-core/ppa")
 }
 
 func TestGenerate_ShellAffectsCMDAndUserShell(t *testing.T) {

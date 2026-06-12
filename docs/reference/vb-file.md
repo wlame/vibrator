@@ -40,6 +40,10 @@ REGION       = "us-east-1"
 serena     = "auto"
 claude-mem = "host"
 
+[identity]
+name  = "Ada Alias"
+email = "ada+vibe@example.com"
+
 [hooks]
 acknowledged_missing = ["node"]
 ```
@@ -106,6 +110,39 @@ Host→container environment forwarding, applied at `docker run`:
 
 Keys are sorted on save. See the [precedence rules](../guides/authentication.md#precedence)
 for how `[env]` interacts with other forwarded vars.
+
+## `[identity]` { #identity }
+
+An optional **privacy override** for the contact name/email the agent uses
+inside the container. By default the agent can read your Anthropic-account email
+(`oauthAccount.emailAddress` in `~/.claude.json`, seeded from the host) and reuse
+it in git commits and outbound HTTP "contact" headers. Set an alias here and
+vibrator forces it everywhere the agent looks:
+
+| TOML key | Type | Notes |
+|----------|------|-------|
+| `name` | string | Git author/committer name and the rewritten `oauthAccount.displayName`. |
+| `email` | string | Git author/committer email and the rewritten `oauthAccount.emailAddress` — the field that actually keeps the real account email off the wire. |
+
+```toml
+[identity]
+name  = "Ada Alias"
+email = "ada+vibe@example.com"
+```
+
+When set, vibrator:
+
+- forwards `GIT_AUTHOR_*` / `GIT_COMMITTER_*` / `EMAIL` so commits use the alias
+  regardless of any gitconfig (git prefers these over config);
+- has the container entrypoint rewrite `oauthAccount.emailAddress` /
+  `.displayName` in `~/.claude.json` and pin `git config --global user.*`;
+- **suppresses the host `~/.gitconfig` mount** so the real email can't leak through it.
+
+Authentication is unaffected — the OAuth token and account UUID still carry your
+real login; only the human-readable contact info is swapped. Changing `[identity]`
+on an existing workspace recreates the container from the existing image (no
+rebuild), so the alias takes effect immediately rather than leaking from a stale
+container.
 
 ## `[integrations]`
 

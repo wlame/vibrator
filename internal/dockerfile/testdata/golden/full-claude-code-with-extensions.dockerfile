@@ -33,6 +33,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
 
+# --- latest git from the official git-core PPA ---
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends software-properties-common \
+ && add-apt-repository -y ppa:git-core/ppa \
+ && apt-get update && apt-get install -y --no-install-recommends git \
+ && apt-get purge -y software-properties-common && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/* \
+ && git --version
+
 # --- docker CLI client (always present; activated at run time via --dind) ---
 RUN install -m 0755 -d /etc/apt/keyrings \
  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \

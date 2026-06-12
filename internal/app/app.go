@@ -26,6 +26,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -71,6 +73,24 @@ const (
 // app (set in launch.go, read in resolveAndLaunch) because it's an
 // orchestration concern, not a docker-client detail.
 const dindLabelKey = "vibrator.dind"
+
+// identityLabelKey records the [identity] override a container was created
+// with — stored as a fingerprint (not the alias itself) so resolveAndLaunch
+// can detect a change and recreate the container. Like dindLabelKey, it's a
+// runtime concern: identity flows in via env vars + the entrypoint, neither
+// of which can be retrofitted onto a live container.
+const identityLabelKey = "vibrator.identity"
+
+// identityFingerprint returns a short, stable hash of the pin's identity
+// override (name + email), or "" when no override is set. Hashing keeps the
+// alias out of docker labels while still letting us detect a change.
+func identityFingerprint(pin config.Pin) string {
+	if pin.Identity == nil || (pin.Identity.Name == "" && pin.Identity.Email == "") {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(pin.Identity.Name + "\x00" + pin.Identity.Email))
+	return hex.EncodeToString(sum[:8])
+}
 
 // effectiveLaunchTarget normalizes the zero-value to LaunchHarness so
 // downstream consumers can branch on a known value without a special
@@ -328,24 +348,38 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 	}
 
-	// --dind toggle: the docker socket is bind-mounted at container-creation
-	// time and CANNOT be added to (or removed from) a live container. So when
-	// the requested --dind state differs from how the existing container was
-	// created, recreate it — reusing the EXISTING image (no rebuild; the
-	// docker client is baked into every base image). This is what makes
-	// `vibrate --dind` on a previously-non-dind container start working
-	// without a from-scratch build.
+	// Runtime-state recreate: some settings are baked into a container at
+	// creation time and CANNOT be changed on a live container — the --dind
+	// socket mount and the [identity] override (env vars + entrypoint
+	// rewrite). When the request differs from how the existing container was
+	// created, recreate it from the EXISTING image (no rebuild; image content
+	// is identical). This is what makes `vibrate --dind` (or a freshly-set
+	// alias) take effect on a prior container without a from-scratch build —
+	// and, for identity, ensures a privacy alias can't silently fail to apply
+	// because an old container leaking the real email got reused.
 	if status != "" {
-		haveDinD, err := containerHasDinD(ctx, dc, containerName)
-		if err != nil {
+		var reason string
+
+		if haveDinD, err := containerHasDinD(ctx, dc, containerName); err != nil {
 			return fmt.Errorf("inspect container dind state: %w", err)
+		} else if haveDinD != opts.DinD {
+			reason = fmt.Sprintf("--dind state changed (was %v, now %v)", haveDinD, opts.DinD)
 		}
-		if haveDinD != opts.DinD {
+
+		if reason == "" {
+			if haveID, err := dc.ContainerLabel(ctx, containerName, identityLabelKey); err != nil {
+				return fmt.Errorf("inspect container identity state: %w", err)
+			} else if haveID != identityFingerprint(pin) {
+				reason = "identity ([identity] in .vb) changed"
+			}
+		}
+
+		if reason != "" {
 			fmt.Fprintf(opts.Stderr,
-				"→ --dind state changed (was %v, now %v) — recreating container %s from the existing image (no rebuild)\n",
-				haveDinD, opts.DinD, containerName)
+				"→ %s — recreating container %s from the existing image (no rebuild)\n",
+				reason, containerName)
 			if err := dc.Remove(ctx, docker.RemoveContainer, containerName, true); err != nil {
-				return fmt.Errorf("remove container for --dind change: %w", err)
+				return fmt.Errorf("remove container for runtime-state change: %w", err)
 			}
 			status = "" // fall through to the build-if-missing + run path
 		}

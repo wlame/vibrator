@@ -233,6 +233,67 @@ func TestBuildContainerEnv_PinEnvOverridesWithDollarIndirection(t *testing.T) {
 	}
 }
 
+// An [identity] alias must forward the GIT_*/EMAIL identity env vars (so
+// git commits use the alias regardless of any gitconfig) plus the
+// VIBRATOR_IDENTITY_* pair the entrypoint consumes to rewrite oauthAccount.
+func TestBuildContainerEnv_IdentityForwardsGitAndContactVars(t *testing.T) {
+	got, err := buildContainerEnv(config.Pin{
+		Harness:  "claude-code",
+		Identity: &config.Identity{Name: "Ada Alias", Email: "alias@example.com"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("buildContainerEnv: %v", err)
+	}
+	envMap := envToMap(got)
+	wants := map[string]string{
+		"GIT_AUTHOR_NAME":         "Ada Alias",
+		"GIT_COMMITTER_NAME":      "Ada Alias",
+		"GIT_AUTHOR_EMAIL":        "alias@example.com",
+		"GIT_COMMITTER_EMAIL":     "alias@example.com",
+		"EMAIL":                   "alias@example.com",
+		"VIBRATOR_IDENTITY_EMAIL": "alias@example.com",
+		"VIBRATOR_IDENTITY_NAME":  "Ada Alias",
+	}
+	for k, want := range wants {
+		if envMap[k] != want {
+			t.Errorf("identity env %s = %q, want %q", k, envMap[k], want)
+		}
+	}
+}
+
+// A power user's explicit [env] entry still wins over the identity default.
+func TestBuildContainerEnv_PinEnvOverridesIdentity(t *testing.T) {
+	got, err := buildContainerEnv(config.Pin{
+		Harness:  "claude-code",
+		Identity: &config.Identity{Email: "alias@example.com"},
+		Env:      map[string]string{"GIT_AUTHOR_EMAIL": "explicit@example.com"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("buildContainerEnv: %v", err)
+	}
+	if got := envToMap(got)["GIT_AUTHOR_EMAIL"]; got != "explicit@example.com" {
+		t.Errorf("explicit [env] should override identity, got %q", got)
+	}
+}
+
+func TestIdentityFingerprint(t *testing.T) {
+	if fp := identityFingerprint(config.Pin{}); fp != "" {
+		t.Errorf("no identity → empty fingerprint, got %q", fp)
+	}
+	if fp := identityFingerprint(config.Pin{Identity: &config.Identity{}}); fp != "" {
+		t.Errorf("empty identity → empty fingerprint, got %q", fp)
+	}
+	a := identityFingerprint(config.Pin{Identity: &config.Identity{Email: "a@x.io"}})
+	b := identityFingerprint(config.Pin{Identity: &config.Identity{Email: "b@x.io"}})
+	if a == "" || a == b {
+		t.Errorf("distinct emails must yield distinct non-empty fingerprints: a=%q b=%q", a, b)
+	}
+	// Stable across calls.
+	if a != identityFingerprint(config.Pin{Identity: &config.Identity{Email: "a@x.io"}}) {
+		t.Error("fingerprint must be deterministic")
+	}
+}
+
 func TestBuildContainerEnv_ExtensionAuthForwarded(t *testing.T) {
 	// Regression: previously, declaring `auth.env: OPENAI_API_KEY` on
 	// an extension entry rendered a badge in the wizard but NEVER
@@ -582,6 +643,65 @@ func TestBuildOptionalMounts_AWSDirMountsReadOnly(t *testing.T) {
 	}
 	if !found.ReadOnly {
 		t.Error("AWS creds mount must be read-only — container should not be able to rotate or wipe them")
+	}
+}
+
+func TestBuildOptionalMounts_GitconfigMountsReadOnly(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	// A host ~/.gitconfig carrying identity + default branch.
+	mustWriteFile(t, filepath.Join(tmp, ".gitconfig"),
+		"[user]\n  name = Alice\n  email = alice@example.com\n[init]\n  defaultBranch = main\n")
+
+	var stderr bytes.Buffer
+	got := buildOptionalMounts("alice", config.Pin{}, "abc12345", &stderr)
+
+	var found *docker.Volume
+	for i := range got {
+		if got[i].Container == "/home/alice/.gitconfig" {
+			found = &got[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected /home/alice/.gitconfig mount, got %+v", got)
+	}
+	if found.Host != filepath.Join(tmp, ".gitconfig") {
+		t.Errorf("host path = %q, want %q", found.Host, filepath.Join(tmp, ".gitconfig"))
+	}
+	if !found.ReadOnly {
+		t.Error("gitconfig mount must be read-only — git only reads identity/config from it")
+	}
+}
+
+// A missing host ~/.gitconfig yields no mount (the agent falls back to
+// git's own defaults rather than a dangling bind).
+func TestBuildOptionalMounts_NoGitconfigNoMount(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	var stderr bytes.Buffer
+	got := buildOptionalMounts("alice", config.Pin{}, "abc12345", &stderr)
+	for _, v := range got {
+		if v.Container == "/home/alice/.gitconfig" {
+			t.Errorf("did not expect a gitconfig mount when host has none: %+v", v)
+		}
+	}
+}
+
+// When an [identity] alias is set, the host gitconfig must NOT be mounted —
+// it carries the real email the alias is meant to keep off the wire.
+func TestBuildOptionalMounts_IdentitySuppressesGitconfigMount(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	mustWriteFile(t, filepath.Join(tmp, ".gitconfig"), "[user]\n  email = real@private.tld\n")
+
+	pin := config.Pin{Identity: &config.Identity{Email: "alias@example.com"}}
+	var stderr bytes.Buffer
+	got := buildOptionalMounts("alice", pin, "abc12345", &stderr)
+	for _, v := range got {
+		if v.Container == "/home/alice/.gitconfig" {
+			t.Errorf("host gitconfig must not be mounted when an identity alias is set: %+v", v)
+		}
 	}
 }
 

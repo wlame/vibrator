@@ -124,6 +124,11 @@ func runContainer(ctx context.Context, dc docker.Client,
 		// recreate the container (the socket mount can't be added to a
 		// live container).
 		dindLabelKey: strconv.FormatBool(opts.DinD),
+		// Fingerprint of the [identity] override this container was created
+		// with (empty when none). Lets resolveAndLaunch recreate the
+		// container when the alias changes — identity is injected at run
+		// time, so a live container can't be retrofitted.
+		identityLabelKey: identityFingerprint(pin),
 	}
 
 	// Workspace mount at the same absolute path on both sides — the
@@ -432,6 +437,26 @@ func buildOptionalMounts(containerUser string, pin config.Pin, wsHash string, st
 		out = append(out, docker.Volume{
 			Host:      hostAws,
 			Container: containerHome + "/.aws",
+			ReadOnly:  true,
+		})
+	}
+
+	// D6b: host global git config passthrough. Read-only — the container's
+	// global git config IS the host's, so when the agent runs `git init`
+	// and `git commit` in a fresh repo it commits with the user's real
+	// name + email instead of a bogus container default. Only the standard
+	// ~/.gitconfig is forwarded; git reads it for identity (user.name /
+	// user.email) without needing to write to it.
+	//
+	// Suppressed when [identity] is set: the whole point of an alias is to
+	// keep the real email off the wire, so we must NOT mount a host
+	// gitconfig that carries it. Identity instead flows in via the
+	// GIT_*/EMAIL env vars and the entrypoint's git-config write.
+	identitySet := pin.Identity != nil && (pin.Identity.Email != "" || pin.Identity.Name != "")
+	if hostGitconfig := filepath.Join(hostHome, ".gitconfig"); !identitySet && isRegularFile(hostGitconfig) {
+		out = append(out, docker.Volume{
+			Host:      hostGitconfig,
+			Container: containerHome + "/.gitconfig",
 			ReadOnly:  true,
 		})
 	}
@@ -992,7 +1017,28 @@ func buildContainerEnv(pin config.Pin, enabledExts []*extensions.Entry) ([]docke
 		}
 	}
 
-	// 4. pin.Env overrides. Values of the form "$NAME" are resolved
+	// 4. Identity override. When [identity] is set, force git's authoring
+	//    identity via the GIT_*/EMAIL env vars (git prefers these over any
+	//    config, so commits use the alias regardless of the mounted or
+	//    in-container gitconfig) and hand the alias to the entrypoint via
+	//    VIBRATOR_IDENTITY_* so it can also rewrite oauthAccount in
+	//    ~/.claude.json. Emitted before pin.Env so a power user can still
+	//    override an individual var explicitly.
+	if id := pin.Identity; id != nil {
+		if id.Email != "" {
+			final["GIT_AUTHOR_EMAIL"] = id.Email
+			final["GIT_COMMITTER_EMAIL"] = id.Email
+			final["EMAIL"] = id.Email
+			final["VIBRATOR_IDENTITY_EMAIL"] = id.Email
+		}
+		if id.Name != "" {
+			final["GIT_AUTHOR_NAME"] = id.Name
+			final["GIT_COMMITTER_NAME"] = id.Name
+			final["VIBRATOR_IDENTITY_NAME"] = id.Name
+		}
+	}
+
+	// 5. pin.Env overrides. Values of the form "$NAME" are resolved
 	//    against the host's environment; literal values pass through.
 	for k, v := range pin.Env {
 		if strings.HasPrefix(v, "$") {
@@ -1002,7 +1048,7 @@ func buildContainerEnv(pin config.Pin, enabledExts []*extensions.Entry) ([]docke
 		}
 	}
 
-	// 5. Per-integration hosting mode. The container's claude-exec wrapper
+	// 6. Per-integration hosting mode. The container's claude-exec wrapper
 	//    reads VIBRATOR_INTEGRATION_MODE_<UPPERID> to decide between the
 	//    host server (http) and a container-local fallback (stdio). Only
 	//    explicit choices are forwarded; an absent var means "auto" in the

@@ -78,6 +78,33 @@ type Pin struct {
 	// Hooks holds per-workspace hook preferences. Persisted under [hooks].
 	// nil when the user has never been prompted about a hook/tool gap.
 	Hooks *HookPrefs `toml:"hooks,omitempty"`
+
+	// Identity is an optional override for the name/email the agent uses
+	// inside the container. When set, vibrator forces git's identity to it,
+	// exports the matching GIT_*/EMAIL env vars, and rewrites the email +
+	// display name in the merged ~/.claude.json so the agent never sees the
+	// user's real Anthropic-account email. Persisted under [identity].
+	// nil = inherit (host gitconfig + Claude account email flow through).
+	Identity *Identity `toml:"identity,omitempty"`
+}
+
+// Identity overrides the contact name/email exposed to the agent inside
+// the container. Its purpose is privacy: by default the agent can read the
+// user's Anthropic-account email (oauthAccount.emailAddress in
+// ~/.claude.json) and reuse it in git commits and outbound HTTP "contact"
+// headers. Setting an alias here replaces that everywhere the agent looks.
+//
+// Either field may be set independently; an empty field is left to the
+// agent's own default for that slot.
+type Identity struct {
+	// Name is the git author/committer name and the rewritten
+	// oauthAccount.displayName.
+	Name string `toml:"name,omitempty"`
+
+	// Email is the git author/committer email and the rewritten
+	// oauthAccount.emailAddress. This is the field that actually keeps the
+	// real account email off the wire.
+	Email string `toml:"email,omitempty"`
 }
 
 // HookPrefs captures the user's decisions about Claude Code hooks that need a
@@ -182,7 +209,7 @@ func (p Pin) IsEmpty() bool {
 		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 &&
 		p.LLM == nil &&
 		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0 &&
-		p.Hooks == nil
+		p.Hooks == nil && p.Identity == nil
 }
 
 // Load reads a .vb file from path and decodes it into a Pin.
@@ -226,6 +253,7 @@ func Save(path string, p *Pin) error {
 		No         []string   `toml:"no,omitempty"`
 		Extensions []string   `toml:"extensions,omitempty"`
 		LLM        *LLMSpec   `toml:"llm,omitempty"`
+		Identity   *Identity  `toml:"identity,omitempty"`
 		Hooks      *HookPrefs `toml:"hooks,omitempty"`
 	}{
 		Harness:    p.Harness,
@@ -235,6 +263,7 @@ func Save(path string, p *Pin) error {
 		No:         p.No,
 		Extensions: p.Extensions,
 		LLM:        p.LLM,
+		Identity:   p.Identity,
 		Hooks:      p.Hooks,
 	}
 	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {

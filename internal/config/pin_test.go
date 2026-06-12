@@ -66,6 +66,45 @@ func TestPin_IsEmptyWithHooks(t *testing.T) {
 	}
 }
 
+func TestPin_RoundtripIdentity(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+
+	want := &Pin{
+		Harness: "claude-code",
+		Identity: &Identity{
+			Name:  "Ada Alias",
+			Email: "ada+vibe@example.com",
+		},
+	}
+	if err := Save(path, want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	// The [identity] table must actually be written.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(raw), "[identity]") {
+		t.Errorf("expected [identity] table in .vb, got:\n%s", raw)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("roundtrip mismatch\n want: %+v\n got:  %+v", want, got)
+	}
+}
+
+func TestPin_IsEmptyWithIdentity(t *testing.T) {
+	p := Pin{Identity: &Identity{Email: "x@y.z"}}
+	if p.IsEmpty() {
+		t.Error("pin with identity override should not be empty")
+	}
+}
+
 func TestPin_RoundtripIntegrations(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".vb")

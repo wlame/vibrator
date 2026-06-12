@@ -289,6 +289,40 @@ func TestResolveAndLaunch_DinDMatchReusesContainer(t *testing.T) {
 	}
 }
 
+// Setting (or changing) the [identity] alias on an existing container must
+// recreate it from the existing image — identity is injected at run time
+// (env + entrypoint), so an old container would otherwise keep leaking the
+// real email. No rebuild; image is reused.
+func TestResolveAndLaunch_IdentityChangeRecreatesContainerWithoutRebuild(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Containers[testContainer] = "exited"
+	// Existing container carries no identity (label empty); image present.
+	mock.ContainerLabels = map[string]map[string]string{
+		testContainer: {dindLabelKey: "false", identityLabelKey: ""},
+	}
+	mock.Images[testImage] = true
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, _, wsDir, imageTag, containerName, opts := newResolveArgs(Options{Stderr: &stderr})
+	pin := config.Pin{Identity: &config.Identity{Email: "alias@example.com"}}
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if probe.built {
+		t.Error("expected NO image rebuild when only the identity alias changed")
+	}
+	if !probe.ran {
+		t.Error("expected a fresh runContainer carrying the new identity")
+	}
+	if n := len(rmContainerRemovals(mock)); n != 1 {
+		t.Errorf("expected exactly one container removal for the identity change, got %d", n)
+	}
+}
+
 // rmContainerRemovals returns the recorded `container rm` calls. The mock
 // records Remove as [<kind>, rm, ...], so a container removal looks like
 // ["container", "rm", "-f", name].

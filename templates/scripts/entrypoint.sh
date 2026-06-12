@@ -100,6 +100,32 @@ if [ -f "$HOST_CLAUDE_JSON" ] && command -v jq >/dev/null 2>&1; then
     fi
 fi
 
+# --- 2b. Identity override ([identity] in .vb) -----------------------------
+# When the user sets an alias, force it everywhere the agent might read a
+# "contact" email so the real Anthropic-account email never reaches git
+# commits or outbound HTTP headers:
+#   - rewrite oauthAccount.emailAddress/displayName in ~/.claude.json (the
+#     field the model reads and reuses), and
+#   - pin git's global identity (commits already use the GIT_*_EMAIL env
+#     vars vibrator forwards; this makes `git config user.email` agree).
+if [ -n "$VIBRATOR_IDENTITY_EMAIL" ]; then
+    if [ -f "$CONTAINER_CLAUDE_JSON" ] && command -v jq >/dev/null 2>&1; then
+        jq --arg email "$VIBRATOR_IDENTITY_EMAIL" --arg name "$VIBRATOR_IDENTITY_NAME" '
+            if .oauthAccount then
+                .oauthAccount.emailAddress = $email
+                | (if $name != "" then .oauthAccount.displayName = $name else . end)
+            else . end
+        ' "$CONTAINER_CLAUDE_JSON" > "$CONTAINER_CLAUDE_JSON.tmp" \
+            && mv "$CONTAINER_CLAUDE_JSON.tmp" "$CONTAINER_CLAUDE_JSON"
+        log "Identity: rewrote Claude account email/display name to the configured alias"
+    fi
+    if command -v git >/dev/null 2>&1; then
+        git config --global user.email "$VIBRATOR_IDENTITY_EMAIL"
+        [ -n "$VIBRATOR_IDENTITY_NAME" ] && git config --global user.name "$VIBRATOR_IDENTITY_NAME"
+        log "Identity: pinned git global user.email/user.name to the configured alias"
+    fi
+fi
+
 # --- 3. Host rules → container rules ---------------------------------------
 # Host's ~/.claude/rules/ is mounted read-only at ~/.claude/rules-host;
 # copy each *.md into the writable container rules dir. Done on every

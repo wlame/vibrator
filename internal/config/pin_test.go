@@ -415,6 +415,26 @@ func TestAppendToGitignore_NoFile_DoesNothing(t *testing.T) {
 	}
 }
 
+func TestPinMountsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+
+	want := &Pin{
+		Harness: "claude-code",
+		Mounts:  []string{"/data/refs", "/work/lib:rw"},
+	}
+	if err := Save(path, want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got.Mounts) != 2 || got.Mounts[0] != "/data/refs" || got.Mounts[1] != "/work/lib:rw" {
+		t.Fatalf("Mounts round-trip = %#v", got.Mounts)
+	}
+}
+
 func TestAppendToGitignore_NoTrailingNewlineGetsOne(t *testing.T) {
 	dir := t.TempDir()
 	gi := filepath.Join(dir, ".gitignore")

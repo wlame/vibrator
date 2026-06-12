@@ -49,6 +49,12 @@ type Pin struct {
 	No         []string `toml:"no,omitempty"`
 	Extensions []string `toml:"extensions,omitempty"`
 
+	// Mounts are extra host folders to bind into the container at the
+	// same absolute path, as raw "PATH[:ro|:rw]" entries (read-only is
+	// the default). Parsed/validated by internal/mount at launch time;
+	// stored raw so the file round-trips exactly what the user typed.
+	Mounts []string `toml:"mounts,omitempty"`
+
 	// LLM is the chosen LLM provider + model + auth shape. nil for harnesses
 	// that don't need it (Claude Code is Anthropic-only and uses the existing
 	// AuthEnvVars forwarding). See LLMSpec for the per-field semantics.
@@ -206,7 +212,7 @@ type LLMAuth struct {
 // mid-wizard.
 func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
-		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 &&
+		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 && len(p.Mounts) == 0 &&
 		p.LLM == nil &&
 		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0 &&
 		p.Hooks == nil && p.Identity == nil
@@ -252,6 +258,7 @@ func Save(path string, p *Pin) error {
 		With       []string   `toml:"with,omitempty"`
 		No         []string   `toml:"no,omitempty"`
 		Extensions []string   `toml:"extensions,omitempty"`
+		Mounts     []string   `toml:"mounts,omitempty"`
 		LLM        *LLMSpec   `toml:"llm,omitempty"`
 		Identity   *Identity  `toml:"identity,omitempty"`
 		Hooks      *HookPrefs `toml:"hooks,omitempty"`
@@ -262,6 +269,7 @@ func Save(path string, p *Pin) error {
 		With:       p.With,
 		No:         p.No,
 		Extensions: p.Extensions,
+		Mounts:     p.Mounts,
 		LLM:        p.LLM,
 		Identity:   p.Identity,
 		Hooks:      p.Hooks,

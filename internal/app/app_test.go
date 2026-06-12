@@ -15,6 +15,7 @@ import (
 	"github.com/wlame/vibrator/internal/harness"
 	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
 	"github.com/wlame/vibrator/internal/prereq"
+	"github.com/wlame/vibrator/internal/workspace"
 )
 
 // --- needsWizard ----------------------------------------------------------
@@ -780,36 +781,30 @@ func TestBuildSpecs_ExtensionDepsAreFoldedIntoFeatures(t *testing.T) {
 	}
 }
 
-// When --dind is set, buildSpecs must auto-inject the docker-cli feature so
-// the container has the docker binary needed to talk to the mounted socket.
-// The user can still strip it with --no=docker-cli if they supply their own.
-func TestBuildSpecs_DinDInjectsDockerCLIFeature(t *testing.T) {
+// --dind must NOT change the resolved feature set. The docker client is
+// baked into every base image, so an image built with --dind is
+// byte-identical to one built without it — that's what lets toggling
+// --dind reuse the existing image instead of rebuilding from scratch.
+func TestBuildSpecs_DinDDoesNotChangeFeatures(t *testing.T) {
 	pin := config.Pin{
 		Harness: "claude-code",
 		Profile: "minimal", // minimal has no features — clean baseline
 	}
-	_, ws, err := buildSpecs(pin, Options{DinD: true})
+	_, wsOff, err := buildSpecs(pin, Options{DinD: false})
+	if err != nil {
+		t.Fatalf("buildSpecs without DinD: %v", err)
+	}
+	_, wsOn, err := buildSpecs(pin, Options{DinD: true})
 	if err != nil {
 		t.Fatalf("buildSpecs with DinD: %v", err)
 	}
-	if !containsString(ws.Features, "docker-cli") {
-		t.Errorf("expected docker-cli in resolved Features when DinD=true, got %v", ws.Features)
+	if !reflect.DeepEqual(wsOff.Features, wsOn.Features) {
+		t.Errorf("--dind changed the feature set (would force a rebuild): off=%v on=%v",
+			wsOff.Features, wsOn.Features)
 	}
-}
-
-// --no=docker-cli must still be able to override the auto-injected feature.
-func TestBuildSpecs_DinDDockerCLICanBeRemovedWithNo(t *testing.T) {
-	pin := config.Pin{
-		Harness: "claude-code",
-		Profile: "minimal",
-		No:      []string{"docker-cli"},
-	}
-	_, ws, err := buildSpecs(pin, Options{DinD: true})
-	if err != nil {
-		t.Fatalf("buildSpecs with DinD + --no=docker-cli: %v", err)
-	}
-	if containsString(ws.Features, "docker-cli") {
-		t.Errorf("--no=docker-cli should override DinD auto-inject, got %v", ws.Features)
+	// And the fingerprint (image identity) must be identical too.
+	if workspace.Fingerprint(wsOff) != workspace.Fingerprint(wsOn) {
+		t.Errorf("--dind changed the workspace fingerprint — image would rebuild")
 	}
 }
 

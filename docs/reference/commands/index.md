@@ -32,7 +32,6 @@ everywhere.
 | `vibrate prereqs bootstrap` | Run host-side setup (e.g. mint a claude-mem key) | [prereqs.md](prereqs.md#vibrate-prereqs-bootstrap) |
 | `vibrate hostprobe` | Show host-detected plugins + extension matches | [hostprobe.md](hostprobe.md) |
 | `vibrate runtime detect` | Show the auto-detected Docker socket | [runtime.md](runtime.md) |
-| `vibrate migrate-pin` | Convert a bash-era `.vb.env` → TOML `.vb` | [migrate-pin.md](migrate-pin.md) |
 
 ## Spec-resolution flags
 

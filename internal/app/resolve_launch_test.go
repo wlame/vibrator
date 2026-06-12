@@ -223,6 +223,72 @@ func TestResolveAndLaunch_RunningContainerWithLoginRunsLoginThenExecs(t *testing
 	}
 }
 
+// --dind state change: an existing (exited) container created WITHOUT the
+// socket must be recreated when --dind is requested — removed and re-run
+// from the EXISTING image, never rebuilt. This is the regression target for
+// "vibrate --dind on a prior container rebuilds from scratch".
+func TestResolveAndLaunch_DinDChangeRecreatesContainerWithoutRebuild(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Containers[testContainer] = "exited"
+	// Container was created without --dind (label "false"); image is present.
+	mock.ContainerLabels = map[string]map[string]string{
+		testContainer: {dindLabelKey: "false"},
+	}
+	mock.Images[testImage] = true
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+		DinD:   true,
+		Stderr: &stderr,
+	})
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if probe.built {
+		t.Error("expected NO image rebuild (image already present) when only --dind changed")
+	}
+	if !probe.ran {
+		t.Error("expected a fresh runContainer with the socket mounted")
+	}
+	if n := len(rmContainerRemovals(mock)); n != 1 {
+		t.Errorf("expected exactly one container removal for the --dind change, got %d", n)
+	}
+}
+
+// --dind state matches the existing container → reuse it, no remove, no run.
+func TestResolveAndLaunch_DinDMatchReusesContainer(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Containers[testContainer] = "running"
+	mock.ContainerLabels = map[string]map[string]string{
+		testContainer: {dindLabelKey: "true"},
+	}
+
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+		DinD:   true,
+		Stderr: &bytes.Buffer{},
+	})
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if !probe.execed {
+		t.Error("expected exec into the matching --dind container")
+	}
+	if probe.built || probe.ran {
+		t.Errorf("expected no build/run when --dind matches, got built=%v ran=%v", probe.built, probe.ran)
+	}
+	if n := len(rmContainerRemovals(mock)); n != 0 {
+		t.Errorf("expected no removal when --dind state matches, got %d", n)
+	}
+}
+
 // rmContainerRemovals returns the recorded `container rm` calls. The mock
 // records Remove as [<kind>, rm, ...], so a container removal looks like
 // ["container", "rm", "-f", name].

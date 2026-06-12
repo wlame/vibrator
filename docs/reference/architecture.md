@@ -25,7 +25,6 @@ code is a single Go module (`github.com/wlame/vibrator`) with a thin `main` and 
 | `internal/hostprobe` | Scans the host for installed harness plugins. |
 | `internal/prereq` | Host-side prereq verifiers/bootstrappers (HTTP/command/file probes; claude-mem). |
 | `internal/localprovider` | Ollama / LM Studio lifecycle. |
-| `internal/migrate` | Bash `.vb.env` → TOML `.vb` converter. |
 
 The catalogue (`extensions/`) and runtime scripts/shells (`templates/`) are
 [embedded](#embedded-assets) into the binary.

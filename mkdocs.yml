@@ -131,7 +131,6 @@ nav:
       - Integrations: guides/integrations.md
       - Authentication: guides/authentication.md
       - Docker-in-Docker: guides/docker-in-docker.md
-      - Migrating from bash: guides/migrating.md
   - Lifecycle:
       - lifecycle/index.md
       - What happens on build: lifecycle/build.md
@@ -149,7 +148,6 @@ nav:
       - prereqs: reference/commands/prereqs.md
       - hostprobe: reference/commands/hostprobe.md
       - runtime: reference/commands/runtime.md
-      - migrate-pin: reference/commands/migrate-pin.md
   - Reference:
       - reference/index.md
       - ".vb schema": reference/vb-file.md

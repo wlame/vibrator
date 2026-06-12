@@ -82,8 +82,8 @@ type Detector struct {
 	IsSocket func(path string) bool
 
 	// Readlink returns the target of a symlink (one hop, not -f resolution),
-	// matching the behaviour the bash version needed for /var/run/docker.sock
-	// pointing at e.g. ~/.colima/default/docker.sock. Defaults to os.Readlink.
+	// needed for /var/run/docker.sock pointing at e.g.
+	// ~/.colima/default/docker.sock. Defaults to os.Readlink.
 	Readlink func(path string) (string, error)
 
 	// DockerCtxEndpoint runs `docker context inspect --format '{{.Endpoints.docker.Host}}'`

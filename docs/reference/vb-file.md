@@ -16,7 +16,7 @@ omitted on save.
 harness = "claude-code"
 profile = "full"
 shell   = "zsh"
-with    = ["docker-cli"]
+with    = ["gh"]
 no      = ["aider"]
 extensions = ["context7", "ecc-developer"]
 
@@ -139,4 +139,3 @@ Per-workspace hook preferences, written when you respond to a
 ## Related pages
 
 - [The `.vb` file](../guides/configuration.md) — practical guide.
-- [Migrating from bash](../guides/migrating.md) — converting `.vb.env`.

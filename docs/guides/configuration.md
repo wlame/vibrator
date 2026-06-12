@@ -14,7 +14,7 @@ This page is the practical guide.
 harness = "claude-code"
 profile = "full"
 shell   = "zsh"
-with    = ["docker-cli"]
+with    = ["gh"]
 no      = ["aider"]
 extensions = ["context7", "ecc-developer"]
 
@@ -93,5 +93,4 @@ rather than editing by hand.
 ## Related pages
 
 - [`.vb` schema reference](../reference/vb-file.md) — every field and its type.
-- [Migrating from bash](migrating.md) — converting a legacy `.vb.env`.
 - [The wizard](../reference/commands/wizard.md) — what writes `.vb`.

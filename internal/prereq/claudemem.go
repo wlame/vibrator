@@ -44,9 +44,7 @@ const claudeMemKeyRandomBytes = 24
 
 // localhostRewrite captures localhost / 127.0.0.1 hosts in a postgres URL
 // so the one-shot container can reach the host's daemon via
-// host.docker.internal. Single-quoted Go regex form; the corresponding sed
-// in the bash impl uses '#' as the delimiter because '|' alternation
-// confuses BSD sed. We have no such constraint here.
+// host.docker.internal.
 var localhostRewrite = regexp.MustCompile(`//([^/@]*@)?(localhost|127\.0\.0\.1)([:/])`)
 
 // hostInternalRewrite is the inverse: it captures host.docker.internal so
@@ -333,8 +331,7 @@ func (b *ClaudeMemBootstrap) Bootstrap(ctx context.Context, ws Workspace) (map[s
 // runPSQL launches the one-shot psql container, pipes `sql` on stdin, and
 // returns the captured stdout (trimmed). Variadic `kv` pairs are passed as
 // `-v name=value` so the SQL can reference them via `:'name'` interpolation
-// — which is psql's quoted-literal substitution. This is the same
-// injection-safe pattern the bash impl uses.
+// — which is psql's quoted-literal substitution, an injection-safe pattern.
 //
 // stderr goes to os.Stderr unfiltered so psql errors surface to the user
 // (we don't try to interpret psql diagnostics).
@@ -374,8 +371,7 @@ func (b *ClaudeMemBootstrap) runPSQL(ctx context.Context, image, dsn, sql string
 }
 
 // mintClaudeMemKey produces a fresh `cmem_<48-hex>` plaintext key. The 48
-// hex chars come from 24 random bytes — same width as the bash impl
-// (`openssl rand -hex 24`).
+// hex chars come from 24 random bytes (equivalent to `openssl rand -hex 24`).
 //
 // `rng` is optional; nil means use crypto/rand.Reader.
 func mintClaudeMemKey(rng io.Reader) (string, error) {
@@ -390,7 +386,7 @@ func mintClaudeMemKey(rng io.Reader) (string, error) {
 }
 
 // sha256Hex is the SHA-256 hash of s, hex-encoded, no trailing newline.
-// Matches the server's hash-on-write convention (and the bash impl's
+// Matches the server's hash-on-write convention (equivalent to
 // `sha256sum | awk '{print $1}'`).
 func sha256Hex(s string) string {
 	sum := sha256.Sum256([]byte(s))

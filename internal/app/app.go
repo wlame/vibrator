@@ -66,6 +66,12 @@ const (
 	LaunchShell LaunchTarget = "shell"
 )
 
+// dindLabelKey is the container label that records whether a container
+// was created with the host docker socket mounted (--dind). It lives in
+// app (set in launch.go, read in resolveAndLaunch) because it's an
+// orchestration concern, not a docker-client detail.
+const dindLabelKey = "vibrator.dind"
+
 // effectiveLaunchTarget normalizes the zero-value to LaunchHarness so
 // downstream consumers can branch on a known value without a special
 // case for the empty string.
@@ -322,6 +328,29 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
 	}
 
+	// --dind toggle: the docker socket is bind-mounted at container-creation
+	// time and CANNOT be added to (or removed from) a live container. So when
+	// the requested --dind state differs from how the existing container was
+	// created, recreate it — reusing the EXISTING image (no rebuild; the
+	// docker client is baked into every base image). This is what makes
+	// `vibrate --dind` on a previously-non-dind container start working
+	// without a from-scratch build.
+	if status != "" {
+		haveDinD, err := containerHasDinD(ctx, dc, containerName)
+		if err != nil {
+			return fmt.Errorf("inspect container dind state: %w", err)
+		}
+		if haveDinD != opts.DinD {
+			fmt.Fprintf(opts.Stderr,
+				"→ --dind state changed (was %v, now %v) — recreating container %s from the existing image (no rebuild)\n",
+				haveDinD, opts.DinD, containerName)
+			if err := dc.Remove(ctx, docker.RemoveContainer, containerName, true); err != nil {
+				return fmt.Errorf("remove container for --dind change: %w", err)
+			}
+			status = "" // fall through to the build-if-missing + run path
+		}
+	}
+
 	switch status {
 	case "running":
 		fmt.Fprintln(opts.Stderr, "→ Container already running — exec'ing in")
@@ -376,6 +405,17 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 	default:
 		return fmt.Errorf("unexpected container status %q for %s", status, containerName)
 	}
+}
+
+// containerHasDinD reports whether an existing container was created with
+// the host docker socket mounted, by reading the vibrator.dind label.
+// A missing label (older container, or label absent) reads as false.
+func containerHasDinD(ctx context.Context, dc docker.Client, containerName string) (bool, error) {
+	v, err := dc.ContainerLabel(ctx, containerName, dindLabelKey)
+	if err != nil {
+		return false, err
+	}
+	return v == "true", nil
 }
 
 // loadWorkspaceAndPin resolves the workspace root and reads any
@@ -672,14 +712,11 @@ func resolveExtensionsAndFeatures(pin config.Pin, opts Options) ([]*extensions.E
 	for _, e := range catEntries {
 		initial = append(initial, e.Deps.Features...)
 	}
-	// --dind mounts the host docker socket at run time; the container also
-	// needs a docker CLI binary so those socket calls actually work. Auto-
-	// inject the feature here (same tier as profile/harness requirements)
-	// so the user can still override with --no=docker-cli if they supply
-	// their own binary via a custom Dockerfile fragment.
-	if opts.DinD {
-		initial = append(initial, "docker-cli")
-	}
+	// NB: --dind deliberately does NOT add any feature here. The docker CLI
+	// is baked into the base image for every variant, so the image content
+	// is identical with or without --dind. That keeps toggling --dind a
+	// run-time-only decision (socket mount + container recreate), never an
+	// image rebuild. See resolveAndLaunch for the container-side handling.
 	resolved, err := feature.Resolve(initial, pin.With, pin.No)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve features: %w", err)

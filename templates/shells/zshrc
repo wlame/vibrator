@@ -21,8 +21,7 @@ setopt EXTENDED_HISTORY HIST_IGNORE_DUPS SHARE_HISTORY HIST_REDUCE_BLANKS
 # user@host in vibrator-yellow, workspace in green. The container's
 # hostname is set by `docker run --hostname` to `vibrate-<workspace>`,
 # so the yellow "user@vibrate-<workspace>" portion is the visible cue
-# that you're inside a vibrator container — replacing the old [vb]
-# prefix the bash impl used. Saves four chars of horizontal space.
+# that you're inside a vibrator container.
 PROMPT='%F{yellow}%n@%m%f %F{green}%~%f %# '
 
 # --- aliases ----------------------------------------------------------

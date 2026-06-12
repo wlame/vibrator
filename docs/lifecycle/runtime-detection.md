@@ -54,8 +54,8 @@ vibrate runtime detect --colima-profile=work
 For VM-based runtimes (Colima, Rancher Desktop), the macOS-side socket is a proxy that
 only listens on the host. When you use [`--dind`](../guides/docker-in-docker.md) to mount
 the socket into a container, Vibrator mounts the daemon's own `/var/run/docker.sock` (which
-the daemon, running inside the VM, resolves to its real socket) and the
-[`docker-cli` feature](../reference/features.md)'s sudo wrapper handles group access.
+the daemon, running inside the VM, resolves to its real socket) and the base image's
+docker sudo wrapper handles group access.
 
 ## Overriding detection
 

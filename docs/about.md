@@ -118,17 +118,18 @@ than running a coding agent, devcontainers are the better fit.
 
 ## Project status
 
-Vibrator began as a bash implementation; the current Go rewrite (Go ≥ 1.26, a single static
-binary) is **feature-complete**. It's released under the **MIT** license from
+Vibrator is a single static Go binary (Go ≥ 1.26), released under the **MIT** license from
 [github.com/wlame/vibrator](https://github.com/wlame/vibrator).
+
+**Harness support:** Claude Code is the primary, well-exercised harness — it's what vibrator
+is developed and tested against day to day. Codex, OpenCode, and Pi are wired in and usable
+(install, launch, auth/config mounts, extensions) but see far less real-world use, so treat
+them as **experimental** for now and expect rough edges.
 
 Releases are **created manually in the GitHub UI**: publishing a release fires a CI workflow
 that builds the binaries for Linux and macOS (amd64/arm64) and attaches them — plus a
 `checksums.txt` manifest — as assets on that release. (Windows isn't built; it uses Unix-only
 syscalls, so Windows users run vibrate through WSL2.)
-
-If you're coming from the old bash version, [`vibrate migrate-pin`](reference/commands/migrate-pin.md)
-converts a legacy `.vb.env` file into the current TOML `.vb` format.
 
 !!! tip "New here?"
     Start with the [Getting started](getting-started/index.md) guide, then read

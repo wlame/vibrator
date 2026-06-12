@@ -112,7 +112,8 @@ func init() {
 		"Force a fresh `docker build` even when a matching image exists.")
 	runCmd.Flags().BoolVar(&runFlagsState.dind, "dind", false,
 		"Mount the host's Docker socket so `docker` inside the container drives the host daemon. "+
-			"Automatically installs the docker CLI client in the image (docker-cli feature).")
+			"The docker client is always baked into the image, so toggling --dind never rebuilds it — "+
+			"it just recreates the container with (or without) the socket.")
 	runCmd.Flags().BoolVar(&runFlagsState.login, "login", false,
 		"Run `claude auth login` in the container before launching the harness. "+
 			"Opens the auth URL in your host browser automatically. "+

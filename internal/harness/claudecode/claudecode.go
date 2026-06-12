@@ -71,11 +71,11 @@ func (claudeCode) LLMEnvVars(_, _, _, _ string) map[string]string { return nil }
 // sessionPersistDirs are the per-CC subdirectories that hold in-progress
 // conversations, file history, etc. Bind-mounting them means a
 // container-side claude session shows up in the host's history list (and
-// vice versa) — the same session continuity the bash impl gave by default.
+// vice versa) — session continuity is on by default.
 //
 // Trade-off: shared mutable state. Concurrent host + container claude runs
-// could race on the same JSON files; the bash impl shipped this default-on
-// for ~12 months without major complaints, so we follow.
+// could race on the same JSON files, but in practice this has proven safe
+// enough to ship default-on.
 //
 // "projects" is NOT here — it's mounted at a per-workspace scope below so
 // other projects' transcripts aren't visible inside the container.

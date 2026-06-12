@@ -11,8 +11,7 @@ install: |
   git clone --depth 1 https://github.com/umputun/cc-thingz.git \
     "$HOME/.claude/plugins/marketplaces/umputun-cc-thingz"
   # The vibrate harness scaffolding wires the marketplace into Claude's
-  # registry — see install-cc-thingz pattern (Phase 3, derived from
-  # previous-implementation/templates/install-cc-thingz.sh).
+  # registry.
 source: https://github.com/umputun/cc-thingz
 ---
 

@@ -21,7 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget \
       git gpg openssh-client \
-      sudo vim less tree \
+      sudo vim less tree htop \
       jq sqlite3 dnsutils \
       unzip xz-utils \
       build-essential \
@@ -32,6 +32,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       zsh \
  && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
+
+# --- docker CLI client (always present; activated at run time via --dind) ---
+RUN install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+ && chmod a+r /etc/apt/keyrings/docker.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu noble stable" \
+      > /etc/apt/sources.list.d/docker.list \
+ && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+ && rm -rf /var/lib/apt/lists/*
+# sudo wrapper at /usr/local/bin/docker (earlier in PATH than /usr/bin/docker)
+# so docker always runs as root and can access the socket regardless of group
+# membership. Needed for VM-based runtimes (Colima, Rancher Desktop) where the
+# socket is owned by a group that doesn't map cleanly across the VM boundary.
+# The container user has NOPASSWD:ALL sudo, so no password is prompted.
+RUN printf '#!/bin/sh\nexec sudo /usr/bin/docker "$@"\n' > /usr/local/bin/docker \
+ && chmod 0755 /usr/local/bin/docker \
+ && docker --version
 
 # --- shell rc files (copied into new-user homes via /etc/skel) ---
 COPY shells/bashrc /etc/skel/.bashrc

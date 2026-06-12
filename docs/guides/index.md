@@ -59,12 +59,6 @@ exhaustive tables, see the [Reference](../reference/index.md) section instead.
 
     Let the container drive the host Docker daemon with `--dind`.
 
--   :material-swap-horizontal:{ .lg .middle } **[Migrating from bash](migrating.md)**
-
-    ---
-
-    Convert a legacy `.vb.env` into the current TOML `.vb`.
-
 </div>
 
 ## Related pages

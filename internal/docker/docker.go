@@ -145,6 +145,11 @@ type Client interface {
 	// empty-string return.
 	ContainerStatus(ctx context.Context, name string) (string, error)
 
+	// ContainerLabel returns the value of a single label on a container by
+	// name. Returns ("", nil) when the container or the label is absent —
+	// callers treat "missing" and "empty" identically.
+	ContainerLabel(ctx context.Context, name, key string) (string, error)
+
 	// ListImages returns vibrator-managed images filtered by label. The
 	// labelFilter is a "key=value" string passed to `--filter label=...`.
 	// Used by `vibrate variants list` and by the launch orchestrator for
@@ -266,6 +271,31 @@ func (c *CLIClient) ContainerStatus(ctx context.Context, name string) (string, e
 		return "", fmt.Errorf("docker container inspect %s: %w", name, err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// ContainerLabel returns a single label's value via `docker inspect`. A
+// missing container OR a missing label both resolve to ("", nil): the Go
+// template `index` on an absent key prints "<no value>", which we map to
+// "" so callers can't accidentally treat the sentinel as a real value.
+func (c *CLIClient) ContainerLabel(ctx context.Context, name, key string) (string, error) {
+	cmd := exec.CommandContext(ctx, c.DockerPath,
+		"container", "inspect", "--format",
+		fmt.Sprintf("{{index .Config.Labels %q}}", key), name)
+	out, err := cmd.Output()
+	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			if strings.Contains(string(ee.Stderr), "No such container") {
+				return "", nil
+			}
+		}
+		return "", fmt.Errorf("docker container inspect %s (label %s): %w", name, key, err)
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "<no value>" {
+		return "", nil
+	}
+	return v, nil
 }
 
 // --- Action methods ---

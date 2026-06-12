@@ -4,11 +4,12 @@ A single-binary CLI that runs AI coding agents (Claude Code, Codex, OpenCode,
 Pi) in isolated Docker containers per workspace — with declarative profile
 and extension configuration via a `.vb` file at the project root.
 
-> **Status:** Go rewrite is feature-complete on branch `pivot`. The previous
-> bash implementation lives under
-> [`previous-implementation/`](./previous-implementation) for design
-> reference. Use [`vibrate migrate-pin`](#migrating-from-the-bash-version) to
-> convert old workspaces.
+> **Harness support:** Claude Code is the primary, well-exercised harness —
+> it's what vibrator is developed and tested against day to day. Codex,
+> OpenCode, and Pi are wired in and usable (install, launch, auth/config
+> mounts, extensions), but they get far less real-world use and are best
+> treated as **experimental** for now. Expect rough edges on the non-Claude
+> harnesses and please file issues.
 
 ## Quick start
 
@@ -53,7 +54,6 @@ The first run writes a `.vb` file capturing your choices. It's added to
 | `vibrate variants list` | List managed images + containers for this host |
 | `vibrate variants prune` | Remove stopped containers / unused images |
 | `vibrate runtime detect` | Auto-detect Docker socket path |
-| `vibrate migrate-pin` | Convert old bash `.vb.env` → new TOML `.vb` |
 
 Common flags (apply to `vibrate` and `vibrate run`):
 
@@ -69,25 +69,11 @@ Common flags (apply to `vibrate` and `vibrate run`):
 --rebuild               Force a fresh `docker build` even when an image exists
 ```
 
-## Migrating from the bash version
-
-If you have a workspace with a bash-era `.vb.env`, run:
-
-```bash
-vibrate migrate-pin --dry-run    # preview the conversion
-vibrate migrate-pin              # write .vb, archive .vb.env to .vb.env.bak
-```
-
-The migrator maps known keys (HARNESS, PROFILE, WITH/NO, CLAUDE_MEM_SERVER_BETA_*)
-to the new TOML structure and preserves unknown keys under `[env]` so nothing
-is lost.
-
 ## What's inside
 
 - **`cmd/vibrate`** — thin main that wires the cobra root command.
 - **`internal/cli`** — every subcommand lives in its own file (run, build,
-  build-dockerfile, extensions, wizard, hostprobe, prereqs, variants, runtime,
-  migrate).
+  build-dockerfile, extensions, wizard, hostprobe, prereqs, variants, runtime).
 - **`internal/app`** — the orchestrator. Decision tree: load pin → flag
   overrides → wizard → validate → save → resolve specs → prereq probes →
   local-LLM startup → build/run/exec.
@@ -95,7 +81,8 @@ is lost.
   gating (skips steps already supplied via flags).
 - **`internal/harness`** — `Harness` interface; one subpackage per built-in
   (claudecode, codex, opencode, pi). Each declares its install snippet,
-  required features, auth env vars, and LLM env-var mapping.
+  required features, auth env vars, host-config mounts, and LLM env-var
+  mapping.
 - **`internal/feature`** — base features (python, node, go, postgres-client,
   playwright, ...) with a topological resolver.
 - **`internal/profile`** — minimal / backend / frontend / full bundles on top
@@ -116,7 +103,6 @@ is lost.
   probes) plus the claude-mem postgres bootstrap.
 - **`internal/localprovider`** — Ollama / LM Studio lifecycle (enumerate
   models, ensure-running before container launch).
-- **`internal/migrate`** — bash `.vb.env` → TOML `.vb` converter.
 
 ## ECC bundle (Everything Claude Code)
 
@@ -281,7 +267,7 @@ just --completions <shell> # emit shell completion script
   It doesn't compare file timestamps; it just runs commands. Go's own build
   cache handles incremental work for us, so we don't need Make's targets.
 - **Cross-platform.** Recipes behave the same on Linux/macOS/Windows. No
-  BSD-vs-GNU `sed -i` workarounds (which the old bash Makefile had).
+  BSD-vs-GNU `sed -i` workarounds.
 - **Static error reporting.** Syntax errors and undefined recipes are caught
   before anything runs.
 - **`just --list`** is self-documenting — every recipe with a `#` comment

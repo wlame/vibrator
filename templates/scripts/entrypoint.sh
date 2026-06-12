@@ -279,7 +279,7 @@ fi
 # "hooks didn't run" with no log line explaining why.
 #
 # Blanket chmod on every entry: cheap (find walks a few dirs) and
-# self-healing. Mirrors the bash impl's behavior at entrypoint.sh:262.
+# self-healing.
 if [ -d "$HOME/.claude/plugins" ]; then
     find "$HOME/.claude/plugins" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
     log "Plugins: re-permissioned hook scripts under ~/.claude/plugins"
@@ -426,7 +426,7 @@ fi
 if command -v jq >/dev/null 2>&1 && [ -f "$CONTAINER_SETTINGS" ]; then
     _vb_hook_tools=$(jq -r '.hooks // {} | .[]? | .[]? | .hooks[]? | .command // empty' \
         "$CONTAINER_SETTINGS" 2>/dev/null \
-        | grep -oE '\b(node|npm|npx|bun|python3?|pip3?|uvx?|go|gh|docker|psql|pg_dump|pg_restore|aider|ralphex|codex|playwright)\b' \
+        | grep -oE '\b(node|npm|npx|bun|python3?|pip3?|uvx?|go|gh|psql|pg_dump|pg_restore|aider|ralphex|codex|playwright)\b' \
         | sort -u)
     _vb_missing=""
     for _t in $_vb_hook_tools; do

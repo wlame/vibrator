@@ -10,8 +10,7 @@ prereq: claude-mem-server-beta
 install: |
   # Host-side bootstrap pre-mints a project-scoped API key into .vb; the
   # plugin scripts inside the container only need the marketplace clone +
-  # settings.json hook entries. This mirrors the bash version's manual
-  # install path (Dockerfile Stage 3) — we deliberately bypass
+  # settings.json hook entries. We deliberately bypass
   # `npx claude-mem install`, whose non-TTY defaults silently say "No" to
   # the "Overwrite existing installation?" prompt.
   #
@@ -101,14 +100,6 @@ chmod 600 ~/.config/vibrator/claude-mem.toml
 `database_url` is optional — leave it out and vibrator skips auto-bootstrap,
 expecting you to mint keys yourself. An optional `team_name` key overrides the
 default team name (`"vibrators"`).
-
-> **Migrating from the bash-era setup?** The previous implementation read a
-> `claude-mem.env` file with `CLAUDE_MEM_*` shell-style keys. The Go rewrite
-> uses TOML with unprefixed keys. Convert by renaming the file, swapping
-> `KEY=value` for `key = "value"`, and shortening keys:
-> `CLAUDE_MEM_RUNTIME` → `runtime`, `CLAUDE_MEM_SERVER_BETA_URL` →
-> `server_url`, `CLAUDE_MEM_SERVER_DATABASE_URL` → `database_url`. Delete the
-> old `.env` once the new file is in place.
 
 The DSN never enters the vibrator container — only the project-scoped Bearer
 token does, minted on first `vibrate` via a one-shot `postgres:16-alpine`

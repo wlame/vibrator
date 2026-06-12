@@ -48,6 +48,10 @@ type Mock struct {
 	// "container does not exist", matching the real CLI semantics.
 	Containers map[string]string
 
+	// ContainerLabels maps container name → label key → value, backing
+	// ContainerLabel(). Missing name or key → ("", nil).
+	ContainerLabels map[string]map[string]string
+
 	// RunHandler, if non-nil, is called by Run() before returning RunErr.
 	// It has full access to the RunSpec — including Stdin/Stdout — so tests
 	// can simulate processes that consume input and produce output (e.g.,
@@ -175,6 +179,14 @@ func (m *Mock) ImageExists(ctx context.Context, image string) (bool, error) {
 func (m *Mock) ContainerStatus(ctx context.Context, name string) (string, error) {
 	m.recordCall("container", "inspect", "--format", "{{.State.Status}}", name)
 	return m.Containers[name], nil
+}
+
+func (m *Mock) ContainerLabel(ctx context.Context, name, key string) (string, error) {
+	m.recordCall("container", "inspect", "--format", "{{index .Config.Labels "+key+"}}", name)
+	if labels, ok := m.ContainerLabels[name]; ok {
+		return labels[key], nil
+	}
+	return "", nil
 }
 
 func (m *Mock) ListImages(ctx context.Context, labelFilter string) ([]ImageInfo, error) {

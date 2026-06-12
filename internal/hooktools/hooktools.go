@@ -36,7 +36,6 @@ var toolFeature = map[string]string{
 	"uv": "python", "uvx": "python",
 	"go":         "go",
 	"gh":         "gh",
-	"docker":     "docker-cli",
 	"psql":       "postgres-client",
 	"pg_dump":    "postgres-client",
 	"pg_restore": "postgres-client",

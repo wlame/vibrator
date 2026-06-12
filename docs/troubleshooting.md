@@ -45,7 +45,7 @@ or Rancher Desktop.
 only listens on the host and is unreachable from inside the VM (and therefore from inside a
 container). Vibrator works around this by mounting the daemon's own
 `/var/run/docker.sock` — which the daemon, running inside the VM, resolves to its real
-socket — with a sudo wrapper from the `docker-cli` feature handling group access.
+socket — with a sudo wrapper baked into the base image handling group access.
 
 **Fix.** If docker-in-docker still fails on these runtimes, this proxy/socket mismatch is
 almost always the cause. Confirm the runtime and socket Vibrator is using, then retry:

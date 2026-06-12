@@ -15,12 +15,21 @@ vibrate --dind
 
 ## What `--dind` does
 
-1. **Auto-installs the `docker-cli` feature** — the container gets a `docker` client binary
-   (not a daemon). You can still override with `--no=docker-cli` if you supply your own.
-2. **Mounts the host Docker socket** at `/var/run/docker.sock` (the path every `docker` CLI
-   looks for by default, so no `DOCKER_HOST` needed inside).
-3. **Adds the container user to the socket's group** (`--group-add`) so `docker` works
+The `docker` client binary (not a daemon) is **always baked into the base image** of every
+variant and profile, alongside the other always-on tools — there's no feature to install. So
+`--dind` is a purely **run-time** decision; it does not change the image at all:
+
+1. **Mounts the host Docker socket** at `/var/run/docker.sock` (the path every `docker` CLI
+   looks for by default, so no `DOCKER_HOST` needed inside). Without `--dind` the `docker`
+   client is still present, it just has no socket to talk to — commands fail to connect,
+   which is expected.
+2. **Adds the container user to the socket's group** (`--group-add`) so `docker` works
    without `sudo` — where the runtime allows it.
+
+Because the image content is identical with or without `--dind`, **toggling it never
+rebuilds the image**. Running `vibrate --dind` on a workspace whose container was created
+without it simply **recreates the container** from the existing image (fast — seconds) with
+the socket mounted. Dropping `--dind` again likewise just recreates the container.
 
 The socket is discovered the same way as [runtime detection](../lifecycle/runtime-detection.md):
 `$DOCKER_HOST` first, then the well-known per-runtime paths.
@@ -29,7 +38,7 @@ The socket is discovered the same way as [runtime detection](../lifecycle/runtim
 
 On Colima and Rancher Desktop the macOS-side socket is a host-only proxy that containers
 (running inside the Linux VM) can't reach. For these, Vibrator mounts the daemon's own
-`/var/run/docker.sock` instead, and the `docker-cli` feature's **sudo wrapper** handles
+`/var/run/docker.sock` instead, and the base image's docker **sudo wrapper** handles
 group access — `docker` in the container is a tiny shim that runs `sudo /usr/bin/docker`,
 and the container user has passwordless sudo inside the sandbox.
 
@@ -44,16 +53,11 @@ docker version     # client + server (the host daemon)
 
 ## Persisting it
 
-To make a workspace always use DinD, the cleanest path is the auto-installed feature plus
-the flag each run. You can also pin the client binary by adding the feature explicitly:
-
-```bash
-vibrate --with=docker-cli   # bake the client in
-# then run with --dind when you actually need socket access
-```
+The `docker` client is already in every image, so there's nothing to bake in — just pass
+`--dind` on the runs where you actually need socket access. Since toggling the flag only
+recreates the container (never rebuilds), there's no cost to enabling it only when needed.
 
 ## Related pages
 
 - [Runtime detection](../lifecycle/runtime-detection.md) — how the socket is found.
-- [`docker-cli` feature](../reference/features.md) — the client binary + sudo wrapper.
 - [`vibrate` flags](../reference/commands/launch.md#options) — `--dind`.

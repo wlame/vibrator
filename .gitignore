@@ -16,10 +16,6 @@ coverage.*
 
 # Workspace pin (new format) — contains plaintext claude-mem API key after bootstrap
 .vb
-.vb.env
-
-# Legacy bash build artifacts under previous-implementation/
-previous-implementation/build/
 
 # OS / editor noise
 .DS_Store

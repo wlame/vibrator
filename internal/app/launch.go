@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	gort "runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -117,6 +118,12 @@ func runContainer(ctx context.Context, dc docker.Client,
 		"vibrator.harness":   pin.Harness,
 		"vibrator.workspace": wsHash,
 		"vibrator.path":      wsDir,
+		// Records whether this container was created with the host docker
+		// socket mounted (--dind). resolveAndLaunch reads it back to decide
+		// whether a later invocation with a different --dind state must
+		// recreate the container (the socket mount can't be added to a
+		// live container).
+		dindLabelKey: strconv.FormatBool(opts.DinD),
 	}
 
 	// Workspace mount at the same absolute path on both sides — the
@@ -215,8 +222,8 @@ func runContainer(ctx context.Context, dc docker.Client,
 		// F2: docker's default /dev/shm is 64MB. Playwright / Chromium
 		// crashes mid-run when shared memory fills up (the symptom is
 		// a cryptic "Target.attachToBrowserTarget failed" on the first
-		// page that allocates ~50MB of canvas). 2GB matches the bash
-		// impl and is comfortably above any single-page workload.
+		// page that allocates ~50MB of canvas). 2GB is comfortably
+		// above any single-page workload.
 		ShmSize: "2g",
 		Volumes: volumes,
 		Env:     envVars,
@@ -561,12 +568,12 @@ func buildDockerSocketMount(stderr io.Writer) (docker.Volume, string, bool) {
 		// in the macOS address space. Use /var/run/docker.sock as the host path
 		// instead — Docker daemon (inside the VM) resolves that path to its own
 		// actual socket, so the bind mount lands the real socket in the container.
-		// The sudo wrapper in the docker-cli feature handles group access.
+		// The base image's sudo wrapper for docker handles group access.
 		mountHostPath := path
 		if det, err := runtime.Detect(runtime.Options{}); err == nil {
 			if det.Runtime == runtime.Colima || det.Runtime == runtime.RancherDesktop {
 				mountHostPath = "/var/run/docker.sock"
-				gid = "" // GID is irrelevant: docker-cli uses a sudo wrapper
+				gid = "" // GID is irrelevant: docker uses a sudo wrapper
 			}
 		}
 
@@ -587,8 +594,8 @@ func buildDockerSocketMount(stderr io.Writer) (docker.Volume, string, bool) {
 // exposing a socket safe to pass into a container or remote session.
 // The path is reported by `gpgconf --list-dirs agent-extra-socket`.
 //
-// The CONTAINER side gets the socket at `/gpg-agent-extra` (matches the
-// bash impl's convention). The entrypoint script (step C5) symlinks
+// The CONTAINER side gets the socket at `/gpg-agent-extra` by
+// convention. The entrypoint script (step C5) symlinks
 // from there to wherever gpg-inside-container expects its socket — so
 // `git commit -S`, `gpg --sign`, etc. all "just work" with the host
 // key without that key ever leaving the host.
@@ -686,8 +693,8 @@ func buildClaudeMemEnv(pin config.Pin) []docker.EnvVar {
 	return envs
 }
 
-// claudeOAuthTokenFile is the conventional host path the bash impl
-// used for storing a long-lived Claude OAuth token outside the shell
+// claudeOAuthTokenFile is the conventional host path for storing a
+// long-lived Claude OAuth token outside the shell
 // environment. Vibrator reads it as a fallback when
 // CLAUDE_CODE_OAUTH_TOKEN isn't already exported.
 const claudeOAuthTokenFile = ".claude-docker-token"
@@ -938,8 +945,8 @@ func buildContainerEnv(pin config.Pin, enabledExts []*extensions.Entry) ([]docke
 	// 1. Auth env vars — forward host values verbatim. For the
 	//    claude-code OAuth token specifically, fall back to a token file
 	//    on the host (~/.claude-docker-token) when the env var is unset.
-	//    The bash impl supported this convention so users could keep the
-	//    OAuth token in a file rather than in their shell rc.
+	//    This convention lets users keep the OAuth token in a file
+	//    rather than in their shell rc.
 	for _, name := range h.AuthEnvVars() {
 		if v := os.Getenv(name); v != "" {
 			final[name] = v

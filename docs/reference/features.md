@@ -19,7 +19,6 @@ dependents).
 | `playwright` | Playwright + Chromium | `node` | 500 MB | Chromium system libs + Chromium browser + Playwright MCP. |
 | `postgres-client` | Postgres client | — | 30 MB | `psql`, `pg_dump`, `pg_restore`. |
 | `gh` | GitHub CLI | — | 20 MB | `gh` from the official apt repo. |
-| `docker-cli` | Docker CLI | — | 40 MB | `docker` client (no daemon) + a sudo wrapper. Auto-added by [`--dind`](../guides/docker-in-docker.md). |
 | `audit-toolkit` | Production audit toolkit | `python` | 400 MB | trivy, syft, grype, semgrep, gitleaks, trufflehog, osv-scanner, checkov, dockle, scc, lizard. |
 | `codex-cli` | OpenAI Codex CLI | `node` | 30 MB | `@openai/codex` (used for cross-model code review). |
 | `ralphex` | ralphex | — | 20 MB | Autonomous coding loop — runs plans task-by-task in fresh sessions. |
@@ -50,8 +49,15 @@ dependents).
 Independent of features, every image includes a base layer:
 `ca-certificates`, `curl`, `wget`, `git`, `gpg`, `openssh-client`, `sudo`, `vim`, `less`,
 `tree`, `jq`, `sqlite3`, `dnsutils`, `unzip`, `xz-utils`, `build-essential`, `locales`,
-your chosen shell, **ripgrep** (`rg`), **fd**, and **fzf**. See
+your chosen shell, **ripgrep** (`rg`), **fd**, **fzf**, and the **`docker` client**
+(`docker-ce-cli` plus a sudo wrapper at `/usr/local/bin/docker`). See
 [Stage 1](../lifecycle/build.md#stage-1-base).
+
+!!! note "docker is always present"
+    The `docker` client binary ships in the base image of every variant and profile. It is
+    not a feature, so there's no `--with`/`--no` toggle for it. The
+    [`--dind`](../guides/docker-in-docker.md) flag is a run-time-only decision that
+    bind-mounts the host's Docker socket so the client has a daemon to talk to.
 
 ## Related pages
 

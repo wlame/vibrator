@@ -167,7 +167,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget \
       git gpg openssh-client \
-      sudo vim less tree \
+      sudo vim less tree htop \
       jq sqlite3 dnsutils \
       unzip xz-utils \
       build-essential \
@@ -181,6 +181,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	fmt.Fprintf(b, "      %s \\\n", spec.Shell)
 	b.WriteString(` && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
+
+`)
+
+	// --- always-on docker CLI client ---
+	// The docker CLI (client only, no daemon) is baked into the base image
+	// for EVERY variant. This is deliberate: it makes Docker-in-Docker a
+	// pure run-time decision. `--dind` only changes whether the host socket
+	// is bind-mounted at `docker run` time — it never changes image content,
+	// so toggling --dind reuses the existing image instead of triggering a
+	// from-scratch rebuild. Without the socket (no --dind), the client is
+	// present but simply has nothing to talk to.
+	//
+	// docker-ce-cli comes from Docker's official apt repo so the version
+	// tracks what Colima/Docker Desktop expose. gpg/curl/ca-certificates are
+	// already installed above.
+	b.WriteString(`# --- docker CLI client (always present; activated at run time via --dind) ---
+RUN install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+ && chmod a+r /etc/apt/keyrings/docker.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu noble stable" \
+      > /etc/apt/sources.list.d/docker.list \
+ && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+ && rm -rf /var/lib/apt/lists/*
+# sudo wrapper at /usr/local/bin/docker (earlier in PATH than /usr/bin/docker)
+# so docker always runs as root and can access the socket regardless of group
+# membership. Needed for VM-based runtimes (Colima, Rancher Desktop) where the
+# socket is owned by a group that doesn't map cleanly across the VM boundary.
+# The container user has NOPASSWD:ALL sudo, so no password is prompted.
+RUN printf '#!/bin/sh\nexec sudo /usr/bin/docker "$@"\n' > /usr/local/bin/docker \
+ && chmod 0755 /usr/local/bin/docker \
+ && docker --version
 
 `)
 

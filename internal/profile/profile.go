@@ -84,8 +84,8 @@ var Full = Profile{
 // the wizard — keep it small→large for easy scanning.
 var All = []Profile{Minimal, Backend, Frontend, Full}
 
-// Default is the profile applied when the user doesn't pick one. Per the plan,
-// full mirrors the bash version's "everything except aider" behaviour.
+// Default is the profile applied when the user doesn't pick one. full is
+// the "everything except aider" bundle.
 var Default = Full
 
 // indexByID lets ByID avoid linear scans and gives constant-time existence

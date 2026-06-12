@@ -8,9 +8,12 @@
 package mount
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -101,4 +104,26 @@ func ResolveAll(raws []string, wsDir string) ([]Resolved, error) {
 		out = append(out, Resolved{Path: abs, ReadOnly: spec.ReadOnly})
 	}
 	return out, nil
+}
+
+// Fingerprint returns a short, stable hash of a resolved mount set, or ""
+// when the set is empty. It is order-independent (entries are sorted) so
+// the same set in any order yields the same value. The app layer stamps
+// this on the container as a label and recreates the container when it
+// changes — bind mounts can't be added to a live container.
+func Fingerprint(rs []Resolved) string {
+	if len(rs) == 0 {
+		return ""
+	}
+	lines := make([]string, len(rs))
+	for i, r := range rs {
+		mode := "rw"
+		if r.ReadOnly {
+			mode = "ro"
+		}
+		lines[i] = r.Path + ":" + mode
+	}
+	sort.Strings(lines)
+	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
+	return hex.EncodeToString(sum[:8])
 }

@@ -123,3 +123,25 @@ func TestResolveAll(t *testing.T) {
 		}
 	})
 }
+
+func TestFingerprint(t *testing.T) {
+	a := []Resolved{{Path: "/x", ReadOnly: true}, {Path: "/y", ReadOnly: false}}
+	b := []Resolved{{Path: "/y", ReadOnly: false}, {Path: "/x", ReadOnly: true}} // reordered
+
+	if Fingerprint(nil) != "" {
+		t.Fatal("empty set must fingerprint to empty string")
+	}
+	if Fingerprint(a) != Fingerprint(b) {
+		t.Fatal("fingerprint must be order-independent")
+	}
+	// Mode flip changes the fingerprint.
+	c := []Resolved{{Path: "/x", ReadOnly: false}, {Path: "/y", ReadOnly: false}}
+	if Fingerprint(a) == Fingerprint(c) {
+		t.Fatal("mode change must change the fingerprint")
+	}
+	// Added path changes the fingerprint.
+	d := append(append([]Resolved{}, a...), Resolved{Path: "/z", ReadOnly: true})
+	if Fingerprint(a) == Fingerprint(d) {
+		t.Fatal("added path must change the fingerprint")
+	}
+}

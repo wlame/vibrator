@@ -9,6 +9,8 @@ package mount
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -40,4 +42,65 @@ func Parse(raw string) (Spec, error) {
 		return Spec{}, fmt.Errorf("--mount %q: empty path", raw)
 	}
 	return Spec{HostPath: path, ReadOnly: readOnly}, nil
+}
+
+// Resolved is a validated, absolute mount. Path is the same on host and
+// container (vibrator mounts every folder at its host path so paths in
+// errors, stack traces, and `pwd` match the user's muscle memory).
+type Resolved struct {
+	Path     string
+	ReadOnly bool
+}
+
+// ResolveAll parses each raw entry, resolves it to an absolute, cleaned
+// path (relative paths are taken against the current working directory),
+// and validates that it exists and is a directory. It is fail-fast: the
+// first bad entry returns an error and no container action should proceed.
+//
+// Two cleanups make the result canonical and docker-safe:
+//   - a path equal to wsDir is dropped (the workspace is already mounted;
+//     re-binding the same path is a docker error), with no error.
+//   - exact duplicates collapse; the same path requested with conflicting
+//     read-only/read-write modes is an error (ambiguous intent).
+func ResolveAll(raws []string, wsDir string) ([]Resolved, error) {
+	wsAbs, _ := filepath.Abs(wsDir)
+	seen := make(map[string]bool) // path -> readOnly
+	byPath := make(map[string]bool)
+	var out []Resolved
+
+	for _, raw := range raws {
+		spec, err := Parse(raw)
+		if err != nil {
+			return nil, err
+		}
+		abs, err := filepath.Abs(spec.HostPath)
+		if err != nil {
+			return nil, fmt.Errorf("--mount %q: %w", raw, err)
+		}
+		abs = filepath.Clean(abs)
+
+		if abs == filepath.Clean(wsAbs) {
+			continue // workspace already mounted
+		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("--mount %s: no such directory", abs)
+			}
+			return nil, fmt.Errorf("--mount %s: %w", abs, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("--mount %s: not a directory", abs)
+		}
+		if was, ok := seen[abs]; ok {
+			if was != spec.ReadOnly {
+				return nil, fmt.Errorf("--mount %s: requested both read-only and read-write", abs)
+			}
+			continue // exact duplicate
+		}
+		seen[abs] = spec.ReadOnly
+		byPath[abs] = true
+		out = append(out, Resolved{Path: abs, ReadOnly: spec.ReadOnly})
+	}
+	return out, nil
 }

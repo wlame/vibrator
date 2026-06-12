@@ -1,6 +1,10 @@
 package mount
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParse(t *testing.T) {
 	tests := []struct {
@@ -37,4 +41,85 @@ func TestParse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveAll(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	ws := t.TempDir()
+	file := filepath.Join(dirA, "f.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("resolves dirs and modes", func(t *testing.T) {
+		got, err := ResolveAll([]string{dirA, dirB + ":rw"}, ws)
+		if err != nil {
+			t.Fatalf("ResolveAll: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d resolved, want 2", len(got))
+		}
+		if got[0].Path != dirA || !got[0].ReadOnly {
+			t.Fatalf("entry 0 = %+v", got[0])
+		}
+		if got[1].Path != dirB || got[1].ReadOnly {
+			t.Fatalf("entry 1 = %+v", got[1])
+		}
+	})
+
+	t.Run("missing path errors", func(t *testing.T) {
+		if _, err := ResolveAll([]string{filepath.Join(dirA, "nope")}, ws); err == nil {
+			t.Fatal("want error for missing path, got nil")
+		}
+	})
+
+	t.Run("regular file errors", func(t *testing.T) {
+		if _, err := ResolveAll([]string{file}, ws); err == nil {
+			t.Fatal("want error for non-directory, got nil")
+		}
+	})
+
+	t.Run("relative path resolved against cwd", func(t *testing.T) {
+		// dirA's base name, resolved from dirA's parent as cwd.
+		parent := filepath.Dir(dirA)
+		cwd, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(cwd) })
+		if err := os.Chdir(parent); err != nil {
+			t.Fatal(err)
+		}
+		got, err := ResolveAll([]string{filepath.Base(dirA)}, ws)
+		if err != nil {
+			t.Fatalf("ResolveAll relative: %v", err)
+		}
+		if got[0].Path != dirA {
+			t.Fatalf("relative resolved to %q, want %q", got[0].Path, dirA)
+		}
+	})
+
+	t.Run("workspace path dropped", func(t *testing.T) {
+		got, err := ResolveAll([]string{ws, dirA}, ws)
+		if err != nil {
+			t.Fatalf("ResolveAll: %v", err)
+		}
+		if len(got) != 1 || got[0].Path != dirA {
+			t.Fatalf("workspace not dropped: %+v", got)
+		}
+	})
+
+	t.Run("exact duplicate collapsed", func(t *testing.T) {
+		got, err := ResolveAll([]string{dirA, dirA}, ws)
+		if err != nil {
+			t.Fatalf("ResolveAll: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("duplicate not collapsed: %+v", got)
+		}
+	})
+
+	t.Run("conflicting modes error", func(t *testing.T) {
+		if _, err := ResolveAll([]string{dirA, dirA + ":rw"}, ws); err == nil {
+			t.Fatal("want error for conflicting modes, got nil")
+		}
+	})
 }

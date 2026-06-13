@@ -25,6 +25,7 @@ import (
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/integration"
 	"github.com/wlame/vibrator/internal/localprovider"
+	"github.com/wlame/vibrator/internal/mount"
 	"github.com/wlame/vibrator/internal/prereq"
 	"github.com/wlame/vibrator/internal/runtime"
 	"github.com/wlame/vibrator/internal/workspace"
@@ -96,6 +97,14 @@ func runContainer(ctx context.Context, dc docker.Client,
 ) error {
 	wsHash := workspace.Fingerprint(wsSpec)
 
+	// User-requested extra mounts (--mount / .vb `mounts`). Resolved
+	// fail-fast: a bad path aborts before we create anything. Resolved
+	// here (not lower) so the fingerprint can go into the labels map.
+	userMounts, err := mount.ResolveAll(pin.Mounts, wsDir)
+	if err != nil {
+		return err
+	}
+
 	envVars, err := buildContainerEnv(pin, enabledExts)
 	if err != nil {
 		return err
@@ -129,6 +138,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 		// container when the alias changes — identity is injected at run
 		// time, so a live container can't be retrofitted.
 		identityLabelKey: identityFingerprint(pin),
+		mountsLabelKey:   mount.Fingerprint(userMounts),
 	}
 
 	// Workspace mount at the same absolute path on both sides — the
@@ -175,6 +185,14 @@ func runContainer(ctx context.Context, dc docker.Client,
 		}
 	}
 
+	volumes = append(volumes, mountVolumes(userMounts)...)
+	extraDirs := mountDirs(userMounts)
+	autoAdded := false
+	if h, ok := harness.ByID(pin.Harness); ok {
+		autoAdded = len(h.ExtraDirArgs(extraDirs)) > 0
+	}
+	announceMounts(opts.Stderr, userMounts, autoAdded)
+
 	fmt.Fprintf(opts.Stderr, "→ Creating container %s ...\n", containerName)
 
 	// LoginMode: start detached with a long-running no-op CMD so the
@@ -204,7 +222,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 	// image's CMD; the Dockerfile still bakes shell as CMD so a manual
 	// `docker run <image>` from someone bypassing vibrate still gets a
 	// sensible default.
-	launchCmd, err := resolveLaunchCmd(pin, opts, nil)
+	launchCmd, err := resolveLaunchCmd(pin, opts, extraDirs)
 	if err != nil {
 		return err
 	}
@@ -261,7 +279,11 @@ func runContainer(ctx context.Context, dc docker.Client,
 func execIntoContainer(ctx context.Context, dc docker.Client,
 	containerName, wsDir string, pin config.Pin, opts Options,
 ) error {
-	cmd, err := resolveLaunchCmd(pin, opts, nil)
+	userMounts, err := mount.ResolveAll(pin.Mounts, wsDir)
+	if err != nil {
+		return err
+	}
+	cmd, err := resolveLaunchCmd(pin, opts, mountDirs(userMounts))
 	if err != nil {
 		return err
 	}
@@ -324,6 +346,47 @@ func resolveLaunchCmd(pin config.Pin, opts Options, extraDirs []string) ([]strin
 
 	// Unreachable — effective() normalizes "" to LaunchHarness.
 	return nil, fmt.Errorf("unknown launch target %q", opts.LaunchTarget)
+}
+
+// mountVolumes maps validated user mounts into docker bind mounts. Each
+// binds at the same absolute path on host and container.
+func mountVolumes(rs []mount.Resolved) []docker.Volume {
+	out := make([]docker.Volume, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, docker.Volume{Host: r.Path, Container: r.Path, ReadOnly: r.ReadOnly})
+	}
+	return out
+}
+
+// mountDirs returns just the container paths, for the harness's add-dir
+// args. All mounts (ro and rw alike) are exposed to the agent.
+func mountDirs(rs []mount.Resolved) []string {
+	out := make([]string, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, r.Path)
+	}
+	return out
+}
+
+// announceMounts prints a one-line notice of the extra mounted folders and
+// their modes. When the harness can't auto-add them (autoAdded == false),
+// it appends a hint that the user must add them inside the agent.
+func announceMounts(stderr io.Writer, rs []mount.Resolved, autoAdded bool) {
+	if len(rs) == 0 {
+		return
+	}
+	parts := make([]string, len(rs))
+	for i, r := range rs {
+		mode := "rw"
+		if r.ReadOnly {
+			mode = "ro"
+		}
+		parts[i] = fmt.Sprintf("%s (%s)", r.Path, mode)
+	}
+	fmt.Fprintf(stderr, "→ Mounted %d extra folder(s): %s\n", len(rs), strings.Join(parts, ", "))
+	if !autoAdded {
+		fmt.Fprintf(stderr, "  (this harness can't auto-add them — add the paths inside the agent if needed)\n")
+	}
 }
 
 // hostMountsToVolumes resolves a harness's declarative HostMounts into

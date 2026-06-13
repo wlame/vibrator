@@ -81,6 +81,11 @@ const dindLabelKey = "vibrator.dind"
 // of which can be retrofitted onto a live container.
 const identityLabelKey = "vibrator.identity"
 
+// mountsLabelKey records a fingerprint of the extra --mount set a container
+// was created with, so resolveAndLaunch can recreate it when the set
+// changes (bind mounts can't be added to a live container).
+const mountsLabelKey = "vibrator.mounts"
+
 // identityFingerprint returns a short, stable hash of the pin's identity
 // override (name + email), or "" when no override is set. Hashing keeps the
 // alias out of docker labels while still letting us detect a change.

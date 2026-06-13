@@ -16,7 +16,7 @@ import (
 
 func TestResolveLaunchCmd_DefaultLaunchesHarness(t *testing.T) {
 	pin := config.Pin{Harness: "claude-code", Shell: "zsh"}
-	got, err := resolveLaunchCmd(pin, Options{}) // zero-value LaunchTarget
+	got, err := resolveLaunchCmd(pin, Options{}, nil) // zero-value LaunchTarget
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestResolveLaunchCmd_DefaultLaunchesHarness(t *testing.T) {
 
 func TestResolveLaunchCmd_ExplicitHarness(t *testing.T) {
 	pin := config.Pin{Harness: "codex", Shell: "bash"}
-	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness})
+	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness}, nil)
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestResolveLaunchCmd_ExplicitHarness(t *testing.T) {
 
 func TestResolveLaunchCmd_Shell(t *testing.T) {
 	pin := config.Pin{Harness: "claude-code", Shell: "fish"}
-	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchShell})
+	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchShell}, nil)
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestResolveLaunchCmd_Shell(t *testing.T) {
 func TestResolveLaunchCmd_Shell_DefaultsToZsh(t *testing.T) {
 	// pin.Shell unset should fall back to zsh — the documented default.
 	pin := config.Pin{Harness: "claude-code"}
-	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchShell})
+	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchShell}, nil)
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestResolveLaunchCmd_EachHarness(t *testing.T) {
 	}
 	for id, wantBin := range cases {
 		t.Run(id, func(t *testing.T) {
-			got, err := resolveLaunchCmd(config.Pin{Harness: id}, Options{LaunchTarget: LaunchHarness})
+			got, err := resolveLaunchCmd(config.Pin{Harness: id}, Options{LaunchTarget: LaunchHarness}, nil)
 			if err != nil {
 				t.Fatalf("resolveLaunchCmd: %v", err)
 			}
@@ -86,7 +86,7 @@ func TestResolveLaunchCmd_EachHarness(t *testing.T) {
 
 func TestResolveLaunchCmd_UnknownHarnessFails(t *testing.T) {
 	pin := config.Pin{Harness: "totally-not-a-harness"}
-	_, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness})
+	_, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness}, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown harness, got nil")
 	}
@@ -118,8 +118,35 @@ func TestLaunchTarget_EffectiveNormalization(t *testing.T) {
 
 func TestResolveLaunchCmd_UnknownTargetErrors(t *testing.T) {
 	pin := config.Pin{Harness: "claude-code"}
-	_, err := resolveLaunchCmd(pin, Options{LaunchTarget: "weird"})
+	_, err := resolveLaunchCmd(pin, Options{LaunchTarget: "weird"}, nil)
 	if err == nil {
 		t.Error("expected error for unknown launch target, got nil")
+	}
+}
+
+func TestResolveLaunchCmdAppendsAddDir(t *testing.T) {
+	pin := config.Pin{Harness: "claude-code"}
+	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness},
+		[]string{"/data/refs", "/work/lib"})
+	if err != nil {
+		t.Fatalf("resolveLaunchCmd: %v", err)
+	}
+	want := []string{"/usr/local/bin/claude-exec", "claude",
+		"--add-dir", "/data/refs", "--add-dir", "/work/lib"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestResolveLaunchCmdShellIgnoresAddDir(t *testing.T) {
+	pin := config.Pin{Harness: "claude-code", Shell: "zsh"}
+	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchShell},
+		[]string{"/data/refs"})
+	if err != nil {
+		t.Fatalf("resolveLaunchCmd: %v", err)
+	}
+	want := []string{"/usr/local/bin/claude-exec", "/bin/zsh"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }

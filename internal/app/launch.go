@@ -204,7 +204,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 	// image's CMD; the Dockerfile still bakes shell as CMD so a manual
 	// `docker run <image>` from someone bypassing vibrate still gets a
 	// sensible default.
-	launchCmd, err := resolveLaunchCmd(pin, opts)
+	launchCmd, err := resolveLaunchCmd(pin, opts, nil)
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 func execIntoContainer(ctx context.Context, dc docker.Client,
 	containerName, wsDir string, pin config.Pin, opts Options,
 ) error {
-	cmd, err := resolveLaunchCmd(pin, opts)
+	cmd, err := resolveLaunchCmd(pin, opts, nil)
 	if err != nil {
 		return err
 	}
@@ -300,7 +300,7 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 // Returns an error only for the harness path, and only when the
 // registered harness has no LaunchCommand (a programming bug — every
 // harness must declare one).
-func resolveLaunchCmd(pin config.Pin, opts Options) ([]string, error) {
+func resolveLaunchCmd(pin config.Pin, opts Options, extraDirs []string) ([]string, error) {
 	switch opts.LaunchTarget.effective() {
 	case LaunchShell:
 		shell := pin.Shell
@@ -318,6 +318,7 @@ func resolveLaunchCmd(pin config.Pin, opts Options) ([]string, error) {
 		if len(argv) == 0 {
 			return nil, fmt.Errorf("harness %q declares no LaunchCommand", pin.Harness)
 		}
+		argv = append(argv, h.ExtraDirArgs(extraDirs)...)
 		return append([]string{"/usr/local/bin/claude-exec"}, argv...), nil
 	}
 

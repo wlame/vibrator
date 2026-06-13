@@ -147,6 +147,17 @@ func (claudeCode) HostMounts(ctx harness.HostMountContext) []harness.HostMount {
 // drops the user into the agent's TUI at the workspace.
 func (claudeCode) LaunchCommand() []string { return []string{"claude"} }
 
+// ExtraDirArgs maps each extra mounted directory to a `--add-dir <path>`
+// pair, which Claude Code accepts to widen the agent's accessible roots
+// beyond the workspace.
+func (claudeCode) ExtraDirArgs(dirs []string) []string {
+	var args []string
+	for _, d := range dirs {
+		args = append(args, "--add-dir", d)
+	}
+	return args
+}
+
 // UpdateCommand returns the argv for upgrading Claude Code in place.
 // The official installer (`claude.ai/install.sh` — see Dockerfile)
 // ships a built-in `claude update` that re-downloads the latest

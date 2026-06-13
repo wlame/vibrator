@@ -92,6 +92,15 @@ type Harness interface {
 	// still run before the agent boots.
 	LaunchCommand() []string
 
+	// ExtraDirArgs returns the harness-specific argv that grants the agent
+	// read access to additional directories mounted into the container
+	// beyond the workspace. dirs are absolute container paths (vibrator
+	// mounts each at its host path). The orchestrator appends the result
+	// to the launch command. Return nil when the harness has no such
+	// mechanism — its mounts are still bound; the user is just told to add
+	// them inside the agent manually.
+	ExtraDirArgs(dirs []string) []string
+
 	// HostMounts returns the harness's DECLARATIVE host→container bind
 	// mounts — the host-side config/auth/session state that should be
 	// visible inside the container so settings and logins persist across

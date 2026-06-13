@@ -73,6 +73,10 @@ func (pi) SupportsLLMProvider() bool { return true }
 // configured provider.
 func (pi) LaunchCommand() []string { return []string{"pi"} }
 
+// ExtraDirArgs returns nil: this harness has no flag to add extra roots,
+// so vibrator just notifies the user of the mounted paths.
+func (pi) ExtraDirArgs([]string) []string { return nil }
+
 // UpdateCommand returns the argv for upgrading Pi in place. Pi is an
 // npm package (see Dockerfile); re-running install with @latest picks
 // up the newest release and overwrites the global bin symlink.

@@ -65,6 +65,10 @@ func (codex) SupportsLLMProvider() bool { return true }
 // opens the agent in the current workspace.
 func (codex) LaunchCommand() []string { return []string{"codex"} }
 
+// ExtraDirArgs returns nil: this harness has no flag to add extra roots,
+// so vibrator just notifies the user of the mounted paths.
+func (codex) ExtraDirArgs([]string) []string { return nil }
+
 // UpdateCommand returns the argv for upgrading Codex in place. Codex
 // installs via `npm install -g @openai/codex` (see Dockerfile); re-
 // running install with the @latest tag picks up the newest release

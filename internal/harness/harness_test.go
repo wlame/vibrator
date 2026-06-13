@@ -196,6 +196,35 @@ func TestUpdateCommand_KnownValues(t *testing.T) {
 	}
 }
 
+func TestExtraDirArgs(t *testing.T) {
+	dirs := []string{"/data/refs", "/work/lib"}
+
+	cc, _ := harness.ByID("claude-code")
+	got := cc.ExtraDirArgs(dirs)
+	want := []string{"--add-dir", "/data/refs", "--add-dir", "/work/lib"}
+	if len(got) != len(want) {
+		t.Fatalf("claude-code ExtraDirArgs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("claude-code ExtraDirArgs = %v, want %v", got, want)
+		}
+	}
+	if cc.ExtraDirArgs(nil) != nil {
+		t.Fatal("claude-code ExtraDirArgs(nil) must be nil")
+	}
+
+	for _, id := range []string{"codex", "opencode", "pi"} {
+		h, ok := harness.ByID(id)
+		if !ok {
+			t.Fatalf("harness %q not registered", id)
+		}
+		if h.ExtraDirArgs(dirs) != nil {
+			t.Fatalf("%s ExtraDirArgs must be nil", id)
+		}
+	}
+}
+
 // Specifically pin the launch commands so a rename in upstream
 // projects (e.g., claude → claude-cli) is a deliberate edit, not a
 // silent change.

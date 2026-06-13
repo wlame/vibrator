@@ -90,6 +90,10 @@ func (opencode) SupportsLLMProvider() bool { return true }
 // args) opens the agent in the current workspace.
 func (opencode) LaunchCommand() []string { return []string{"opencode"} }
 
+// ExtraDirArgs returns nil: this harness has no flag to add extra roots,
+// so vibrator just notifies the user of the mounted paths.
+func (opencode) ExtraDirArgs([]string) []string { return nil }
+
 // UpdateCommand returns the argv for upgrading OpenCode in place.
 // OpenCode is installed from a GitHub Releases tarball (see
 // Dockerfile), but the binary has a built-in `opencode upgrade`

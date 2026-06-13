@@ -199,7 +199,10 @@ func TestUpdateCommand_KnownValues(t *testing.T) {
 func TestExtraDirArgs(t *testing.T) {
 	dirs := []string{"/data/refs", "/work/lib"}
 
-	cc, _ := harness.ByID("claude-code")
+	cc, ok := harness.ByID("claude-code")
+	if !ok {
+		t.Fatal("claude-code harness not registered")
+	}
 	got := cc.ExtraDirArgs(dirs)
 	want := []string{"--add-dir", "/data/refs", "--add-dir", "/work/lib"}
 	if len(got) != len(want) {

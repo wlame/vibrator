@@ -112,9 +112,12 @@ type Options struct {
 	With         []string
 	No           []string
 	ExtensionIDs []string
-	Username     string
-	HostUID      int
-	HostGID      int
+	// Mounts are extra host folders to bind into the container at the same
+	// absolute path, as raw "PATH[:ro|:rw]" entries (read-only default).
+	Mounts   []string
+	Username string
+	HostUID  int
+	HostGID  int
 
 	// NoWizard, when true, skips the interactive wizard entirely. Falls
 	// back to flags/defaults — useful for scripted invocations and CI.
@@ -505,6 +508,9 @@ func applyFlagOverrides(pin *config.Pin, opts Options) {
 	}
 	if len(opts.ExtensionIDs) > 0 {
 		pin.Extensions = append([]string{}, opts.ExtensionIDs...)
+	}
+	if len(opts.Mounts) > 0 {
+		pin.Mounts = append([]string{}, opts.Mounts...)
 	}
 }
 

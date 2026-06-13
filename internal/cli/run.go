@@ -17,6 +17,7 @@ type runFlags struct {
 	with       []string
 	no         []string
 	extensions []string
+	mounts     []string
 	username   string
 	hostUID    int
 	hostGID    int
@@ -67,6 +68,7 @@ func buildAppOptions(cmd *cobra.Command, target app.LaunchTarget) app.Options {
 		With:            runFlagsState.with,
 		No:              runFlagsState.no,
 		ExtensionIDs:    runFlagsState.extensions,
+		Mounts:          runFlagsState.mounts,
 		Username:        runFlagsState.username,
 		HostUID:         runFlagsState.hostUID,
 		HostGID:         runFlagsState.hostGID,
@@ -97,6 +99,10 @@ func init() {
 		"Features to disable on top of the profile.")
 	runCmd.Flags().StringSliceVar(&runFlagsState.extensions, "extensions", nil,
 		"Extension IDs to install.")
+	runCmd.Flags().StringArrayVar(&runFlagsState.mounts, "mount", nil,
+		"Extra host folder to mount at the same path inside the container, "+
+			"read-only unless ':rw' is appended (e.g. --mount=/data/refs or "+
+			"--mount=/work/lib:rw). Repeatable.")
 	runCmd.Flags().StringVar(&runFlagsState.username, "username", "",
 		"Unprivileged user created inside the container.")
 	runCmd.Flags().IntVar(&runFlagsState.hostUID, "host-uid", 0,

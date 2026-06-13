@@ -67,6 +67,21 @@ func TestApplyFlagOverrides_EmptyFlagsLeavePinIntact(t *testing.T) {
 	}
 }
 
+func TestApplyFlagOverridesMounts(t *testing.T) {
+	pin := config.Pin{Mounts: []string{"/old"}}
+	applyFlagOverrides(&pin, Options{Mounts: []string{"/data/refs", "/work/lib:rw"}})
+	if len(pin.Mounts) != 2 || pin.Mounts[0] != "/data/refs" || pin.Mounts[1] != "/work/lib:rw" {
+		t.Fatalf("Mounts override = %#v", pin.Mounts)
+	}
+
+	// Empty flag leaves the pin value intact.
+	pin2 := config.Pin{Mounts: []string{"/keep"}}
+	applyFlagOverrides(&pin2, Options{})
+	if len(pin2.Mounts) != 1 || pin2.Mounts[0] != "/keep" {
+		t.Fatalf("Mounts should be untouched: %#v", pin2.Mounts)
+	}
+}
+
 // --- validatePin ----------------------------------------------------------
 
 func TestValidatePin_FailsWithoutHarness(t *testing.T) {

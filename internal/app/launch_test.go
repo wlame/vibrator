@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/wlame/vibrator/internal/config"
@@ -47,6 +48,28 @@ func TestRunContainerIncludesExtraMounts(t *testing.T) {
 	}
 	if !sawRW {
 		t.Errorf("read-write mount %s missing or not rw in RunSpec.Volumes: %+v", rwDir, captured.Volumes)
+	}
+}
+
+func TestRunContainerMissingMountAborts(t *testing.T) {
+	ws := t.TempDir()
+	dc := docker.NewMock()
+
+	pin := config.Pin{Harness: "claude-code", Shell: "zsh",
+		Mounts: []string{"/definitely/does/not/exist/vb-missing"}}
+	opts := Options{LaunchTarget: LaunchHarness, Stdout: io.Discard, Stderr: io.Discard}
+
+	err := runContainer(context.Background(), dc, "img:tag", "ctr", ws,
+		workspace.Spec{Harness: "claude-code"}, pin, nil, opts)
+	if err == nil {
+		t.Fatal("expected runContainer to abort on a missing --mount path, got nil")
+	}
+	if !strings.Contains(err.Error(), "no such directory") {
+		t.Fatalf("error should mention the missing directory, got: %v", err)
+	}
+	// Fail-fast: no container was created.
+	if runs := dc.CallsFor("run"); len(runs) != 0 {
+		t.Errorf("expected NO docker run after a bad --mount, got %d run call(s)", len(runs))
 	}
 }
 

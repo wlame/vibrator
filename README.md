@@ -37,6 +37,12 @@ just uninstall                     # symmetric — same arg as install
 The first run writes a `.vb` file capturing your choices. It's added to
 `.gitignore` automatically.
 
+Extra folders mounted with `--mount` are saved to `.vb` as
+`mounts = ["/data/refs", "/work/lib:rw"]` and re-applied on later runs.
+They are mounted at the same absolute path on host and container,
+read-only unless `:rw` is given, and (for Claude Code) passed to the
+agent automatically via `--add-dir`.
+
 ## Commands
 
 | Command | Purpose |
@@ -64,6 +70,9 @@ Common flags (apply to `vibrate` and `vibrate run`):
 --with=feature,...      Enable extra features beyond the profile
 --no=feature,...        Disable features from the profile
 --extensions=id,...        Extension IDs to install per the chosen harness
+--mount=PATH[:rw]       Mount an extra host folder at the same path inside
+                        the container (read-only; append :rw for write).
+                        Repeatable.
 --no-wizard             Skip the wizard entirely; require all fields via flags or .vb
 --no-save               Don't write the wizard's result to .vb
 --rebuild               Force a fresh `docker build` even when an image exists

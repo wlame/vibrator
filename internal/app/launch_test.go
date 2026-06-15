@@ -1,10 +1,54 @@
 package app
 
 import (
+	"context"
+	"io"
 	"testing"
 
+	"github.com/wlame/vibrator/internal/config"
+	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/mount"
+	"github.com/wlame/vibrator/internal/workspace"
 )
+
+func TestRunContainerIncludesExtraMounts(t *testing.T) {
+	roDir := t.TempDir()
+	rwDir := t.TempDir()
+	ws := t.TempDir()
+
+	dc := docker.NewMock()
+	var captured docker.RunSpec
+	dc.RunHandler = func(_ context.Context, spec docker.RunSpec) error {
+		captured = spec
+		return nil
+	}
+
+	pin := config.Pin{Harness: "claude-code", Shell: "zsh",
+		Mounts: []string{roDir, rwDir + ":rw"}}
+	opts := Options{LaunchTarget: LaunchHarness, Stdout: io.Discard, Stderr: io.Discard}
+
+	err := runContainer(context.Background(), dc, "img:tag", "ctr", ws,
+		workspace.Spec{Harness: "claude-code"}, pin, nil, opts)
+	if err != nil {
+		t.Fatalf("runContainer: %v", err)
+	}
+
+	var sawRO, sawRW bool
+	for _, v := range captured.Volumes {
+		if v.Host == roDir && v.Container == roDir && v.ReadOnly {
+			sawRO = true
+		}
+		if v.Host == rwDir && v.Container == rwDir && !v.ReadOnly {
+			sawRW = true
+		}
+	}
+	if !sawRO {
+		t.Errorf("read-only mount %s missing or not ro in RunSpec.Volumes: %+v", roDir, captured.Volumes)
+	}
+	if !sawRW {
+		t.Errorf("read-write mount %s missing or not rw in RunSpec.Volumes: %+v", rwDir, captured.Volumes)
+	}
+}
 
 func TestMountVolumesAndDirs(t *testing.T) {
 	rs := []mount.Resolved{

@@ -323,6 +323,41 @@ func TestResolveAndLaunch_IdentityChangeRecreatesContainerWithoutRebuild(t *test
 	}
 }
 
+// Changing the extra --mount set on an existing container must recreate it
+// from the existing image — bind mounts can't be added to a live container.
+// No rebuild; image is reused.
+func TestResolveAndLaunch_MountChangeRecreatesContainerWithoutRebuild(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Containers[testContainer] = "exited"
+	mock.Images[testImage] = true
+	// dind and identity MATCH (so they don't trigger); mounts MISMATCH.
+	mock.ContainerLabels = map[string]map[string]string{
+		testContainer: {dindLabelKey: "false", identityLabelKey: "", mountsLabelKey: "stale-fingerprint"},
+	}
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, _, wsDir, imageTag, containerName, opts := newResolveArgs(Options{Stderr: &stderr})
+	// A real existing dir so ResolveAll succeeds and yields a non-empty fingerprint
+	// that differs from "stale-fingerprint".
+	pin := config.Pin{Mounts: []string{t.TempDir()}}
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if probe.built {
+		t.Error("expected NO image rebuild when only the mount set changed")
+	}
+	if !probe.ran {
+		t.Error("expected a fresh runContainer with the new mounts")
+	}
+	if n := len(rmContainerRemovals(mock)); n != 1 {
+		t.Errorf("expected exactly one container removal for the mount change, got %d", n)
+	}
+}
+
 // rmContainerRemovals returns the recorded `container rm` calls. The mock
 // records Remove as [<kind>, rm, ...], so a container removal looks like
 // ["container", "rm", "-f", name].

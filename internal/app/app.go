@@ -45,6 +45,7 @@ import (
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/hostprobe"
+	"github.com/wlame/vibrator/internal/mount"
 	"github.com/wlame/vibrator/internal/profile"
 	"github.com/wlame/vibrator/internal/wizard"
 	"github.com/wlame/vibrator/internal/workspace"
@@ -95,6 +96,17 @@ func identityFingerprint(pin config.Pin) string {
 	}
 	sum := sha256.Sum256([]byte(pin.Identity.Name + "\x00" + pin.Identity.Email))
 	return hex.EncodeToString(sum[:8])
+}
+
+// mountsFingerprint resolves the pin's extra mounts and returns their
+// fingerprint, matching what runContainer stamps on the container. A bad
+// --mount aborts here (fail-fast) before any reuse decision.
+func mountsFingerprint(pin config.Pin, wsDir string) (string, error) {
+	rs, err := mount.ResolveAll(pin.Mounts, wsDir)
+	if err != nil {
+		return "", err
+	}
+	return mount.Fingerprint(rs), nil
 }
 
 // effectiveLaunchTarget normalizes the zero-value to LaunchHarness so
@@ -379,6 +391,18 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 				return fmt.Errorf("inspect container identity state: %w", err)
 			} else if haveID != identityFingerprint(pin) {
 				reason = "identity ([identity] in .vb) changed"
+			}
+		}
+
+		if reason == "" {
+			wantFP, err := mountsFingerprint(pin, wsDir)
+			if err != nil {
+				return err // bad --mount: fail before touching the container
+			}
+			if haveFP, err := dc.ContainerLabel(ctx, containerName, mountsLabelKey); err != nil {
+				return fmt.Errorf("inspect container mounts state: %w", err)
+			} else if haveFP != wantFP {
+				reason = "--mount set changed"
 			}
 		}
 

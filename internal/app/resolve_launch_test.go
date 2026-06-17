@@ -376,6 +376,65 @@ func TestResolveAndLaunch_MountChangeRecreatesContainerWithoutRebuild(t *testing
 	}
 }
 
+// ─── Login-container cleanup ───────────────────────────────────────────────
+//
+// LoginMode starts a container detached solely to run `claude auth login`
+// then exec in. If the final exec never succeeds, the user is left with an
+// invisible background container unless the failure path removes it. These
+// tests pin that cleanup for the "no existing container" path — the same
+// loginLaunch helper backs the --rebuild branch too.
+
+// Login exec failure: the detached container must be removed exactly once
+// and the error must propagate to the caller.
+func TestResolveAndLaunch_LoginExecFailureRemovesDetachedContainer(t *testing.T) {
+	probe := installLaunchStubs(t)
+	wantErr := errors.New("exec: attach failed")
+	execIntoContainerFn = func(_ context.Context, _ docker.Client, _, _ string, _ config.Pin, _ Options) error {
+		probe.execed = true
+		return wantErr
+	}
+	mock := docker.NewMock() // no existing container
+	mock.Images[testImage] = true
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		LoginMode: true,
+		Stderr:    &stderr,
+	})
+
+	err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected the exec error to propagate, got: %v", err)
+	}
+	if n := len(rmContainerRemovals(mock)); n != 1 {
+		t.Errorf("expected exactly one container removal after a failed login exec, got %d", n)
+	}
+}
+
+// Login exec success: no removal — the container is the user's live session.
+func TestResolveAndLaunch_LoginExecSuccessLeavesContainer(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock() // no existing container
+	mock.Images[testImage] = true
+
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		LoginMode: true,
+		Stderr:    &bytes.Buffer{},
+	})
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+	if !probe.execed {
+		t.Error("expected execIntoContainer to be called")
+	}
+	if n := len(rmContainerRemovals(mock)); n != 0 {
+		t.Errorf("expected no container removal after a successful login exec, got %d", n)
+	}
+}
+
 // rmContainerRemovals returns the recorded `container rm` calls. The mock
 // records Remove as [<kind>, rm, ...], so a container removal looks like
 // ["container", "rm", "-f", name].

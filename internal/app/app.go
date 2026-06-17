@@ -496,13 +496,7 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 		if err := runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts); err != nil {
 			return err
 		}
-		if err := waitForEntrypointFn(ctx, dc, containerName); err != nil {
-			fmt.Fprintf(opts.Stderr, "⚠  entrypoint readiness check timed out: %v\n", err)
-		}
-		if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
-			fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
-		}
-		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
+		return loginLaunch(ctx, dc, containerName, wsDir, pin, opts)
 	}
 
 	// Runtime-state recreate: some settings are baked into a container at
@@ -597,17 +591,34 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 		if err := runContainerFn(ctx, dc, imageTag, containerName, wsDir, wsSpec, pin, dfSpec.Extensions, opts); err != nil {
 			return err
 		}
-		if err := waitForEntrypointFn(ctx, dc, containerName); err != nil {
-			fmt.Fprintf(opts.Stderr, "⚠  entrypoint readiness check timed out: %v\n", err)
-		}
-		if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
-			fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
-		}
-		return execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts)
+		return loginLaunch(ctx, dc, containerName, wsDir, pin, opts)
 
 	default:
 		return fmt.Errorf("unexpected container status %q for %s", status, containerName)
 	}
+}
+
+// loginLaunch finishes a LoginMode start: waits for the entrypoint, runs
+// the auth login step (warn-only — a failed login still gets a shell so
+// the user can retry inside), and execs in. The detached sleep-infinity
+// container was created solely for this handoff; if the exec never
+// succeeds the user is left with an invisible background container, so
+// the error path removes it.
+func loginLaunch(ctx context.Context, dc docker.Client, containerName, wsDir string, pin config.Pin, opts Options) error {
+	if err := waitForEntrypointFn(ctx, dc, containerName); err != nil {
+		fmt.Fprintf(opts.Stderr, "⚠  entrypoint readiness check timed out: %v\n", err)
+	}
+	if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+		fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
+	}
+	if err := execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts); err != nil {
+		fmt.Fprintf(opts.Stderr, "→ Removing login container %s after failed attach\n", containerName)
+		if rerr := dc.Remove(ctx, docker.RemoveContainer, containerName, true); rerr != nil {
+			fmt.Fprintf(opts.Stderr, "⚠  could not remove %s: %v\n", containerName, rerr)
+		}
+		return err
+	}
+	return nil
 }
 
 // containerHasDinD reports whether an existing container was created with

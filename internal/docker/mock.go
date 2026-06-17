@@ -170,9 +170,7 @@ func (m *Mock) Exec(ctx context.Context, spec ExecSpec) error {
 	if spec.Interactive {
 		argv = append(argv, "-it")
 	}
-	for _, e := range spec.Env {
-		argv = append(argv, "-e", e.Name+"="+e.Value)
-	}
+	argv = append(argv, envArgs(spec.Env)...)
 	argv = append(argv, spec.Container)
 	argv = append(argv, spec.Cmd...)
 	m.recordCall(argv...)

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -334,6 +335,15 @@ func (b *ClaudeMemBootstrap) Bootstrap(ctx context.Context, ws Workspace) (map[s
 // `-v name=value` so the SQL can reference them via `:'name'` interpolation
 // — which is psql's quoted-literal substitution, an injection-safe pattern.
 //
+// The DSN itself never becomes a positional argv element: it's parsed into
+// PG* env vars (PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE), which psql
+// picks up automatically, so the credential doesn't appear in argv (visible
+// via ps//proc/*/cmdline on the host). Only a DSN psql itself wouldn't
+// otherwise understand — the rare `key=value` conninfo form, which
+// url.Parse can't decompose — falls back to the legacy positional arg
+// rather than breaking the bootstrap; the argv exposure window returns
+// only for that fallback.
+//
 // stderr goes to os.Stderr unfiltered so psql errors surface to the user
 // (we don't try to interpret psql diagnostics).
 func (b *ClaudeMemBootstrap) runPSQL(ctx context.Context, image, dsn, sql string, kv ...string) (string, error) {
@@ -349,7 +359,26 @@ func (b *ClaudeMemBootstrap) runPSQL(ctx context.Context, image, dsn, sql string
 	//   -f -                 → read SQL from stdin (more reliable than `-c`
 	//                          for :'name' interpolation, especially across
 	//                          psql versions)
-	cmd := []string{"psql", dsn, "-tAq", "-v", "ON_ERROR_STOP=1"}
+	cmd := []string{"psql", "-tAq", "-v", "ON_ERROR_STOP=1"}
+	var env []docker.EnvVar
+	if u, err := url.Parse(dsn); err == nil && u.Host != "" && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		pass, _ := u.User.Password()
+		port := u.Port()
+		if port == "" {
+			port = "5432"
+		}
+		env = []docker.EnvVar{
+			{Name: "PGHOST", Value: u.Hostname()},
+			{Name: "PGPORT", Value: port},
+			{Name: "PGUSER", Value: u.User.Username()},
+			{Name: "PGPASSWORD", Value: pass},
+			{Name: "PGDATABASE", Value: strings.TrimPrefix(u.Path, "/")},
+		}
+	} else {
+		// Unparseable (rare key=value conninfo form): keep the legacy
+		// positional DSN rather than breaking the bootstrap.
+		cmd = append([]string{"psql", dsn}, cmd[1:]...)
+	}
 	for i := 0; i < len(kv); i += 2 {
 		cmd = append(cmd, "-v", kv[i]+"="+kv[i+1])
 	}
@@ -361,6 +390,7 @@ func (b *ClaudeMemBootstrap) runPSQL(ctx context.Context, image, dsn, sql string
 		Remove:   true,
 		AddHosts: []string{"host.docker.internal:host-gateway"},
 		Cmd:      cmd,
+		Env:      env,
 		Stdin:    strings.NewReader(sql),
 		Stdout:   &stdout,
 		Stderr:   os.Stderr,

@@ -235,8 +235,9 @@ type fakePSQL struct {
 }
 
 type psqlCall struct {
-	argv []string // the full `docker run` command vector
-	sql  string   // the SQL piped on stdin
+	argv []string        // the full `docker run` command vector
+	env  []docker.EnvVar // the RunSpec.Env (PG* variables, never in argv)
+	sql  string          // the SQL piped on stdin
 }
 
 func (f *fakePSQL) handle(_ context.Context, spec docker.RunSpec) error {
@@ -251,7 +252,7 @@ func (f *fakePSQL) handle(_ context.Context, spec docker.RunSpec) error {
 		}
 	}
 	argv := append([]string{spec.Image}, spec.Cmd...)
-	f.calls = append(f.calls, psqlCall{argv: argv, sql: sqlBuf.String()})
+	f.calls = append(f.calls, psqlCall{argv: argv, env: spec.Env, sql: sqlBuf.String()})
 
 	// Emit the next canned response to the caller's Stdout.
 	resp := f.responses[0]
@@ -309,10 +310,20 @@ func TestClaudeMemBootstrap_HappyPath(t *testing.T) {
 		t.Fatalf("expected 5 psql calls, got %d", len(psql.calls))
 	}
 
-	// Localhost was rewritten on every call.
+	// Localhost was rewritten on every call. The rewritten host now travels
+	// as the PGHOST env var (never in argv) — see TestRunPSQL_DSNStaysOutOfArgv.
 	for i, c := range psql.calls {
-		if !strings.Contains(strings.Join(c.argv, " "), "host.docker.internal") {
-			t.Errorf("call %d did not rewrite localhost: argv=%v", i, c.argv)
+		if strings.Contains(strings.Join(c.argv, " "), "host.docker.internal") {
+			t.Errorf("call %d leaked host.docker.internal into argv: argv=%v", i, c.argv)
+		}
+		var pgHost string
+		for _, e := range c.env {
+			if e.Name == "PGHOST" {
+				pgHost = e.Value
+			}
+		}
+		if pgHost != "host.docker.internal" {
+			t.Errorf("call %d PGHOST = %q, want host.docker.internal", i, pgHost)
 		}
 	}
 
@@ -375,6 +386,80 @@ func TestClaudeMemBootstrap_FailsWithoutProjectName(t *testing.T) {
 	_, err := b.Bootstrap(context.Background(), Workspace{})
 	if err == nil || !strings.Contains(err.Error(), "ProjectName is empty") {
 		t.Errorf("expected ProjectName error, got %v", err)
+	}
+}
+
+func TestRunPSQL_DSNStaysOutOfArgv(t *testing.T) {
+	m := docker.NewMock()
+	var captured docker.RunSpec
+	m.RunHandler = func(_ context.Context, spec docker.RunSpec) error {
+		captured = spec
+		return nil
+	}
+	b := &ClaudeMemBootstrap{Docker: m}
+	dsn := "postgres://admin:s3cret@host.docker.internal:5432/claudemem"
+	_, _ = b.runPSQL(context.Background(), claudeMemPostgresImage, dsn, "SELECT 1;")
+
+	for _, c := range captured.Cmd {
+		if strings.Contains(c, "s3cret") {
+			t.Errorf("DSN credential leaked into Cmd: %q", c)
+		}
+	}
+
+	envByName := map[string]string{}
+	for _, e := range captured.Env {
+		envByName[e.Name] = e.Value
+	}
+	if envByName["PGPASSWORD"] != "s3cret" || envByName["PGHOST"] != "host.docker.internal" ||
+		envByName["PGUSER"] != "admin" || envByName["PGDATABASE"] != "claudemem" || envByName["PGPORT"] != "5432" {
+		t.Errorf("PG env incomplete: %v", envByName)
+	}
+}
+
+func TestRunPSQL_UnparseableDSNFallsBackToPositional(t *testing.T) {
+	// Rare key=value conninfo form isn't a URL at all — runPSQL should
+	// keep the legacy positional arg rather than breaking the bootstrap.
+	m := docker.NewMock()
+	var captured docker.RunSpec
+	m.RunHandler = func(_ context.Context, spec docker.RunSpec) error {
+		captured = spec
+		return nil
+	}
+	b := &ClaudeMemBootstrap{Docker: m}
+	dsn := "host=localhost port=5432 dbname=cm user=admin password=s3cret"
+	_, _ = b.runPSQL(context.Background(), claudeMemPostgresImage, dsn, "SELECT 1;")
+
+	found := false
+	for _, c := range captured.Cmd {
+		if c == dsn {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected legacy positional DSN in Cmd for unparseable conninfo, got %v", captured.Cmd)
+	}
+	if len(captured.Env) != 0 {
+		t.Errorf("expected no PG* env for the fallback path, got %v", captured.Env)
+	}
+}
+
+func TestRunPSQL_DefaultsPortWhenMissing(t *testing.T) {
+	m := docker.NewMock()
+	var captured docker.RunSpec
+	m.RunHandler = func(_ context.Context, spec docker.RunSpec) error {
+		captured = spec
+		return nil
+	}
+	b := &ClaudeMemBootstrap{Docker: m}
+	dsn := "postgres://admin:s3cret@host.docker.internal/claudemem"
+	_, _ = b.runPSQL(context.Background(), claudeMemPostgresImage, dsn, "SELECT 1;")
+
+	envByName := map[string]string{}
+	for _, e := range captured.Env {
+		envByName[e.Name] = e.Value
+	}
+	if envByName["PGPORT"] != "5432" {
+		t.Errorf("PGPORT = %q, want default 5432", envByName["PGPORT"])
 	}
 }
 

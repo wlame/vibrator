@@ -2,7 +2,9 @@ package docker
 
 import (
 	"context"
+	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -274,6 +276,88 @@ func TestBuildArgsLabelsAreSorted(t *testing.T) {
 	idxZ := strings.Index(joined, "z.label=1")
 	if !(idxA >= 0 && idxA < idxZ) {
 		t.Errorf("labels not in lex order: a@%d z@%d in %v", idxA, idxZ, m.Calls[0])
+	}
+}
+
+func TestRunArgsUseNameOnlyEnv(t *testing.T) {
+	// Secret values must never land in the docker CLI's argv (visible via
+	// ps//proc/*/cmdline on the host) — only the env var NAME goes on the
+	// command line; the VALUE travels through the subprocess environment.
+	args := buildRunArgs(RunSpec{
+		Image: "img",
+		Env:   []EnvVar{{Name: "SECRET_KEY", Value: "hunter2"}},
+	})
+	for i, a := range args {
+		if a == "-e" {
+			if args[i+1] != "SECRET_KEY" {
+				t.Errorf("-e arg = %q, want name-only %q", args[i+1], "SECRET_KEY")
+			}
+		}
+		if strings.Contains(a, "hunter2") {
+			t.Errorf("secret value leaked into argv: %q", a)
+		}
+	}
+}
+
+func TestEnvPairsForSubprocess(t *testing.T) {
+	got := envPairs([]EnvVar{{Name: "A", Value: "1"}, {Name: "B", Value: "x=y"}})
+	want := []string{"A=1", "B=x=y"}
+	if !slices.Equal(got, want) {
+		t.Errorf("envPairs = %v, want %v", got, want)
+	}
+}
+
+func TestEnvArgsNameOnly(t *testing.T) {
+	// CLIClient.Exec builds its argv inline but shares this exact helper,
+	// so testing envArgs directly covers the Exec side too without forcing
+	// an extraction that isn't otherwise warranted.
+	args := envArgs([]EnvVar{{Name: "SECRET_KEY", Value: "hunter2"}})
+	want := []string{"-e", "SECRET_KEY"}
+	if !slices.Equal(args, want) {
+		t.Errorf("envArgs = %v, want %v", args, want)
+	}
+}
+
+func TestWriteEnvFile_ProducesPrivateFileWithPairs(t *testing.T) {
+	// The env-file fallback (see writeEnvFile's doc comment) must produce
+	// a 0600 file so the values aren't world/group-readable on disk even
+	// briefly.
+	path, cleanup, err := writeEnvFile([]EnvVar{{Name: "A", Value: "1"}, {Name: "B", Value: "x=y"}})
+	if err != nil {
+		t.Fatalf("writeEnvFile: %v", err)
+	}
+	defer cleanup()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat env file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("env file perm = %o, want 0600", perm)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read env file: %v", err)
+	}
+	if want := "A=1\nB=x=y\n"; string(data) != want {
+		t.Errorf("env file contents = %q, want %q", string(data), want)
+	}
+
+	cleanup()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("expected env file removed after cleanup, stat err = %v", err)
+	}
+}
+
+func TestWriteEnvFile_EmptyEnvReturnsNoPath(t *testing.T) {
+	path, cleanup, err := writeEnvFile(nil)
+	if err != nil {
+		t.Fatalf("writeEnvFile: %v", err)
+	}
+	defer cleanup() // must be safe to call even with nothing written
+	if path != "" {
+		t.Errorf("path = %q, want empty for no env vars", path)
 	}
 }
 

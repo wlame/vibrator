@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -374,8 +375,34 @@ func (c *CLIClient) Build(ctx context.Context, spec BuildSpec) error {
 
 // Run translates RunSpec into `docker run ...` arguments and execs.
 func (c *CLIClient) Run(ctx context.Context, spec RunSpec) error {
-	args := buildRunArgs(spec)
+	args := buildRunFlags(spec)
+
+	// Belt-and-suspenders env delivery: name-only -e (envArgs, already in
+	// args via buildRunFlags) resolves from the docker CLI's own process
+	// environment, which cmd.Env below supplies. --env-file additionally
+	// supplies the same values via a file docker reads directly, which
+	// keeps working even when something between us and the real docker
+	// client (e.g. a sudo wrapper) strips cmd.Env first. See writeEnvFile.
+	envFile, cleanup, err := writeEnvFile(spec.Env)
+	if err != nil {
+		return fmt.Errorf("docker run: %w", err)
+	}
+	defer cleanup()
+	if envFile != "" {
+		args = append(args, "--env-file", envFile)
+	}
+	args = append(args, spec.Image)
+	args = append(args, spec.Cmd...)
+
 	cmd := exec.CommandContext(ctx, c.DockerPath, args...)
+	if len(spec.Env) > 0 {
+		// Values never touch argv (see envArgs) — they ride along in the
+		// subprocess's own environment instead. os.Environ() is inherited
+		// first so PATH etc. still resolve; per exec.Cmd's Env doc, when a
+		// key is duplicated only the LAST value wins, so the overrides
+		// safely take precedence over any same-named host var.
+		cmd.Env = append(os.Environ(), envPairs(spec.Env)...)
+	}
 	cmd.Stdin = spec.Stdin
 	cmd.Stdout = spec.Stdout
 	cmd.Stderr = spec.Stderr
@@ -392,16 +419,26 @@ func (c *CLIClient) Exec(ctx context.Context, spec ExecSpec) error {
 			args = append(args, "-it")
 		}
 	}
-	for _, e := range spec.Env {
-		args = append(args, "-e", e.Name+"="+e.Value)
-	}
+	args = append(args, envArgs(spec.Env)...)
 	if spec.WorkingDir != "" {
 		args = append(args, "--workdir", spec.WorkingDir)
+	}
+
+	envFile, cleanup, err := writeEnvFile(spec.Env)
+	if err != nil {
+		return fmt.Errorf("docker exec: %w", err)
+	}
+	defer cleanup()
+	if envFile != "" {
+		args = append(args, "--env-file", envFile)
 	}
 	args = append(args, spec.Container)
 	args = append(args, spec.Cmd...)
 
 	cmd := exec.CommandContext(ctx, c.DockerPath, args...)
+	if len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), envPairs(spec.Env)...)
+	}
 	cmd.Stdin = spec.Stdin
 	cmd.Stdout = spec.Stdout
 	cmd.Stderr = spec.Stderr
@@ -565,8 +602,21 @@ func (c *CLIClient) Start(ctx context.Context, nameOrID string) error {
 }
 
 // buildRunArgs is split out so the mock can mirror the same flag-ordering
-// logic for assertion-friendly call traces.
+// logic for assertion-friendly call traces. It's a thin wrapper over
+// buildRunFlags — split out so CLIClient.Run can splice a --env-file flag
+// in just before the image/cmd tail (see writeEnvFile) without fragile
+// string-index math over a fully-assembled slice.
 func buildRunArgs(spec RunSpec) []string {
+	args := buildRunFlags(spec)
+	args = append(args, spec.Image)
+	args = append(args, spec.Cmd...)
+	return args
+}
+
+// buildRunFlags returns every `docker run` flag EXCEPT the trailing
+// image + command, i.e., everything that must precede the image argument
+// on the command line.
+func buildRunFlags(spec RunSpec) []string {
 	args := []string{"run"}
 	if spec.Remove {
 		args = append(args, "--rm")
@@ -616,18 +666,84 @@ func buildRunArgs(spec RunSpec) []string {
 	for _, k := range sortedMapKeys(spec.Labels) {
 		args = append(args, "--label", k+"="+spec.Labels[k])
 	}
-	for _, e := range spec.Env {
-		args = append(args, "-e", e.Name+"="+e.Value)
-	}
+	args = append(args, envArgs(spec.Env)...)
 	for _, v := range spec.Volumes {
 		args = append(args, "-v", v.String())
 	}
 	if spec.WorkingDir != "" {
 		args = append(args, "--workdir", spec.WorkingDir)
 	}
-	args = append(args, spec.Image)
-	args = append(args, spec.Cmd...)
 	return args
+}
+
+// envArgs emits name-only -e flags: the docker CLI resolves each name
+// against ITS OWN process environment, so secret values never appear in
+// argv (visible via ps//proc/*/cmdline). envPairs supplies those values
+// to the subprocess env. Residual exposure: `docker inspect` still shows
+// container env — inherent to container env vars, documented in the
+// security docs.
+func envArgs(env []EnvVar) []string {
+	var args []string
+	for _, e := range env {
+		args = append(args, "-e", e.Name)
+	}
+	return args
+}
+
+// envPairs renders env as NAME=VALUE pairs suitable for exec.Cmd.Env.
+func envPairs(env []EnvVar) []string {
+	var pairs []string
+	for _, e := range env {
+		pairs = append(pairs, e.Name+"="+e.Value)
+	}
+	return pairs
+}
+
+// writeEnvFile persists env as NAME=VALUE lines in a private (mode 0600)
+// temp file and returns its path plus a cleanup func that removes it.
+// Returns ("", a no-op cleanup, nil) when env is empty — callers can call
+// cleanup unconditionally.
+//
+// This exists ALONGSIDE the name-only -e mechanism (envArgs) rather than
+// replacing it, because that mechanism depends on the docker CLI process
+// inheriting our cmd.Env — and at least one real, reachable docker
+// installation doesn't: a `docker` on $PATH that's actually
+// `exec sudo docker "$@"` (common when the invoking user isn't in the
+// `docker` group). sudo's default env_reset policy strips the caller's
+// environment before the real docker client ever runs, so SECRETX=value
+// set via cmd.Env never reaches it — even though nothing in our code did
+// anything wrong. --env-file sidesteps this entirely: docker reads the
+// file itself from a path we hand it, independent of whatever environment
+// sudo (or any other wrapping layer) decided to preserve. Verified live
+// against both `docker run` and `docker exec` in exactly that sudo-wrapped
+// configuration.
+func writeEnvFile(env []EnvVar) (path string, cleanup func(), err error) {
+	noop := func() {}
+	if len(env) == 0 {
+		return "", noop, nil
+	}
+	f, err := os.CreateTemp("", "vibrator-env-*")
+	if err != nil {
+		return "", noop, fmt.Errorf("create env file: %w", err)
+	}
+	cleanup = func() { _ = os.Remove(f.Name()) }
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		cleanup()
+		return "", noop, fmt.Errorf("chmod env file: %w", err)
+	}
+	for _, pair := range envPairs(env) {
+		if _, err := fmt.Fprintln(f, pair); err != nil {
+			_ = f.Close()
+			cleanup()
+			return "", noop, fmt.Errorf("write env file: %w", err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return "", noop, fmt.Errorf("close env file: %w", err)
+	}
+	return f.Name(), cleanup, nil
 }
 
 // sortedMapKeys returns the keys of m in lexicographic order. Used wherever

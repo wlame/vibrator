@@ -69,6 +69,12 @@ type BuildSpec struct {
 	// --rebuild user requests.
 	NoCache bool
 
+	// Labels become --label repeated, sorted for reproducible command
+	// lines. Distinct from BuildArgs: labels attach metadata to the
+	// resulting image (readable via `docker image inspect`/ImageLabel)
+	// without becoming part of the build's ARG surface.
+	Labels map[string]string
+
 	// Stdout/Stderr stream the build output. nil = discard.
 	Stdout, Stderr io.Writer
 }
@@ -149,6 +155,10 @@ type Client interface {
 	// name. Returns ("", nil) when the container or the label is absent —
 	// callers treat "missing" and "empty" identically.
 	ContainerLabel(ctx context.Context, name, key string) (string, error)
+
+	// ImageLabel returns the value of one label on an image, or "" if
+	// the image has no such label.
+	ImageLabel(ctx context.Context, image, key string) (string, error)
 
 	// ListImages returns vibrator-managed images filtered by label. The
 	// labelFilter is a "key=value" string passed to `--filter label=...`.
@@ -298,6 +308,30 @@ func (c *CLIClient) ContainerLabel(ctx context.Context, name, key string) (strin
 	return v, nil
 }
 
+// ImageLabel returns a single label's value via `docker image inspect`,
+// mirroring ContainerLabel's semantics: a missing image OR a missing
+// label both resolve to ("", nil).
+func (c *CLIClient) ImageLabel(ctx context.Context, image, key string) (string, error) {
+	cmd := exec.CommandContext(ctx, c.DockerPath,
+		"image", "inspect", "--format",
+		fmt.Sprintf("{{index .Config.Labels %q}}", key), image)
+	out, err := cmd.Output()
+	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			if strings.Contains(string(ee.Stderr), "No such image") {
+				return "", nil
+			}
+		}
+		return "", fmt.Errorf("docker image inspect %s (label %s): %w", image, key, err)
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "<no value>" {
+		return "", nil
+	}
+	return v, nil
+}
+
 // --- Action methods ---
 
 // Build runs `docker build`. Output streams to spec.Stdout/Stderr.
@@ -313,6 +347,9 @@ func (c *CLIClient) Build(ctx context.Context, spec BuildSpec) error {
 	}
 	if spec.NoCache {
 		args = append(args, "--no-cache")
+	}
+	for _, k := range sortedMapKeys(spec.Labels) {
+		args = append(args, "--label", k+"="+spec.Labels[k])
 	}
 	args = append(args, "-t", spec.Tag)
 

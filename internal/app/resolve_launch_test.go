@@ -3,12 +3,16 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 	"github.com/wlame/vibrator/internal/dockerfile"
 	"github.com/wlame/vibrator/internal/extensions"
+	"github.com/wlame/vibrator/internal/harness"
+	_ "github.com/wlame/vibrator/internal/harness/all" // register built-in harnesses
 	"github.com/wlame/vibrator/internal/workspace"
 )
 
@@ -75,8 +79,22 @@ const (
 	testImage     = "vibrator/ws:abc123"
 )
 
-func newResolveArgs(opts Options) (dockerfile.Spec, workspace.Spec, config.Pin, string, string, string, Options) {
-	return dockerfile.Spec{}, workspace.Spec{}, config.Pin{}, "/ws", testImage, testContainer, opts
+// testDfSpec returns the smallest dockerfile.Spec valid enough for
+// dockerfile.GeneratorHash to succeed (Harness + Shell set) — needed now
+// that resolveAndLaunch's generator-staleness check runs GeneratorHash on
+// the dfSpec even for tests that don't otherwise care about its contents.
+func testDfSpec(t *testing.T) dockerfile.Spec {
+	t.Helper()
+	h, ok := harness.ByID("claude-code")
+	if !ok {
+		t.Fatalf("harness %q not registered", "claude-code")
+	}
+	return dockerfile.Spec{Harness: h, Shell: "zsh"}
+}
+
+func newResolveArgs(t *testing.T, opts Options) (dockerfile.Spec, workspace.Spec, config.Pin, string, string, string, Options) {
+	t.Helper()
+	return testDfSpec(t), workspace.Spec{}, config.Pin{}, "/ws", testImage, testContainer, opts
 }
 
 // The regression target: with a running container, --rebuild must tear the
@@ -87,7 +105,7 @@ func TestResolveAndLaunch_RebuildRemovesRunningContainerAndRebuilds(t *testing.T
 	mock.Containers[testContainer] = "running"
 
 	var stderr bytes.Buffer
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		Rebuild: true,
 		Stderr:  &stderr,
 	})
@@ -118,7 +136,7 @@ func TestResolveAndLaunch_RunningContainerReusedWithoutRebuild(t *testing.T) {
 	mock := docker.NewMock()
 	mock.Containers[testContainer] = "running"
 
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		Stderr: &bytes.Buffer{},
 	})
 
@@ -143,7 +161,7 @@ func TestResolveAndLaunch_NoContainerBuildsAndRuns(t *testing.T) {
 	probe := installLaunchStubs(t)
 	mock := docker.NewMock() // no container, no image present
 
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		Stderr: &bytes.Buffer{},
 	})
 
@@ -168,7 +186,7 @@ func TestResolveAndLaunch_RebuildWithLoginRunsLoginThenExecs(t *testing.T) {
 	mock.Containers[testContainer] = "running"
 
 	var stderr bytes.Buffer
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		Rebuild:   true,
 		LoginMode: true,
 		Stderr:    &stderr,
@@ -202,7 +220,7 @@ func TestResolveAndLaunch_RunningContainerWithLoginRunsLoginThenExecs(t *testing
 	mock := docker.NewMock()
 	mock.Containers[testContainer] = "running"
 
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		LoginMode: true,
 		Stderr:    &bytes.Buffer{},
 	})
@@ -238,7 +256,7 @@ func TestResolveAndLaunch_DinDChangeRecreatesContainerWithoutRebuild(t *testing.
 	mock.Images[testImage] = true
 
 	var stderr bytes.Buffer
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		DinD:   true,
 		Stderr: &stderr,
 	})
@@ -268,7 +286,7 @@ func TestResolveAndLaunch_DinDMatchReusesContainer(t *testing.T) {
 		testContainer: {dindLabelKey: "true"},
 	}
 
-	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(Options{
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
 		DinD:   true,
 		Stderr: &bytes.Buffer{},
 	})
@@ -304,7 +322,7 @@ func TestResolveAndLaunch_IdentityChangeRecreatesContainerWithoutRebuild(t *test
 	mock.Images[testImage] = true
 
 	var stderr bytes.Buffer
-	dfSpec, wsSpec, _, wsDir, imageTag, containerName, opts := newResolveArgs(Options{Stderr: &stderr})
+	dfSpec, wsSpec, _, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{Stderr: &stderr})
 	pin := config.Pin{Identity: &config.Identity{Email: "alias@example.com"}}
 
 	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
@@ -337,7 +355,7 @@ func TestResolveAndLaunch_MountChangeRecreatesContainerWithoutRebuild(t *testing
 	}
 
 	var stderr bytes.Buffer
-	dfSpec, wsSpec, _, wsDir, imageTag, containerName, opts := newResolveArgs(Options{Stderr: &stderr})
+	dfSpec, wsSpec, _, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{Stderr: &stderr})
 	// A real existing dir so ResolveAll succeeds and yields a non-empty fingerprint
 	// that differs from "stale-fingerprint".
 	pin := config.Pin{Mounts: []string{t.TempDir()}}
@@ -369,4 +387,258 @@ func rmContainerRemovals(m *docker.Mock) [][]string {
 		}
 	}
 	return out
+}
+
+// ─── Generator-staleness detection ─────────────────────────────────────────
+//
+// These tests pin resolveAndLaunch's stale-image check: when an existing
+// image's "vibrator.generator" label doesn't match the hash the current
+// generator would produce, the user is warned and offered a rebuild via the
+// promptStaleRebuildFn seam — never rebuilt silently.
+
+// installPromptStub swaps promptStaleRebuildFn for a recording stub that
+// always returns decision, and restores the original on test cleanup.
+// Returns a pointer the test can check to confirm the seam was invoked.
+func installPromptStub(t *testing.T, decision bool) *bool {
+	t.Helper()
+	called := false
+	orig := promptStaleRebuildFn
+	t.Cleanup(func() { promptStaleRebuildFn = orig })
+	promptStaleRebuildFn = func(_ Options, _, _, _ string) bool {
+		called = true
+		return decision
+	}
+	return &called
+}
+
+// imageLabelCalls reports whether any recorded call references the
+// generator label key — i.e., whether ImageLabel was invoked at all. Used
+// to assert the stale check was skipped entirely (--rebuild already set,
+// or the image doesn't exist).
+func imageLabelCalls(m *docker.Mock) bool {
+	for _, c := range m.Calls {
+		if strings.Contains(strings.Join(c, " "), GeneratorLabelKey) {
+			return true
+		}
+	}
+	return false
+}
+
+// Case 1: the image's generator label matches the current hash — no
+// staleness, no prompt, normal reuse (image present, skip build, run).
+func TestResolveAndLaunch_GeneratorHashMatchesNoRebuild(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Images[testImage] = true
+
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Stderr: &bytes.Buffer{},
+	})
+	want, err := dockerfile.GeneratorHash(dfSpec)
+	if err != nil {
+		t.Fatalf("GeneratorHash: %v", err)
+	}
+	mock.ImageLabels = map[string]map[string]string{
+		testImage: {GeneratorLabelKey: want},
+	}
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if probe.built {
+		t.Error("expected NO rebuild when the generator hash matches")
+	}
+	if !probe.ran {
+		t.Error("expected normal runContainer when reusing a fresh image")
+	}
+}
+
+// Case 2: generator label mismatch, user declines the rebuild prompt — a
+// warning is printed but the launch proceeds without a rebuild.
+func TestResolveAndLaunch_GeneratorHashMismatchPromptDeclines(t *testing.T) {
+	probe := installLaunchStubs(t)
+	called := installPromptStub(t, false)
+	mock := docker.NewMock()
+	mock.Images[testImage] = true
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Stderr: &stderr,
+	})
+	mock.ImageLabels = map[string]map[string]string{
+		testImage: {GeneratorLabelKey: "stale-hash-0000"},
+	}
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if !*called {
+		t.Error("expected promptStaleRebuildFn to be invoked on mismatch")
+	}
+	if probe.built {
+		t.Error("expected NO rebuild when the user declines the prompt")
+	}
+	if !probe.ran {
+		t.Error("expected the launch to proceed (reuse the stale image) after declining")
+	}
+	if !strings.Contains(stderr.String(), "different vibrate") {
+		t.Errorf("expected a staleness warning on stderr, got: %s", stderr.String())
+	}
+}
+
+// Case 3: generator label mismatch, user accepts the rebuild prompt — the
+// existing container is removed and the image is rebuilt from scratch.
+func TestResolveAndLaunch_GeneratorHashMismatchPromptAccepts(t *testing.T) {
+	probe := installLaunchStubs(t)
+	called := installPromptStub(t, true)
+	mock := docker.NewMock()
+	mock.Containers[testContainer] = "running"
+	mock.Images[testImage] = true
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Stderr: &stderr,
+	})
+	mock.ImageLabels = map[string]map[string]string{
+		testImage: {GeneratorLabelKey: "stale-hash-0000"},
+	}
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if !*called {
+		t.Error("expected promptStaleRebuildFn to be invoked on mismatch")
+	}
+	if !probe.built {
+		t.Error("expected a rebuild when the user accepts the prompt")
+	}
+	if !probe.ran {
+		t.Error("expected a fresh runContainer after rebuilding")
+	}
+	if n := len(rmContainerRemovals(mock)); n != 1 {
+		t.Errorf("expected exactly one container removal for the rebuild, got %d", n)
+	}
+}
+
+// Case 4: an image predating the label entirely (no "vibrator.generator"
+// label at all, distinct from Case 2/3's stale-but-present value) is
+// treated identically to a mismatch — "have" resolves to "" and the
+// warning reports it as unknown/pre-label.
+func TestResolveAndLaunch_GeneratorLabelAbsentTreatedAsMismatch(t *testing.T) {
+	probe := installLaunchStubs(t)
+	called := installPromptStub(t, false)
+	mock := docker.NewMock()
+	mock.Images[testImage] = true
+	// No mock.ImageLabels entry at all for testImage — simulates an image
+	// built before this label existed.
+
+	var stderr bytes.Buffer
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Stderr: &stderr,
+	})
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if !*called {
+		t.Error("expected promptStaleRebuildFn to be invoked for a pre-label image")
+	}
+	if probe.built {
+		t.Error("expected NO rebuild when the user declines the prompt")
+	}
+	if !strings.Contains(stderr.String(), "unknown/pre-label") {
+		t.Errorf("expected the warning to report the missing label as unknown/pre-label, got: %s", stderr.String())
+	}
+}
+
+// Case 5: --rebuild is already set — the stale check must be skipped
+// entirely (no ImageLabel call), since a from-scratch rebuild is already
+// guaranteed regardless of the existing image's label.
+func TestResolveAndLaunch_RebuildAlreadySetSkipsStaleCheck(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Images[testImage] = true
+	mock.ImageLabels = map[string]map[string]string{
+		testImage: {GeneratorLabelKey: "stale-hash-0000"},
+	}
+
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Rebuild: true,
+		Stderr:  &bytes.Buffer{},
+	})
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if !probe.built {
+		t.Error("expected --rebuild to force a rebuild regardless of the label")
+	}
+	if imageLabelCalls(mock) {
+		t.Error("expected NO ImageLabel call when --rebuild is already set")
+	}
+}
+
+// Case 6: the image doesn't exist at all — the stale check must be skipped
+// (no ImageLabel call) and the normal build-then-run path runs.
+func TestResolveAndLaunch_ImageMissingSkipsStaleCheck(t *testing.T) {
+	probe := installLaunchStubs(t)
+	mock := docker.NewMock() // no image present
+
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Stderr: &bytes.Buffer{},
+	})
+
+	if err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts); err != nil {
+		t.Fatalf("resolveAndLaunch: %v", err)
+	}
+
+	if !probe.built {
+		t.Error("expected a normal build when the image doesn't exist")
+	}
+	if imageLabelCalls(mock) {
+		t.Error("expected NO ImageLabel call when the image doesn't exist")
+	}
+}
+
+// Case 7: dc.ImageExists itself fails (e.g. a docker daemon hiccup) during
+// the staleness check. The error must surface, not be silently swallowed —
+// a prior version of this check used `if exists, err := ...; err == nil &&
+// exists` which discarded a real error and fell through as if the image
+// were simply absent, masking daemon failures from the user.
+//
+// The container is set up as already "running" so the ONLY ImageExists call
+// resolveAndLaunch makes is the staleness check itself — the "" (no
+// container) branch further down happens to make its own correctly-checked
+// ImageExists call, which would mask this exact bug if a container weren't
+// already present.
+func TestResolveAndLaunch_ImageExistsErrorDuringStaleCheckSurfaces(t *testing.T) {
+	installLaunchStubs(t)
+	mock := docker.NewMock()
+	mock.Containers[testContainer] = "running"
+	wantErr := errors.New("docker: daemon unreachable")
+	mock.ImageExistsErr = wantErr
+
+	dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts := newResolveArgs(t, Options{
+		Stderr: &bytes.Buffer{},
+	})
+
+	err := resolveAndLaunch(context.Background(), mock, dfSpec, wsSpec, pin,
+		wsDir, imageTag, containerName, opts)
+	if err == nil {
+		t.Fatal("expected resolveAndLaunch to return an error when ImageExists fails, got nil")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected the returned error to wrap %v, got: %v", wantErr, err)
+	}
 }

@@ -25,6 +25,7 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -85,6 +86,14 @@ const identityLabelKey = "vibrator.identity"
 // was created with, so resolveAndLaunch can recreate it when the set
 // changes (bind mounts can't be added to a live container).
 const mountsLabelKey = "vibrator.mounts"
+
+// GeneratorLabelKey carries dockerfile.GeneratorHash on built images so a
+// later vibrate can detect that its generator has diverged from what the
+// image was built with. Exported (unlike its dind/identity/mounts siblings
+// above) because internal/cli's `vibrate build` command — which already
+// imports this package for HostUsername — must stamp the exact same label
+// key on images it builds directly, without going through resolveAndLaunch.
+const GeneratorLabelKey = "vibrator.generator"
 
 // identityFingerprint returns a short, stable hash of the pin's identity
 // override (name + email), or "" when no override is set. Hashing keeps the
@@ -327,7 +336,42 @@ var (
 	execIntoContainerFn = execIntoContainer
 	waitForEntrypointFn = waitForEntrypoint
 	runLoginStepFn      = runLoginStep
+
+	// promptStaleRebuildFn asks the user whether to rebuild a stale image.
+	// A seam (like the others above) so tests can pin the decision without
+	// depending on a real terminal.
+	promptStaleRebuildFn = promptStaleRebuild
 )
+
+// promptStaleRebuild asks the user whether to rebuild a stale image.
+// Non-TTY (CI, pipes) never prompts and never rebuilds — the warning
+// above is the only signal, so scripts keep working unchanged.
+func promptStaleRebuild(opts Options, imageTag, have, want string) bool {
+	if !isStdinTTY(opts.Stdin) {
+		return false
+	}
+	fmt.Fprint(opts.Stderr, "   Rebuild now? [y/N] ")
+	r := bufio.NewReader(opts.Stdin)
+	line, err := r.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	switch strings.TrimSpace(strings.ToLower(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
+}
+
+// orUnknown renders an empty "have" hash (a container built before the
+// generator label existed) as a human-readable placeholder rather than an
+// empty string in the staleness warning.
+func orUnknown(s string) string {
+	if s == "" {
+		return "unknown/pre-label"
+	}
+	return s
+}
 
 // resolveAndLaunch decides how to bring the workspace up given the current
 // state of its container and image, then launches it. The four outcomes:
@@ -348,6 +392,36 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 	status, err := dc.ContainerStatus(ctx, containerName)
 	if err != nil {
 		return fmt.Errorf("inspect container: %w", err)
+	}
+
+	// Generator-staleness check: an image built by an older vibrate (or a
+	// changed dev build) carries a different generator hash. Warn and offer
+	// a rebuild; never rebuild silently. Skipped when --rebuild is already
+	// forcing a fresh build.
+	if !opts.Rebuild {
+		exists, err := dc.ImageExists(ctx, imageTag)
+		if err != nil {
+			return fmt.Errorf("check image for staleness: %w", err)
+		}
+		if exists {
+			want, err := dockerfile.GeneratorHash(dfSpec)
+			if err != nil {
+				return fmt.Errorf("generator hash: %w", err)
+			}
+			have, err := dc.ImageLabel(ctx, imageTag, GeneratorLabelKey)
+			if err != nil {
+				return fmt.Errorf("inspect image generator label: %w", err)
+			}
+			if have != want {
+				fmt.Fprintf(opts.Stderr,
+					"⚠  Image %s was built by a different vibrate (generator %s, current %s).\n"+
+						"   Rebuild recommended: extensions, templates, or the generator have changed.\n",
+					imageTag, orUnknown(have), want)
+				if promptStaleRebuildFn(opts, imageTag, have, want) {
+					opts.Rebuild = true
+				}
+			}
+		}
 	}
 
 	// --rebuild forces a from-scratch image build and a fresh container.

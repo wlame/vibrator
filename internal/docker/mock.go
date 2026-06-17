@@ -43,6 +43,11 @@ type Mock struct {
 	// present. nil = empty.
 	Images map[string]bool
 
+	// ImageExistsErr, when set, is returned by ImageExists instead of the
+	// Images lookup — lets tests simulate a docker daemon failure (e.g. a
+	// timeout inspecting the image) during the generator-staleness check.
+	ImageExistsErr error
+
 	// Containers maps container name to its reported docker status string
 	// (e.g., "running", "exited"). Missing entries → ("", nil) — meaning
 	// "container does not exist", matching the real CLI semantics.
@@ -51,6 +56,10 @@ type Mock struct {
 	// ContainerLabels maps container name → label key → value, backing
 	// ContainerLabel(). Missing name or key → ("", nil).
 	ContainerLabels map[string]map[string]string
+
+	// ImageLabels maps image tag → label key → value, backing
+	// ImageLabel(). Missing image or key → ("", nil).
+	ImageLabels map[string]map[string]string
 
 	// RunHandler, if non-nil, is called by Run() before returning RunErr.
 	// It has full access to the RunSpec — including Stdin/Stdout — so tests
@@ -112,6 +121,7 @@ func (m *Mock) Reset() {
 	m.ExecErr = nil
 	m.StartErr = nil
 	m.Images = make(map[string]bool)
+	m.ImageExistsErr = nil
 	m.Containers = make(map[string]string)
 }
 
@@ -130,6 +140,9 @@ func (m *Mock) Build(ctx context.Context, spec BuildSpec) error {
 	}
 	if spec.NoCache {
 		argv = append(argv, "--no-cache")
+	}
+	for _, k := range sortedMapKeys(spec.Labels) {
+		argv = append(argv, "--label", k+"="+spec.Labels[k])
 	}
 	argv = append(argv, "-t", spec.Tag)
 	if spec.DockerfilePath != "" {
@@ -173,6 +186,9 @@ func (m *Mock) Start(ctx context.Context, nameOrID string) error {
 
 func (m *Mock) ImageExists(ctx context.Context, image string) (bool, error) {
 	m.recordCall("image", "inspect", "--format", "{{.Id}}", image)
+	if m.ImageExistsErr != nil {
+		return false, m.ImageExistsErr
+	}
 	return m.Images[image], nil
 }
 
@@ -184,6 +200,14 @@ func (m *Mock) ContainerStatus(ctx context.Context, name string) (string, error)
 func (m *Mock) ContainerLabel(ctx context.Context, name, key string) (string, error) {
 	m.recordCall("container", "inspect", "--format", "{{index .Config.Labels "+key+"}}", name)
 	if labels, ok := m.ContainerLabels[name]; ok {
+		return labels[key], nil
+	}
+	return "", nil
+}
+
+func (m *Mock) ImageLabel(ctx context.Context, image, key string) (string, error) {
+	m.recordCall("image", "inspect", "--format", "{{index .Config.Labels "+key+"}}", image)
+	if labels, ok := m.ImageLabels[image]; ok {
 		return labels[key], nil
 	}
 	return "", nil

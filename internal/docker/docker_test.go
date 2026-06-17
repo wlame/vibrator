@@ -232,6 +232,51 @@ func TestMockBuild_PassesDockerfileBytesAsStdin(t *testing.T) {
 	}
 }
 
+func TestBuildArgsIncludeLabels(t *testing.T) {
+	// Assert via the Mock, which records the translated CLI args the same
+	// way the app-level tests do.
+	m := NewMock()
+	spec := BuildSpec{
+		DockerfileBytes: []byte("FROM scratch"),
+		ContextDir:      "/ctx",
+		Tag:             "t",
+		Labels:          map[string]string{"vibrator.generator": "abc123def456"},
+	}
+	if err := m.Build(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Calls) != 1 {
+		t.Fatalf("want 1 build call, got %d", len(m.Calls))
+	}
+	if !containsSubseq(m.Calls[0], []string{"--label", "vibrator.generator=abc123def456"}) {
+		t.Errorf("expected --label vibrator.generator=abc123def456, got %v", m.Calls[0])
+	}
+}
+
+func TestBuildArgsLabelsAreSorted(t *testing.T) {
+	// Stable label emission matters for reproducible command lines, same
+	// rationale as TestBuildRunArgs_LabelsAreSorted for `docker run`.
+	m := NewMock()
+	spec := BuildSpec{
+		DockerfileBytes: []byte("FROM scratch"),
+		ContextDir:      "/ctx",
+		Tag:             "t",
+		Labels: map[string]string{
+			"z.label": "1",
+			"a.label": "2",
+		},
+	}
+	if err := m.Build(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(m.Calls[0], " ")
+	idxA := strings.Index(joined, "a.label=2")
+	idxZ := strings.Index(joined, "z.label=1")
+	if !(idxA >= 0 && idxA < idxZ) {
+		t.Errorf("labels not in lex order: a@%d z@%d in %v", idxA, idxZ, m.Calls[0])
+	}
+}
+
 // containsSubseq reports whether sub appears contiguously inside seq.
 func containsSubseq(seq, sub []string) bool {
 	if len(sub) == 0 {

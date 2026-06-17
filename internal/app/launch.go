@@ -44,6 +44,15 @@ func buildImage(ctx context.Context, dc docker.Client,
 		return fmt.Errorf("generate dockerfile: %w", err)
 	}
 
+	// Stamped as a --label (not a Dockerfile LABEL) so the hash never
+	// becomes self-referential: it fingerprints the generated Dockerfile
+	// bytes, so baking it INTO those bytes would make every build
+	// change its own target hash. See dockerfile.GeneratorHash.
+	genHash, err := dockerfile.GeneratorHash(dfSpec)
+	if err != nil {
+		return fmt.Errorf("generator hash: %w", err)
+	}
+
 	ctxDir, cleanup, err := dockerfile.PrepareBuildContext()
 	if err != nil {
 		return fmt.Errorf("prepare build context: %w", err)
@@ -71,6 +80,7 @@ func buildImage(ctx context.Context, dc docker.Client,
 			"HOST_UID": fmt.Sprintf("%d", dfSpec.HostUID),
 			"HOST_GID": fmt.Sprintf("%d", dfSpec.HostGID),
 		},
+		Labels: map[string]string{GeneratorLabelKey: genHash},
 		Stdout: opts.Stdout,
 		Stderr: opts.Stderr,
 	})

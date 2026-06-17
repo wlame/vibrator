@@ -32,7 +32,7 @@ const IntegrationsManifestFilename = "integrations.json"
 //     WriteIntegrationsManifest once the caller knows the harness.
 //     Always present so the Dockerfile's unconditional COPY works
 //     even if the caller forgets to fill it in (defense in depth).
-//   - Files matching templateContextSkip (README.md, etc.) are filtered
+//   - Files matched by skipTemplateFile (README.md, etc.) are filtered
 //     out — they document the layout for contributors but have no
 //     business in the container image.
 //
@@ -86,13 +86,26 @@ func WriteIntegrationsManifest(ctxDir, harness string) error {
 	return nil
 }
 
-// templateContextSkip lists path components inside templates/ that
-// should NOT be copied into the build context. README files exist for
-// human readers, not the container. `.gitkeep` is a git placeholder
-// for empty dirs. Both end in noise inside the image if shipped.
-var templateContextSkip = map[string]struct{}{
-	"README.md": {},
-	".gitkeep":  {},
+// skipTemplateFile reports whether a file under the embedded templates/
+// tree (matched by basename) should NOT reach the shipped image. README
+// files exist for human readers, not the container; `.gitkeep` is a git
+// placeholder for empty dirs. Both are noise inside the image if shipped.
+//
+// This is the SINGLE source of truth for "what actually ships" — both
+// extractTemplatesTo (below, populates the real docker build context) and
+// dockerfile.GeneratorHash (internal/dockerfile/generatorhash.go, fingerprints
+// what a vibrate build would produce) call this exact predicate. Without
+// that sharing, GeneratorHash would fingerprint files extractTemplatesTo
+// filters out — editing templates/README.md would then flip the hash and
+// trigger a permanent false "image is stale" warning despite the built
+// image being byte-for-byte identical.
+func skipTemplateFile(name string) bool {
+	switch name {
+	case "README.md", ".gitkeep":
+		return true
+	default:
+		return false
+	}
 }
 
 // extractTemplatesTo walks the embedded `templates/` tree and writes
@@ -112,7 +125,7 @@ func extractTemplatesTo(dst string) error {
 		}
 		// Path-component skip — apply to the basename so README.md
 		// anywhere in the tree gets filtered.
-		if _, skip := templateContextSkip[d.Name()]; skip {
+		if skipTemplateFile(d.Name()) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -262,17 +263,40 @@ func runBuild(cmd *cobra.Command, _ []string) error {
 
 	fmt.Fprintf(cmd.ErrOrStderr(), "Building %s (no-cache=%v)\n", tag, buildFlagsState.noCache)
 
-	return client.Build(context.Background(), docker.BuildSpec{
-		DockerfileBytes: out,
+	spec, err := buildImageSpec(df, out, ctxDir, tag, buildFlagsState.noCache, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	if err != nil {
+		return err
+	}
+	return client.Build(context.Background(), spec)
+}
+
+// buildImageSpec assembles the docker.BuildSpec for `vibrate build`. Split
+// out from runBuild as a pure function (no docker calls) so the label
+// wiring is unit-testable without a docker daemon.
+//
+// The generator hash MUST be attached here: `vibrate build` produces the
+// exact same image tag the `vibrate`/`vibrate run` launch flow resolves
+// (workspace.ImageName + fingerprint), so a pre-built image missing this
+// label would read as "generator unknown/pre-label" on every subsequent
+// launch — a permanent false-stale warning for images that are actually
+// current. See dockerfile.GeneratorHash and app.GeneratorLabelKey.
+func buildImageSpec(df dockerfile.Spec, dockerfileBytes []byte, ctxDir, tag string, noCache bool, stdout, stderr io.Writer) (docker.BuildSpec, error) {
+	genHash, err := dockerfile.GeneratorHash(df)
+	if err != nil {
+		return docker.BuildSpec{}, fmt.Errorf("generator hash: %w", err)
+	}
+	return docker.BuildSpec{
+		DockerfileBytes: dockerfileBytes,
 		ContextDir:      ctxDir,
 		Tag:             tag,
-		NoCache:         buildFlagsState.noCache,
+		NoCache:         noCache,
 		BuildArgs: map[string]string{
 			"USERNAME": df.Username,
 			"HOST_UID": fmt.Sprintf("%d", df.HostUID),
 			"HOST_GID": fmt.Sprintf("%d", df.HostGID),
 		},
-		Stdout: cmd.OutOrStdout(),
-		Stderr: cmd.ErrOrStderr(),
-	})
+		Labels: map[string]string{app.GeneratorLabelKey: genHash},
+		Stdout: stdout,
+		Stderr: stderr,
+	}, nil
 }

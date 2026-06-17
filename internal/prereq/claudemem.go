@@ -17,6 +17,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
 )
 
@@ -122,7 +123,7 @@ func SaveClaudeMemAdminConfig(cfg *ClaudeMemAdminConfig) error {
 	if err := toml.NewEncoder(&b).Encode(cfg); err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
-	return os.WriteFile(path, b.Bytes(), 0600)
+	return config.WriteFileAtomic0600(path, b.Bytes())
 }
 
 // ClaudeMemAdminConfigPath returns the resolved path used by Load. Split

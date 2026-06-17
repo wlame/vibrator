@@ -308,8 +308,8 @@ func Save(path string, p *Pin) error {
 		}
 	}
 
-	// 0600 — the file may hold plaintext API keys after bootstrap.
-	return os.WriteFile(path, []byte(b.String()), 0o600)
+	// 0600 from the first byte — the file may hold plaintext API keys.
+	return WriteFileAtomic0600(path, []byte(b.String()))
 }
 
 // FindPin walks from startDir upward, looking for a .vb file. Stops at the

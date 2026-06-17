@@ -205,6 +205,24 @@ func TestLoadClaudeMemAdminConfig_MissingFileSurfacesErrNotExist(t *testing.T) {
 	}
 }
 
+func TestSaveClaudeMemAdminConfig_TightensExistingPerms(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "claude-mem.toml")
+	t.Setenv("VIBRATOR_CLAUDE_MEM_CONFIG", path)
+	if err := os.WriteFile(path, []byte("# junk"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveClaudeMemAdminConfig(&ClaudeMemAdminConfig{}); err != nil {
+		t.Fatalf("SaveClaudeMemAdminConfig: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode = %o, want 0600", got)
+	}
+}
+
 // --- Bootstrap flow -------------------------------------------------------
 
 // fakePSQL is a scripted docker.Run handler that returns canned stdout

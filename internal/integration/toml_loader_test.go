@@ -28,7 +28,7 @@ restart        = "unless-stopped"
 add_hosts      = ["host.docker.internal:host-gateway"]
 
 [[wiring]]
-harness = "claudecode"
+harness = "claude-code"
 
 [wiring.mcp]
 name = "bookmarks"
@@ -86,7 +86,7 @@ func TestLoadFromDir_RegistersValidTOML(t *testing.T) {
 		t.Fatalf("Wiring = %d, want 1", len(integ.Wiring))
 	}
 	w := integ.Wiring[0]
-	if w.Harness != "claudecode" || w.MCP == nil ||
+	if w.Harness != "claude-code" || w.MCP == nil ||
 		w.MCP.HTTP == nil || w.MCP.HTTP.URL == "" ||
 		w.MCP.Stdio == nil || len(w.MCP.Stdio.Command) != 2 {
 		t.Errorf("wiring mismatch: %+v", w)

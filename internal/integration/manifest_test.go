@@ -12,7 +12,7 @@ func TestBuildManifest_FiltersByHarness(t *testing.T) {
 	Register(&Integration{
 		ID: "alpha",
 		Wiring: []Wiring{
-			{Harness: "claudecode", MCP: &MCPWiring{Name: "alpha-mcp",
+			{Harness: "claude-code", MCP: &MCPWiring{Name: "alpha-mcp",
 				HTTP: &MCPHTTP{URL: "http://a"}}},
 			{Harness: "codex", MCP: &MCPWiring{Name: "alpha-mcp",
 				HTTP: &MCPHTTP{URL: "http://a"}}},
@@ -33,7 +33,7 @@ func TestBuildManifest_FiltersByHarness(t *testing.T) {
 		},
 	})
 
-	cc := BuildManifest("claudecode")
+	cc := BuildManifest("claude-code")
 	ids := make([]string, len(cc))
 	for i, e := range cc {
 		ids[i] = e.ID
@@ -55,7 +55,7 @@ func TestBuildManifest_StarMatchesAllHarnesses(t *testing.T) {
 		},
 	})
 
-	for _, h := range []string{"claudecode", "codex", "opencode", "pi"} {
+	for _, h := range []string{"claude-code", "codex", "opencode", "pi"} {
 		entries := BuildManifest(h)
 		if len(entries) != 1 || entries[0].ID != "wild" {
 			t.Errorf("BuildManifest(%s) = %v, want one wild entry", h, entries)
@@ -68,10 +68,10 @@ func TestBuildManifest_DropsEmptyEntries(t *testing.T) {
 	Register(&Integration{
 		ID: "void",
 		Wiring: []Wiring{
-			{Harness: "claudecode"}, // no MCP, no env — drop
+			{Harness: "claude-code"}, // no MCP, no env — drop
 		},
 	})
-	got := BuildManifest("claudecode")
+	got := BuildManifest("claude-code")
 	if len(got) != 0 {
 		t.Errorf("BuildManifest = %v, want empty (the wiring had no MCP or env)", got)
 	}
@@ -82,10 +82,10 @@ func TestBuildManifest_DropsMCPWithoutHTTPOrStdio(t *testing.T) {
 	Register(&Integration{
 		ID: "broken-mcp",
 		Wiring: []Wiring{
-			{Harness: "claudecode", MCP: &MCPWiring{Name: "broken"}},
+			{Harness: "claude-code", MCP: &MCPWiring{Name: "broken"}},
 		},
 	})
-	got := BuildManifest("claudecode")
+	got := BuildManifest("claude-code")
 	if len(got) != 0 {
 		t.Errorf("BuildManifest = %v, want empty (MCP has no HTTP or Stdio)", got)
 	}
@@ -97,19 +97,19 @@ func TestBuildManifest_DeterministicOrder(t *testing.T) {
 	Register(&Integration{
 		ID: "zulu",
 		Wiring: []Wiring{
-			{Harness: "claudecode", MCP: &MCPWiring{Name: "z",
+			{Harness: "claude-code", MCP: &MCPWiring{Name: "z",
 				HTTP: &MCPHTTP{URL: "http://z"}}},
 		},
 	})
 	Register(&Integration{
 		ID: "alpha",
 		Wiring: []Wiring{
-			{Harness: "claudecode", MCP: &MCPWiring{Name: "a",
+			{Harness: "claude-code", MCP: &MCPWiring{Name: "a",
 				HTTP: &MCPHTTP{URL: "http://a"}}},
 		},
 	})
 
-	got := BuildManifest("claudecode")
+	got := BuildManifest("claude-code")
 	if len(got) != 2 || got[0].ID != "alpha" || got[1].ID != "zulu" {
 		t.Errorf("ordering = %s, %s; want alpha, zulu",
 			got[0].ID, got[1].ID)
@@ -121,10 +121,10 @@ func TestBuildManifest_KeepsEnvOnlyEntries(t *testing.T) {
 	Register(&Integration{
 		ID: "envonly",
 		Wiring: []Wiring{
-			{Harness: "claudecode", EnvVars: map[string]string{"K": "V"}},
+			{Harness: "claude-code", EnvVars: map[string]string{"K": "V"}},
 		},
 	})
-	got := BuildManifest("claudecode")
+	got := BuildManifest("claude-code")
 	if len(got) != 1 || got[0].EnvVars["K"] != "V" {
 		t.Errorf("BuildManifest = %v, want one env-only entry", got)
 	}
@@ -133,7 +133,7 @@ func TestBuildManifest_KeepsEnvOnlyEntries(t *testing.T) {
 func TestWriteManifest_AlwaysEmitsArray(t *testing.T) {
 	resetRegistry()
 	var buf bytes.Buffer
-	if err := WriteManifest(&buf, "claudecode"); err != nil {
+	if err := WriteManifest(&buf, "claude-code"); err != nil {
 		t.Fatalf("WriteManifest: %v", err)
 	}
 	// Parse as JSON to confirm it's a valid array literal.
@@ -155,7 +155,7 @@ func TestWriteManifest_RoundTrips(t *testing.T) {
 	Register(&Integration{
 		ID: "rt",
 		Wiring: []Wiring{{
-			Harness: "claudecode",
+			Harness: "claude-code",
 			MCP: &MCPWiring{
 				Name: "rt",
 				HTTP: &MCPHTTP{URL: "http://rt/mcp",
@@ -170,7 +170,7 @@ func TestWriteManifest_RoundTrips(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	if err := WriteManifest(&buf, "claudecode"); err != nil {
+	if err := WriteManifest(&buf, "claude-code"); err != nil {
 		t.Fatalf("WriteManifest: %v", err)
 	}
 	var entries []ManifestEntry
@@ -181,7 +181,7 @@ func TestWriteManifest_RoundTrips(t *testing.T) {
 		t.Fatalf("got %d entries, want 1", len(entries))
 	}
 	e := entries[0]
-	if e.ID != "rt" || e.Harness != "claudecode" || e.MCP == nil ||
+	if e.ID != "rt" || e.Harness != "claude-code" || e.MCP == nil ||
 		e.MCP.HTTP == nil || e.MCP.HTTP.URL != "http://rt/mcp" ||
 		e.MCP.HTTP.Headers["Auth"] != "x" ||
 		e.MCP.Stdio == nil || len(e.MCP.Stdio.Command) != 2 ||

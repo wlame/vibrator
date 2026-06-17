@@ -246,7 +246,7 @@ func TestWriteIntegrationsManifest_ProducesValidJSON(t *testing.T) {
 	}
 	defer cleanup()
 
-	if err := WriteIntegrationsManifest(dir, "claudecode"); err != nil {
+	if err := WriteIntegrationsManifest(dir, "claude-code"); err != nil {
 		t.Fatalf("WriteIntegrationsManifest: %v", err)
 	}
 

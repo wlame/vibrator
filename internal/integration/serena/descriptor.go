@@ -47,7 +47,7 @@ func descriptor() *integration.Integration {
 			}, nil
 		},
 		Wiring: []integration.Wiring{{
-			Harness: "claudecode",
+			Harness: "claude-code",
 			MCP: &integration.MCPWiring{
 				Name: "serena",
 				HTTP: &integration.MCPHTTP{

@@ -11,9 +11,9 @@ package integration
 // init-script hooks, build-time installs) should be added as
 // additional optional fields rather than overloading these two.
 type Wiring struct {
-	// Harness identifies the target harness ("claudecode", "codex",
-	// "opencode", "pi"). Use "*" to apply to all harnesses that speak
-	// the same protocol.
+	// Harness identifies the target harness by its registry ID
+	// ("claude-code", "codex", "opencode", "pi" — see internal/harness).
+	// Use "*" to apply to all harnesses that speak the same protocol.
 	Harness string
 
 	// MCP, when non-nil, declares an MCP server entry to add to the

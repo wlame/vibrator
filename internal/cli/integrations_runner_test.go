@@ -11,7 +11,7 @@ func TestFirstMCPURL_PicksHTTPFromFirstWiring(t *testing.T) {
 	integ := &integration.Integration{
 		ID: "x",
 		Wiring: []integration.Wiring{
-			{Harness: "claudecode", MCP: &integration.MCPWiring{
+			{Harness: "claude-code", MCP: &integration.MCPWiring{
 				Name: "x",
 				HTTP: &integration.MCPHTTP{URL: "http://primary"},
 			}},
@@ -30,7 +30,7 @@ func TestFirstMCPURL_EmptyWhenNoHTTP(t *testing.T) {
 	integ := &integration.Integration{
 		ID: "stdio-only",
 		Wiring: []integration.Wiring{
-			{Harness: "claudecode", MCP: &integration.MCPWiring{
+			{Harness: "claude-code", MCP: &integration.MCPWiring{
 				Name:  "x",
 				Stdio: &integration.MCPStdio{Command: []string{"cmd"}},
 			}},
@@ -45,7 +45,7 @@ func TestFirstMCPURL_EmptyWhenNoMCP(t *testing.T) {
 	integ := &integration.Integration{
 		ID: "no-mcp",
 		Wiring: []integration.Wiring{
-			{Harness: "claudecode", EnvVars: map[string]string{"K": "V"}},
+			{Harness: "claude-code", EnvVars: map[string]string{"K": "V"}},
 		},
 	}
 	if got := firstMCPURL(integ); got != "" {

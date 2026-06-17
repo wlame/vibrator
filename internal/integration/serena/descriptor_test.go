@@ -53,13 +53,13 @@ func TestDescriptor_StableShape(t *testing.T) {
 		t.Errorf("probe URL = %q, expected to end with /mcp", probe.Describe())
 	}
 
-	// Must declare an MCP wiring for claudecode with both http and stdio.
+	// Must declare an MCP wiring for claude-code with both http and stdio.
 	if len(d.Wiring) == 0 {
 		t.Fatal("no Wiring declared")
 	}
 	w := d.Wiring[0]
-	if w.Harness != "claudecode" {
-		t.Errorf("Wiring[0].Harness = %q, want claudecode", w.Harness)
+	if w.Harness != "claude-code" {
+		t.Errorf("Wiring[0].Harness = %q, want claude-code", w.Harness)
 	}
 	if w.MCP == nil || w.MCP.HTTP == nil || w.MCP.Stdio == nil {
 		t.Errorf("MCP wiring incomplete: %+v", w.MCP)
@@ -98,4 +98,16 @@ func TestInit_RegistersSerena(t *testing.T) {
 	if got.ID != "serena" {
 		t.Errorf("Get(serena).ID = %q", got.ID)
 	}
+}
+
+// The bug this guards: descriptor harness IDs drifting from registry IDs
+// made BuildManifest return an empty manifest for claude-code images.
+func TestSerenaWiringReachesClaudeCodeManifest(t *testing.T) {
+	entries := integration.BuildManifest("claude-code")
+	for _, e := range entries {
+		if e.ID == "serena" && e.MCP != nil {
+			return
+		}
+	}
+	t.Fatalf("BuildManifest(\"claude-code\") has no serena MCP entry: %+v", entries)
 }

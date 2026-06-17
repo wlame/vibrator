@@ -233,6 +233,12 @@ func runContainer(ctx context.Context, dc docker.Client,
 		return err
 	}
 
+	// Release the setup-phase workspace lock right before the blocking
+	// interactive attach: everything mutating (wizard, pin writes, image
+	// build, container create) is done, and a second `vibrate` joining this
+	// now-live session is a supported workflow (see internal/lockfile).
+	opts.releaseLock()
+
 	return dc.Run(ctx, docker.RunSpec{
 		Image:         imageTag,
 		ContainerName: containerName,
@@ -295,6 +301,14 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 		return err
 	}
 	announceMounts(opts.Stderr, userMounts, harnessAutoAddsDirs(pin, extraDirs))
+
+	// Release the setup-phase workspace lock right before the blocking
+	// interactive exec — see the matching comment in runContainer. This is
+	// also the re-entry path for an already-running container (resolveAndLaunch's
+	// "running"/"exited" branches), so a plain `docker exec` re-attach never
+	// stays needlessly locked either.
+	opts.releaseLock()
+
 	return dc.Exec(ctx, docker.ExecSpec{
 		Container:   containerName,
 		Interactive: true,

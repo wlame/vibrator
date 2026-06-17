@@ -376,12 +376,18 @@ func TestAppendToGitignore_AddsLineWhenMissing(t *testing.T) {
 	if !strings.Contains(string(content), "\n.vb\n") {
 		t.Errorf("expected .vb in .gitignore, got:\n%s", content)
 	}
+	if !strings.Contains(string(content), "\n.vb.lock\n") {
+		t.Errorf("expected .vb.lock in .gitignore, got:\n%s", content)
+	}
 }
 
+// TestAppendToGitignore_IdempotentWhenPresent covers the "both lines
+// already present" case: neither ".vb" nor ".vb.lock" needs adding, so the
+// file must come back byte-identical.
 func TestAppendToGitignore_IdempotentWhenPresent(t *testing.T) {
 	dir := t.TempDir()
 	gi := filepath.Join(dir, ".gitignore")
-	original := "build/\n.vb\n"
+	original := "build/\n.vb\n.vb.lock\n"
 	if err := os.WriteFile(gi, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -391,11 +397,55 @@ func TestAppendToGitignore_IdempotentWhenPresent(t *testing.T) {
 		t.Fatalf("AppendToGitignore: %v", err)
 	}
 	if changed {
-		t.Errorf("expected changed=false when .vb already listed")
+		t.Errorf("expected changed=false when .vb and .vb.lock are already listed")
 	}
 	content, _ := os.ReadFile(gi)
 	if string(content) != original {
 		t.Errorf(".gitignore was modified despite presence:\n%s", content)
+	}
+}
+
+// TestAppendToGitignore_AddsLockLineWhenOnlyPinPresent covers a .gitignore
+// written before .vb.lock existed (older vibrator, or hand-edited): only
+// ".vb" is listed, so the call must add ".vb.lock" and report changed=true.
+// Also verifies no duplicate headers: if .vb is already present (with or
+// without header), we add only the missing line and no extra header.
+func TestAppendToGitignore_AddsLockLineWhenOnlyPinPresent(t *testing.T) {
+	dir := t.TempDir()
+	gi := filepath.Join(dir, ".gitignore")
+	// Start with a .gitignore that already has the header and .vb from a
+	// previous run (e.g., from a prior version that wrote both).
+	initial := "build/\n# vibrator workspace pin — may contain plaintext prereq tokens\n.vb\n"
+	if err := os.WriteFile(gi, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	changed, err := AppendToGitignore(dir, false)
+	if err != nil {
+		t.Fatalf("AppendToGitignore: %v", err)
+	}
+	if !changed {
+		t.Errorf("expected changed=true when .vb.lock is still missing")
+	}
+	content, _ := os.ReadFile(gi)
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "\n.vb.lock\n") {
+		t.Errorf("expected .vb.lock added to .gitignore, got:\n%s", contentStr)
+	}
+
+	// Verify exactly one header (no duplicate when only .vb.lock was added).
+	headerCount := strings.Count(contentStr, "# vibrator workspace pin")
+	if headerCount != 1 {
+		t.Errorf("expected exactly 1 header, got %d:\n%s", headerCount, contentStr)
+	}
+
+	// Second call: both now present — no further change.
+	changed, err = AppendToGitignore(dir, false)
+	if err != nil {
+		t.Fatalf("AppendToGitignore (2nd): %v", err)
+	}
+	if changed {
+		t.Errorf("expected changed=false once both lines are present")
 	}
 }
 
@@ -456,6 +506,9 @@ func TestAppendToGitignore_NoTrailingNewlineGetsOne(t *testing.T) {
 	if !strings.Contains(string(content), "\n.vb\n") {
 		t.Errorf("missing .vb entry:\n%s", content)
 	}
+	if !strings.Contains(string(content), "\n.vb.lock\n") {
+		t.Errorf("missing .vb.lock entry:\n%s", content)
+	}
 }
 
 func TestHasSecrets(t *testing.T) {
@@ -487,8 +540,12 @@ func TestAppendToGitignore_CreatesFileWhenAsked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "\n.vb\n") && !strings.HasPrefix(string(data), ".vb\n") {
-		t.Errorf(".gitignore missing .vb line: %q", data)
+	content := string(data)
+	if !strings.Contains(content, "\n.vb\n") && !strings.HasPrefix(content, ".vb\n") {
+		t.Errorf(".gitignore missing .vb line: %q", content)
+	}
+	if !strings.Contains(content, "\n.vb.lock\n") {
+		t.Errorf(".gitignore missing .vb.lock line: %q", content)
 	}
 	// Idempotent on the second call.
 	changed, err = AppendToGitignore(dir, true)

@@ -45,6 +45,7 @@ import (
 	"github.com/wlame/vibrator/internal/feature"
 	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/hostprobe"
+	"github.com/wlame/vibrator/internal/lockfile"
 	"github.com/wlame/vibrator/internal/mount"
 	"github.com/wlame/vibrator/internal/profile"
 	"github.com/wlame/vibrator/internal/wizard"
@@ -188,6 +189,21 @@ type Options struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Stdin  io.Reader
+
+	// releaseWorkspaceLock releases the setup-phase workspace lock; set by
+	// Run, called by the launch layer right before a blocking interactive
+	// attach. Nil-safe via releaseLock().
+	releaseWorkspaceLock func()
+}
+
+// releaseLock releases the setup-phase workspace lock if one was acquired.
+// Nil-safe: callers unrelated to Run's lock lifecycle (existing tests,
+// internal helpers invoked directly) can call it without checking whether
+// releaseWorkspaceLock was ever populated.
+func (o Options) releaseLock() {
+	if o.releaseWorkspaceLock != nil {
+		o.releaseWorkspaceLock()
+	}
 }
 
 // Run executes the full vibrate decision tree. Returns nil on
@@ -214,6 +230,23 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
+
+	// Serialize the mutating setup phase (wizard, pin writes, build,
+	// container create) per workspace. Fail fast on contention — see
+	// internal/lockfile. Released before the interactive attach so a
+	// second vibrate can still join a running session. The lock does NOT
+	// arbitrate --rebuild or other mutating flags against an already-running
+	// session — that race is out of scope.
+	wsLock, err := lockfile.Acquire(filepath.Join(wsDir, ".vb.lock"))
+	if err != nil {
+		var held *lockfile.HeldError
+		if errors.As(err, &held) {
+			return fmt.Errorf("another vibrate is running for this workspace (pid %d) — retry when it finishes", held.PID)
+		}
+		return err
+	}
+	defer wsLock.Release()
+	opts.releaseWorkspaceLock = wsLock.Release
 
 	// 2. Apply CLI flag overrides on top of pin values.
 	applyFlagOverrides(&pin, opts)

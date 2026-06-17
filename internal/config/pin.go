@@ -359,8 +359,16 @@ func FindPin(startDir string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// AppendToGitignore ensures ".vb" is covered by the workspace's .gitignore.
-//   - If .gitignore exists: appends the .vb line unless already present.
+// gitignoreWantedLines are the exact-match lines AppendToGitignore ensures
+// are present: ".vb" may hold plaintext prereq credentials, and ".vb.lock"
+// is the per-workspace setup lock (internal/lockfile) — a lock file with a
+// live pid inside has no business in version control either.
+var gitignoreWantedLines = []string{".vb", ".vb.lock"}
+
+// AppendToGitignore ensures both ".vb" and ".vb.lock" are covered by the
+// workspace's .gitignore.
+//   - If .gitignore exists: appends whichever of the wanted lines are
+//     missing (a no-op, changed=false, once both are already present).
 //   - If it doesn't: creates it when createIfMissing is true (callers pass
 //     true when the pin holds secrets — a credential-bearing .vb must never
 //     be committable), otherwise does nothing (creating a .gitignore in a
@@ -375,7 +383,7 @@ func AppendToGitignore(workspaceDir string, createIfMissing bool) (changed bool,
 			if !createIfMissing {
 				return false, nil
 			}
-			content := "# vibrator workspace pin — may contain plaintext prereq tokens\n.vb\n"
+			content := "# vibrator workspace pin — may contain plaintext prereq tokens\n.vb\n.vb.lock\n"
 			if werr := os.WriteFile(gi, []byte(content), 0o644); werr != nil {
 				return false, werr
 			}
@@ -391,11 +399,25 @@ func AppendToGitignore(workspaceDir string, createIfMissing bool) (changed bool,
 	if err != nil {
 		return false, err
 	}
+
+	present := make(map[string]bool, len(gitignoreWantedLines))
 	for _, line := range strings.Split(string(content), "\n") {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == ".vb" {
-			return false, nil
+		for _, wanted := range gitignoreWantedLines {
+			if trimmed == wanted {
+				present[wanted] = true
+			}
 		}
+	}
+
+	var missing []string
+	for _, wanted := range gitignoreWantedLines {
+		if !present[wanted] {
+			missing = append(missing, wanted)
+		}
+	}
+	if len(missing) == 0 {
+		return false, nil
 	}
 
 	// Ensure we don't glue to the previous line.
@@ -405,13 +427,21 @@ func AppendToGitignore(workspaceDir string, createIfMissing bool) (changed bool,
 	}
 	defer f.Close()
 
-	prefix := ""
+	var b strings.Builder
 	if len(content) > 0 && !strings.HasSuffix(string(content), "\n") {
-		prefix = "\n"
+		b.WriteString("\n")
 	}
-	if _, err := io.WriteString(f,
-		prefix+"\n# vibrator workspace pin — may contain plaintext prereq tokens\n.vb\n",
-	); err != nil {
+	// Only write header if both lines are missing (initial setup).
+	// If one line is already present with the header, appending just the
+	// missing line avoids duplicate headers.
+	if len(missing) == 2 {
+		b.WriteString("\n# vibrator workspace pin — may contain plaintext prereq tokens\n")
+	}
+	for _, wanted := range missing {
+		b.WriteString(wanted)
+		b.WriteString("\n")
+	}
+	if _, err := io.WriteString(f, b.String()); err != nil {
 		return false, err
 	}
 	return true, nil

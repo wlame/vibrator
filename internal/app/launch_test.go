@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -70,6 +71,23 @@ func TestRunContainerMissingMountAborts(t *testing.T) {
 	// Fail-fast: no container was created.
 	if runs := dc.CallsFor("run"); len(runs) != 0 {
 		t.Errorf("expected NO docker run after a bad --mount, got %d run call(s)", len(runs))
+	}
+}
+
+func TestExecIntoContainerAnnouncesMounts(t *testing.T) {
+	roDir := t.TempDir()
+	ws := t.TempDir()
+	dc := docker.NewMock()
+	var stderr bytes.Buffer
+
+	pin := config.Pin{Harness: "claude-code", Shell: "zsh", Mounts: []string{roDir}}
+	opts := Options{LaunchTarget: LaunchHarness, Stdout: io.Discard, Stderr: &stderr}
+
+	if err := execIntoContainer(context.Background(), dc, "ctr", ws, pin, opts); err != nil {
+		t.Fatalf("execIntoContainer: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "Mounted 1 extra folder") {
+		t.Fatalf("expected a mount notice on the reuse path, got: %q", stderr.String())
 	}
 }
 

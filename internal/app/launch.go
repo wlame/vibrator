@@ -97,7 +97,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 ) error {
 	wsHash := workspace.Fingerprint(wsSpec)
 
-	// User-requested extra mounts (--mount / .vb `mounts`). Resolved
+	// User-requested extra mounts (--mount / .vb `mounts`), resolved
 	// fail-fast: a bad path aborts before we create anything. Resolved
 	// here (not lower) so the fingerprint can go into the labels map.
 	userMounts, err := mount.ResolveAll(pin.Mounts, wsDir)
@@ -187,11 +187,7 @@ func runContainer(ctx context.Context, dc docker.Client,
 
 	volumes = append(volumes, mountVolumes(userMounts)...)
 	extraDirs := mountDirs(userMounts)
-	autoAdded := false
-	if h, ok := harness.ByID(pin.Harness); ok {
-		autoAdded = len(h.ExtraDirArgs(extraDirs)) > 0
-	}
-	announceMounts(opts.Stderr, userMounts, autoAdded)
+	announceMounts(opts.Stderr, userMounts, harnessAutoAddsDirs(pin, extraDirs))
 
 	fmt.Fprintf(opts.Stderr, "→ Creating container %s ...\n", containerName)
 
@@ -283,10 +279,12 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 	if err != nil {
 		return err
 	}
-	cmd, err := resolveLaunchCmd(pin, opts, mountDirs(userMounts))
+	extraDirs := mountDirs(userMounts)
+	cmd, err := resolveLaunchCmd(pin, opts, extraDirs)
 	if err != nil {
 		return err
 	}
+	announceMounts(opts.Stderr, userMounts, harnessAutoAddsDirs(pin, extraDirs))
 	return dc.Exec(ctx, docker.ExecSpec{
 		Container:   containerName,
 		Interactive: true,
@@ -318,6 +316,8 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 // on every session start — without it, host-side service changes (e.g.,
 // starting the Serena host server between sessions) wouldn't get picked
 // up by an exec'd harness.
+//
+// extraDirs are appended as harness add-dir args on the LaunchHarness path (ignored for the shell).
 //
 // Returns an error only for the harness path, and only when the
 // registered harness has no LaunchCommand (a programming bug — every
@@ -366,6 +366,14 @@ func mountDirs(rs []mount.Resolved) []string {
 		out = append(out, r.Path)
 	}
 	return out
+}
+
+// harnessAutoAddsDirs reports whether the pin's harness will be handed the
+// extra mounted dirs as launch args (e.g. Claude Code's --add-dir). Used to
+// decide whether announceMounts appends the "add them manually" hint.
+func harnessAutoAddsDirs(pin config.Pin, extraDirs []string) bool {
+	h, ok := harness.ByID(pin.Harness)
+	return ok && len(h.ExtraDirArgs(extraDirs)) > 0
 }
 
 // announceMounts prints a one-line notice of the extra mounted folders and

@@ -626,7 +626,10 @@ func persistPin(pinPath string, pin *config.Pin, stderr io.Writer) error {
 		return err
 	}
 	wsDir := filepath.Dir(pinPath)
-	if added, err := config.AppendToGitignore(wsDir, pin.HasSecrets()); err == nil && added {
+	added, err := config.AppendToGitignore(wsDir, pin.HasSecrets())
+	if err != nil {
+		fmt.Fprintf(stderr, "  warning: could not update .gitignore: %v\n", err)
+	} else if added {
 		fmt.Fprintf(stderr, "→ Added .vb to %s/.gitignore\n", wsDir)
 	}
 	fmt.Fprintf(stderr, "→ Saved pin: %s\n", pinPath)

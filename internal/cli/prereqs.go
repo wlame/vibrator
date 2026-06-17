@@ -252,7 +252,7 @@ func runPrereqsBootstrap(cmd *cobra.Command, args []string) error {
 
 	// .gitignore: append .vb if not already there (idempotent).
 	wsDir := filepath.Dir(pinPath)
-	changed, err := config.AppendToGitignore(wsDir)
+	changed, err := config.AppendToGitignore(wsDir, true)
 	if err != nil {
 		fmt.Fprintf(out, "  %swarning: could not update .gitignore: %v%s\n", c.yellow, err, c.reset)
 	}

@@ -365,7 +365,7 @@ func TestAppendToGitignore_AddsLineWhenMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changed, err := AppendToGitignore(dir)
+	changed, err := AppendToGitignore(dir, false)
 	if err != nil {
 		t.Fatalf("AppendToGitignore: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestAppendToGitignore_IdempotentWhenPresent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changed, err := AppendToGitignore(dir)
+	changed, err := AppendToGitignore(dir, false)
 	if err != nil {
 		t.Fatalf("AppendToGitignore: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestAppendToGitignore_NoFile_DoesNothing(t *testing.T) {
 	// No .gitignore at all → no-op, no error. We deliberately don't create
 	// .gitignore for projects that don't have one.
 	dir := t.TempDir()
-	changed, err := AppendToGitignore(dir)
+	changed, err := AppendToGitignore(dir, false)
 	if err != nil {
 		t.Fatalf("AppendToGitignore: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestAppendToGitignore_NoTrailingNewlineGetsOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := AppendToGitignore(dir); err != nil {
+	if _, err := AppendToGitignore(dir, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -455,5 +455,55 @@ func TestAppendToGitignore_NoTrailingNewlineGetsOne(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "\n.vb\n") {
 		t.Errorf("missing .vb entry:\n%s", content)
+	}
+}
+
+func TestHasSecrets(t *testing.T) {
+	cases := []struct {
+		name string
+		pin  Pin
+		want bool
+	}{
+		{"empty", Pin{}, false},
+		{"plain fields only", Pin{Harness: "codex", Shell: "zsh"}, false},
+		{"llm env-var auth is not a secret", Pin{LLM: &LLMSpec{Auth: &LLMAuth{Env: "OPENAI_API_KEY"}}}, false},
+		{"pasted llm key", Pin{LLM: &LLMSpec{Auth: &LLMAuth{Value: "sk-live"}}}, true},
+		{"prereq token", Pin{Prereqs: map[string]map[string]string{"claude-mem-server-beta": {"api_key": "x"}}}, true},
+	}
+	for _, tc := range cases {
+		if got := tc.pin.HasSecrets(); got != tc.want {
+			t.Errorf("%s: HasSecrets() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestAppendToGitignore_CreatesFileWhenAsked(t *testing.T) {
+	dir := t.TempDir()
+	changed, err := AppendToGitignore(dir, true)
+	if err != nil || !changed {
+		t.Fatalf("AppendToGitignore(create) = %v, %v; want true, nil", changed, err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "\n.vb\n") && !strings.HasPrefix(string(data), ".vb\n") {
+		t.Errorf(".gitignore missing .vb line: %q", data)
+	}
+	// Idempotent on the second call.
+	changed, err = AppendToGitignore(dir, true)
+	if err != nil || changed {
+		t.Errorf("second call = %v, %v; want false, nil", changed, err)
+	}
+}
+
+func TestAppendToGitignore_NoCreateWithoutFlag(t *testing.T) {
+	dir := t.TempDir()
+	changed, err := AppendToGitignore(dir, false)
+	if err != nil || changed {
+		t.Fatalf("= %v, %v; want false, nil", changed, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); !os.IsNotExist(err) {
+		t.Error(".gitignore was created despite createIfMissing=false")
 	}
 }

@@ -469,7 +469,11 @@ func persistAndReport(out io.Writer, pinPath, prereqID string, result map[string
 	if err := persistPrereqResult(pinPath, prereqID, result); err != nil {
 		return fmt.Errorf("persist to %s: %w", pinPath, err)
 	}
-	changed, gErr := config.AppendToGitignore(filepath.Dir(pinPath))
+	// true: persistPrereqResult (just above) unconditionally wrote this
+	// prereqID's result into pin.Prereqs, so the on-disk pin can never be
+	// secret-free at this point — no need to reload it just to ask
+	// HasSecrets().
+	changed, gErr := config.AppendToGitignore(filepath.Dir(pinPath), true)
 	if gErr != nil {
 		fmt.Fprintf(out, "  %swarning: could not update .gitignore: %v%s\n", c.yellow, gErr, c.reset)
 	}

@@ -207,6 +207,17 @@ type LLMAuth struct {
 	Value string `toml:"value,omitempty"`
 }
 
+// HasSecrets reports whether the pin holds credential material that must
+// not reach version control: a pasted LLM API key, or any cached prereq
+// entry (prereq subtables exist to cache minted tokens — treat all of
+// them as secret-bearing).
+func (p Pin) HasSecrets() bool {
+	if p.LLM != nil && p.LLM.Auth != nil && p.LLM.Auth.Value != "" {
+		return true
+	}
+	return len(p.Prereqs) > 0
+}
+
 // IsEmpty reports whether the pin carries any data worth saving.
 // Used to avoid writing an empty file when the user opts out of pinning
 // mid-wizard.
@@ -348,18 +359,27 @@ func FindPin(startDir string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// AppendToGitignore appends ".vb" to the workspace's .gitignore if and only if:
-//   - .gitignore exists at workspaceDir (we don't create one — that would be
-//     intrusive for projects that deliberately track everything)
-//   - .vb isn't already covered by an exact-line match
+// AppendToGitignore ensures ".vb" is covered by the workspace's .gitignore.
+//   - If .gitignore exists: appends the .vb line unless already present.
+//   - If it doesn't: creates it when createIfMissing is true (callers pass
+//     true when the pin holds secrets — a credential-bearing .vb must never
+//     be committable), otherwise does nothing (creating a .gitignore in a
+//     repo that deliberately tracks everything would be intrusive).
 //
 // Idempotent. Does NOT stage or commit anything.
-func AppendToGitignore(workspaceDir string) (changed bool, err error) {
+func AppendToGitignore(workspaceDir string, createIfMissing bool) (changed bool, err error) {
 	gi := filepath.Join(workspaceDir, ".gitignore")
 	info, err := os.Stat(gi)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil // not an error, just nothing to do
+			if !createIfMissing {
+				return false, nil
+			}
+			content := "# vibrator workspace pin — may contain plaintext prereq tokens\n.vb\n"
+			if werr := os.WriteFile(gi, []byte(content), 0o644); werr != nil {
+				return false, werr
+			}
+			return true, nil
 		}
 		return false, err
 	}

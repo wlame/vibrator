@@ -952,6 +952,30 @@ func containsString(haystack []string, needle string) bool {
 	return false
 }
 
+// --- validateLoginTarget --------------------------------------------------
+
+func TestValidateLoginTarget(t *testing.T) {
+	cases := []struct {
+		harness   string
+		loginMode bool
+		wantErr   bool
+	}{
+		{"claude-code", true, false},
+		{"claude-code", false, false},
+		{"codex", true, true},
+		{"opencode", true, true},
+		{"pi", true, true},
+		{"codex", false, false},
+	}
+	for _, tc := range cases {
+		err := validateLoginTarget(tc.harness, tc.loginMode)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("validateLoginTarget(%q, %v) err = %v, wantErr %v",
+				tc.harness, tc.loginMode, err, tc.wantErr)
+		}
+	}
+}
+
 // --- helper ---------------------------------------------------------------
 
 func envToMap(vars []docker.EnvVar) map[string]string {

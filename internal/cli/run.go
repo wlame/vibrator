@@ -121,7 +121,7 @@ func init() {
 			"The docker client is always baked into the image, so toggling --dind never rebuilds it — "+
 			"it just recreates the container with (or without) the socket.")
 	runCmd.Flags().BoolVar(&runFlagsState.login, "login", false,
-		"Run `claude auth login` in the container before launching the harness. "+
+		"Run `claude auth login` in the container before launching the harness (claude-code only). "+
 			"Opens the auth URL in your host browser automatically. "+
 			"Auth state is saved to ~/.claude.json so subsequent runs are pre-authenticated. "+
 			"Always runs the auth flow when passed — use it to re-authenticate or switch accounts.")

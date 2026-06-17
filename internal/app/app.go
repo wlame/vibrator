@@ -247,6 +247,12 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	// Gate --login to claude-code only; other harnesses don't have the
+	// login flow wired yet.
+	if err := validateLoginTarget(pin.Harness, opts.LoginMode); err != nil {
+		return err
+	}
+
 	// 5. Persist the pin (after wizard, with consent baked in by Options.NoSave).
 	if saveAfterWizard {
 		if err := persistPin(pinPath, &pin, opts.Stderr); err != nil {
@@ -591,6 +597,18 @@ func validatePin(pin config.Pin) error {
 	// generator's own validation — so reject bad values here, up front.
 	if pin.Shell != "" && !dockerfile.SupportedShell(pin.Shell) {
 		return fmt.Errorf("unsupported shell %q in .vb (valid: bash, zsh, fish)", pin.Shell)
+	}
+	return nil
+}
+
+// validateLoginTarget rejects --login for harnesses whose login flow is
+// not wired: runLoginStep is claude-code-specific end to end (it execs
+// `claude auth login`, scans its stdout for the auth URL, and writes
+// tokens back to ~/.claude.json). The literal ID matches the pattern
+// used by runHookReadiness.
+func validateLoginTarget(harnessID string, loginMode bool) error {
+	if loginMode && harnessID != "claude-code" {
+		return fmt.Errorf("--login is only supported for claude-code (the %s login flow is not wired yet — authenticate via its env vars or host config mounts instead)", harnessID)
 	}
 	return nil
 }

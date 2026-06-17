@@ -2,6 +2,8 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,6 +19,20 @@ import (
 	"github.com/wlame/vibrator/internal/prereq"
 	"github.com/wlame/vibrator/internal/workspace"
 )
+
+// --- preflightDaemon ------------------------------------------------------
+
+func TestPreflightDaemon(t *testing.T) {
+	m := docker.NewMock()
+	if err := preflightDaemon(context.Background(), m); err != nil {
+		t.Fatalf("healthy daemon: %v", err)
+	}
+	m.InfoErr = errors.New("cannot connect to the Docker daemon")
+	err := preflightDaemon(context.Background(), m)
+	if err == nil || !strings.Contains(err.Error(), "docker daemon is not reachable") {
+		t.Errorf("err = %v, want daemon-unreachable message", err)
+	}
+}
 
 // --- needsWizard ----------------------------------------------------------
 

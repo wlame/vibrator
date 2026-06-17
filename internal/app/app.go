@@ -36,6 +36,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"time"
 
 	vibrator "github.com/wlame/vibrator"
 	"github.com/wlame/vibrator/internal/config"
@@ -206,6 +207,19 @@ func (o Options) releaseLock() {
 	}
 }
 
+// preflightDaemon verifies the docker daemon answers before any pipeline
+// work touches it. The explicit timeout matters as much as the call: the
+// real-world failure mode is a HUNG daemon (suspended Colima/Docker
+// Desktop VM), which without a deadline would hang vibrate indefinitely.
+func preflightDaemon(ctx context.Context, dc docker.Client) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := dc.Info(ctx); err != nil {
+		return fmt.Errorf("docker daemon is not reachable: %w — is it running? (`vibrate runtime detect` shows the resolved socket)", err)
+	}
+	return nil
+}
+
 // Run executes the full vibrate decision tree. Returns nil on
 // successful container entry (the exec/run call inherits stdio so the
 // user "lands" inside the container; when they exit, control returns
@@ -353,6 +367,10 @@ func Run(ctx context.Context, opts Options) error {
 	//     neither → build then run.
 	dockerCli, err := docker.NewCLIClient()
 	if err != nil {
+		return err
+	}
+
+	if err := preflightDaemon(ctx, dockerCli); err != nil {
 		return err
 	}
 

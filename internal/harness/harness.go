@@ -41,12 +41,6 @@ type Harness interface {
 	// browser flow".
 	AuthEnvVars() []string
 
-	// HostConfigDir returns the absolute path to the harness's config dir
-	// on the host (e.g., "$HOME/.claude"). Vibrator selectively mounts
-	// useful subpaths into the container so user settings persist across
-	// runs. Empty string means "no host config persistence".
-	HostConfigDir() string
-
 	// RequiredFeatures lists base features (internal/feature IDs) this
 	// harness needs to run. The Dockerfile generator unions these with
 	// the user's resolved feature set so a harness's deps are always

@@ -74,16 +74,6 @@ func TestRegistry_RequiredFeaturesValid(t *testing.T) {
 	}
 }
 
-// Every harness must declare a host config dir — Phase 4 lifecycle code
-// relies on this to set up selective mounts for settings/auth/plugins.
-func TestRegistry_AllHaveHostConfigDir(t *testing.T) {
-	for _, h := range harness.Registry {
-		if h.HostConfigDir() == "" {
-			t.Errorf("harness %q has empty HostConfigDir", h.ID())
-		}
-	}
-}
-
 // Every harness's HostMounts descriptors must be well-formed: a non-empty
 // host- and container-relative path, a valid MountKind, and — critically —
 // neither path may climb out of its home root via "..". The orchestrator

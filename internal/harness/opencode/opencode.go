@@ -44,21 +44,14 @@ func (opencode) AuthEnvVars() []string {
 	}
 }
 
-func (opencode) HostConfigDir() string {
-	// Note: opencode uses ~/.local/share/opencode/ for auth (XDG-style) and
-	// ~/.config/opencode/ for config. We surface the parent ~/.local/share/
-	// region via selective mount in docker_cmd (Phase 4).
-	return "$HOME/.config/opencode"
-}
-
 func (opencode) RequiredFeatures() []string {
 	// Self-contained binary — no host runtime needed.
 	return nil
 }
 
 // HostMounts wires the host's OpenCode state into the container. OpenCode
-// splits its state across two XDG locations, which is why HostConfigDir()
-// alone is insufficient — these descriptors name the exact paths:
+// splits its state across two XDG locations; these descriptors name the
+// exact paths:
 //
 //   - ~/.local/share/opencode/auth.json (the OAuth/credential store the
 //     hostprobe uses as the primary "is it installed?" signal) is mounted

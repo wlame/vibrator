@@ -728,16 +728,8 @@ func buildGPGAgentMount() (docker.Volume, bool) {
 	}, true
 }
 
-// exists is a small file-presence helper. Treats every error as
-// "doesn't exist" — for mount-construction, missing-vs-permission-
-// denied is the same decision: skip.
-func exists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// isDir reports whether path is a directory. Same error semantics as
-// exists — any stat failure means "skip this mount".
+// isDir reports whether path is a directory. Any stat failure means
+// "skip this mount".
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()

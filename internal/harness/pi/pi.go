@@ -39,10 +39,6 @@ func (pi) AuthEnvVars() []string {
 	}
 }
 
-func (pi) HostConfigDir() string {
-	return "$HOME/.pi"
-}
-
 // HostMounts wires the host's ~/.pi state into the container. Pi keeps
 // its config (agent settings, ~/.pi/agent/mcp.json) and any credential
 // state under a single ~/.pi tree, so this is a coarse whole-directory

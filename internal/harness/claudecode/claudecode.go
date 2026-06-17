@@ -45,12 +45,6 @@ func (claudeCode) AuthEnvVars() []string {
 	}
 }
 
-func (claudeCode) HostConfigDir() string {
-	// Claude Code's per-user config and plugin install location. Vibrator
-	// selectively mounts settings.json, rules/, hooks/, projects/, etc.
-	return "$HOME/.claude"
-}
-
 func (claudeCode) RequiredFeatures() []string {
 	// Claude itself is a single binary — no runtime deps. But its
 	// integration with claude-mem plugin walks Python (uv for serena MCP)

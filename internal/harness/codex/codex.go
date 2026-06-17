@@ -27,10 +27,6 @@ func (codex) AuthEnvVars() []string {
 	return []string{"OPENAI_API_KEY"}
 }
 
-func (codex) HostConfigDir() string {
-	return "$HOME/.codex"
-}
-
 func (codex) RequiredFeatures() []string {
 	// `npm install -g` is the install path, and the binary re-execs node
 	// at runtime for plugin loading.

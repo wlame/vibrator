@@ -4,6 +4,8 @@ A single-binary CLI that runs AI coding agents (Claude Code, Codex, OpenCode,
 Pi) in isolated Docker containers per workspace — with declarative profile
 and extension configuration via a `.vb` file at the project root.
 
+**Full documentation:** https://wlame.github.io/vibrator/
+
 > **Harness support:** Claude Code is the primary, well-exercised harness —
 > it's what vibrator is developed and tested against day to day. Codex,
 > OpenCode, and Pi are wired in and usable (install, launch, auth/config

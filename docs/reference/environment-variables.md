@@ -31,6 +31,7 @@ Listed by source, in precedence order (later wins on name collision).
 | Harness auth vars (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) | forwarded from host when set — see [Authentication](../guides/authentication.md) |
 | LLM-derived vars (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, provider keys, …) | computed from [`[llm]`](vb-file.md#llm) |
 | Extension `auth.env` vars | declared by selected [extensions](../guides/extensions.md) |
+| `VIBRATOR_IDENTITY_NAME`, `VIBRATOR_IDENTITY_EMAIL` | Set by vibrate from the pin's `[identity]` table; the entrypoint uses them to override git identity and rewrite the Claude account email inside the container. |
 | `[env]` overrides | [`.vb` `[env]`](vb-file.md) — literal or `$NAME` indirection |
 | `VIBRATOR_INTEGRATION_MODE_<ID>` | per-integration [hosting mode](../guides/integrations.md#hosting-modes) |
 | `CLAUDE_MEM_RUNTIME`, `CLAUDE_MEM_SERVER_BETA_URL`, `CLAUDE_MEM_SERVER_BETA_API_KEY`, `CLAUDE_MEM_SERVER_BETA_TEAM_ID`, `CLAUDE_MEM_SERVER_BETA_PROJECT_ID` | [claude-mem](../integrations/claude-mem.md) when bootstrapped |

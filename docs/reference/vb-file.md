@@ -19,6 +19,7 @@ shell   = "zsh"
 with    = ["gh"]
 no      = ["aider"]
 extensions = ["context7", "ecc-developer"]
+mounts  = ["/data/refs", "/work/lib:rw"]
 
 [llm]
 provider = "openai"
@@ -58,6 +59,7 @@ acknowledged_missing = ["node"]
 | `with` | list | — | [Feature](features.md) IDs to enable on top of the profile. |
 | `no` | list | — | Feature IDs to disable. |
 | `extensions` | list | — | [Extension](../guides/extensions.md) IDs (scoped to the harness). |
+| `mounts` | list | — | Extra host folders bound into the container at the same absolute path. Each entry is `PATH` or `PATH:rw`; read-only is the default. Written by the `--mount` flag and re-applied on every run. Changing the set recreates the container (the mount set is part of the container identity, not the image fingerprint). For claude-code, mounted folders are also passed to the agent via `--add-dir`. |
 
 ## `[llm]` { #llm }
 

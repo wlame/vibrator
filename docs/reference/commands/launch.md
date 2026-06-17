@@ -70,6 +70,7 @@ Shared with [`build`](build.md). See the [shared table](index.md#spec-resolution
 | `--no-save` | `false` | Don't write the resolved config to `.vb`. |
 | `--rebuild` | `false` | Remove any existing container and rebuild the image from scratch (`docker build --no-cache`), then run fresh. |
 | `--dind` | `false` | Mount the host's Docker socket so `docker` inside the container drives the host daemon. The `docker` client is always in the image, so toggling this never rebuilds — it just recreates the container with (or without) the socket mounted. See [Docker-in-Docker](../../guides/docker-in-docker.md). |
+| `--mount=PATH[:rw]` | *(none)* | Mount an extra host folder at the same absolute path inside the container. Read-only unless `:rw` is appended. Repeatable. Saved to `.vb` as `mounts = [...]` and re-applied on later runs; for claude-code the folders are also passed to the agent via `--add-dir`. |
 | `--login` | `false` | Run `claude auth login` in the container before launching the harness; opens the auth URL in your host browser and writes auth state back to the host. See [Authentication](../../guides/authentication.md#vibrate-login). |
 
 ---

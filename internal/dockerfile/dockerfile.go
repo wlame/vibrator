@@ -21,6 +21,7 @@ package dockerfile
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -116,6 +117,29 @@ func validate(spec Spec) error {
 	}
 	if _, ok := supportedShells[spec.Shell]; !ok {
 		return fmt.Errorf("dockerfile: unsupported shell %q (supported: bash, zsh, fish)", spec.Shell)
+	}
+	if err := ValidateUsername(spec.Username); err != nil {
+		return err
+	}
+	return nil
+}
+
+// usernameRE is the Linux useradd convention: lowercase letters, digits,
+// underscore, dash; must start with a letter or underscore. Anything
+// outside it is rejected rather than sanitized — spec.Username is spliced
+// into the generated Dockerfile (ARG USERNAME=...), so a permissive value
+// would become a literal Dockerfile instruction.
+var usernameRE = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+
+// ValidateUsername reports whether u is safe to bake into the Dockerfile
+// and acceptable to useradd. Empty is allowed — Generate falls back to
+// the "vibrate" default.
+func ValidateUsername(u string) error {
+	if u == "" {
+		return nil
+	}
+	if len(u) > 32 || !usernameRE.MatchString(u) {
+		return fmt.Errorf("dockerfile: invalid container username %q (want ^[a-z_][a-z0-9_-]*$, max 32 chars)", u)
 	}
 	return nil
 }

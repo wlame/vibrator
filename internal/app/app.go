@@ -34,7 +34,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	vibrator "github.com/wlame/vibrator"
@@ -238,6 +237,13 @@ func Run(ctx context.Context, opts Options) error {
 
 	// 4. Validate the resolved pin before committing.
 	if err := validatePin(pin); err != nil {
+		return err
+	}
+
+	// Explicit --username reaches the Dockerfile generator; reject bad
+	// values here for a clean CLI error before any docker work. (The
+	// generator re-checks as defense in depth.)
+	if err := dockerfile.ValidateUsername(opts.Username); err != nil {
 		return err
 	}
 
@@ -625,12 +631,6 @@ func printLaunchPlan(stderr io.Writer, wsDir, imageTag, containerName string, pi
 // detected or isn't safe for Linux useradd (e.g., running as root).
 const fallbackUsername = "vibrate"
 
-// validUsername matches the Linux useradd convention: lowercase letters,
-// digits, underscores, and dashes only, starting with a letter or
-// underscore. macOS allows mixed case and a few odd chars; we sanitize
-// them out (HostUsername docs the exact rules).
-var validUsername = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
-
 // HostUsername returns the host user's name, sanitized for use as a
 // Linux container username. Sanitization rules:
 //
@@ -694,7 +694,7 @@ func sanitizeUsername(raw string) string {
 		out = out[:32]
 	}
 	// Final validation — if we somehow still don't match, give up.
-	if !validUsername.MatchString(out) {
+	if dockerfile.ValidateUsername(out) != nil {
 		return ""
 	}
 	return out

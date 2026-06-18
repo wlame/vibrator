@@ -678,10 +678,12 @@ func buildRunFlags(spec RunSpec) []string {
 
 // envArgs emits name-only -e flags: the docker CLI resolves each name
 // against ITS OWN process environment, so secret values never appear in
-// argv (visible via ps//proc/*/cmdline). envPairs supplies those values
+// argv (visible via ps and /proc/*/cmdline). envPairs supplies those values
 // to the subprocess env. Residual exposure: `docker inspect` still shows
-// container env — inherent to container env vars, documented in the
-// security docs.
+// container env regardless of how it was passed — inherent to container env
+// vars, not specific to this mechanism. See "How forwarded values reach the
+// container, and their residual exposure" in
+// docs/reference/environment-variables.md.
 func envArgs(env []EnvVar) []string {
 	var args []string
 	for _, e := range env {
@@ -722,10 +724,23 @@ func envPairs(env []EnvVar) []string {
 // `docker run` argv directly (e.g. integration.DockerRuntime, which has no
 // docker.Client of its own) can reuse this exact mechanism instead of
 // duplicating tempfile-permission-and-cleanup logic.
+//
+// Rejects any value containing '\n': the env-file format is one NAME=VALUE
+// pair per line, so an embedded newline would split a single value across
+// lines — silently truncating it (and turning the remainder into a bogus,
+// likely-ignored line) rather than failing loudly. Returning an error that
+// names the offending variable is far preferable to shipping a corrupted or
+// partially-unset secret.
 func WriteEnvFile(env []EnvVar) (path string, cleanup func(), err error) {
 	noop := func() {}
 	if len(env) == 0 {
 		return "", noop, nil
+	}
+	for _, e := range env {
+		if strings.Contains(e.Value, "\n") {
+			return "", noop, fmt.Errorf(
+				"env var %s: value contains a newline, which would corrupt the docker --env-file format", e.Name)
+		}
 	}
 	f, err := os.CreateTemp("", "vibrator-env-*")
 	if err != nil {

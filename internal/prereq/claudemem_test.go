@@ -443,6 +443,35 @@ func TestRunPSQL_UnparseableDSNFallsBackToPositional(t *testing.T) {
 	}
 }
 
+// A DSN carrying query params (sslmode, connect_timeout, ...) must not have
+// those params silently dropped by the PG*-env decomposition — that would be
+// a connection-security downgrade (e.g. losing a required sslmode=require).
+// runPSQL must fall back to the legacy positional DSN so nothing is lost.
+func TestRunPSQL_QueryParamsFallBackToPositionalRatherThanBeingDropped(t *testing.T) {
+	m := docker.NewMock()
+	var captured docker.RunSpec
+	m.RunHandler = func(_ context.Context, spec docker.RunSpec) error {
+		captured = spec
+		return nil
+	}
+	b := &ClaudeMemBootstrap{Docker: m}
+	dsn := "postgres://admin:s3cret@host.docker.internal:5432/claudemem?sslmode=require&connect_timeout=10"
+	_, _ = b.runPSQL(context.Background(), claudeMemPostgresImage, dsn, "SELECT 1;")
+
+	found := false
+	for _, c := range captured.Cmd {
+		if c == dsn {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected full DSN (with query params intact) as a positional arg, got %v", captured.Cmd)
+	}
+	if len(captured.Env) != 0 {
+		t.Errorf("expected no PG* env when falling back for query params (they'd be dropped), got %v", captured.Env)
+	}
+}
+
 func TestRunPSQL_DefaultsPortWhenMissing(t *testing.T) {
 	m := docker.NewMock()
 	var captured docker.RunSpec

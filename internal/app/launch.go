@@ -233,10 +233,17 @@ func runContainer(ctx context.Context, dc docker.Client,
 		return err
 	}
 
-	// Release the setup-phase workspace lock right before the blocking
-	// interactive attach: everything mutating (wizard, pin writes, image
-	// build, container create) is done, and a second `vibrate` joining this
-	// now-live session is a supported workflow (see internal/lockfile).
+	// Release the setup-phase workspace lock right before this blocking
+	// interactive `docker run`. This is NOT "container creation is done" —
+	// dc.Run below is what actually creates the container, so releasing
+	// here means container creation itself happens unlocked. That's a
+	// deliberate, benign race: a second `vibrate` racing this one can only
+	// reach `docker run --name <containerName>` after us, and docker itself
+	// enforces name uniqueness (the second invocation fails with "name
+	// already in use" rather than corrupting anything). The alternative —
+	// holding the lock through the interactive attach — would block a
+	// legitimate second `vibrate` joining this now-live session, which is a
+	// supported workflow (see internal/lockfile).
 	opts.releaseLock()
 
 	return dc.Run(ctx, docker.RunSpec{
@@ -303,10 +310,14 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 	announceMounts(opts.Stderr, userMounts, harnessAutoAddsDirs(pin, extraDirs))
 
 	// Release the setup-phase workspace lock right before the blocking
-	// interactive exec — see the matching comment in runContainer. This is
-	// also the re-entry path for an already-running container (resolveAndLaunch's
-	// "running"/"exited" branches), so a plain `docker exec` re-attach never
-	// stays needlessly locked either.
+	// interactive exec. Unlike runContainer's release (see its comment —
+	// dc.Run there still has to CREATE the container), the container this
+	// call execs into already exists by this point: either already running/
+	// started above, or just created by runContainer's detached `docker run`
+	// on the LoginMode handoff path — so there's no equivalent creation race
+	// here. This is also the re-entry path for an already-running container
+	// (resolveAndLaunch's "running"/"exited" branches), so a plain `docker
+	// exec` re-attach never stays needlessly locked either.
 	opts.releaseLock()
 
 	return dc.Exec(ctx, docker.ExecSpec{

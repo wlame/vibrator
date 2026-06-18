@@ -335,14 +335,23 @@ func (b *ClaudeMemBootstrap) Bootstrap(ctx context.Context, ws Workspace) (map[s
 // `-v name=value` so the SQL can reference them via `:'name'` interpolation
 // — which is psql's quoted-literal substitution, an injection-safe pattern.
 //
-// The DSN itself never becomes a positional argv element: it's parsed into
-// PG* env vars (PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE), which psql
-// picks up automatically, so the credential doesn't appear in argv (visible
-// via ps//proc/*/cmdline on the host). Only a DSN psql itself wouldn't
-// otherwise understand — the rare `key=value` conninfo form, which
-// url.Parse can't decompose — falls back to the legacy positional arg
-// rather than breaking the bootstrap; the argv exposure window returns
-// only for that fallback.
+// The DSN itself normally never becomes a positional argv element: it's
+// parsed into PG* env vars (PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE),
+// which psql picks up automatically, so the credential doesn't appear in
+// argv (visible via ps and /proc/*/cmdline on the host). Two DSN shapes fall
+// back to the legacy positional argument instead of decomposing it:
+//
+//   - Unparseable as a URL — the rare `key=value` conninfo form, which
+//     url.Parse can't decompose.
+//   - Carrying query parameters (e.g. `?sslmode=require&connect_timeout=10`):
+//     the PG*-env fields above have no slot for arbitrary query params, so
+//     decomposing anyway would silently drop them — a connection-security
+//     downgrade (e.g. losing a required sslmode). Falling back to the
+//     positional DSN is the simplest way to guarantee nothing is lost.
+//
+// The argv exposure window returns only for these two fallback cases; see
+// "How forwarded values reach the container, and their residual exposure" in
+// docs/reference/environment-variables.md.
 //
 // stderr goes to os.Stderr unfiltered so psql errors surface to the user
 // (we don't try to interpret psql diagnostics).
@@ -361,7 +370,10 @@ func (b *ClaudeMemBootstrap) runPSQL(ctx context.Context, image, dsn, sql string
 	//                          psql versions)
 	cmd := []string{"psql", "-tAq", "-v", "ON_ERROR_STOP=1"}
 	var env []docker.EnvVar
-	if u, err := url.Parse(dsn); err == nil && u.Host != "" && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+	u, parseErr := url.Parse(dsn)
+	canDecompose := parseErr == nil && u.Host != "" && u.RawQuery == "" &&
+		(u.Scheme == "postgres" || u.Scheme == "postgresql")
+	if canDecompose {
 		pass, _ := u.User.Password()
 		port := u.Port()
 		if port == "" {
@@ -375,8 +387,10 @@ func (b *ClaudeMemBootstrap) runPSQL(ctx context.Context, image, dsn, sql string
 			{Name: "PGDATABASE", Value: strings.TrimPrefix(u.Path, "/")},
 		}
 	} else {
-		// Unparseable (rare key=value conninfo form): keep the legacy
-		// positional DSN rather than breaking the bootstrap.
+		// Unparseable (rare key=value conninfo form), OR a DSN carrying
+		// query params that the PG*-env decomposition can't represent:
+		// keep the legacy positional DSN rather than breaking the
+		// bootstrap or silently dropping connection-security params.
 		cmd = append([]string{"psql", dsn}, cmd[1:]...)
 	}
 	for i := 0; i < len(kv); i += 2 {

@@ -343,6 +343,24 @@ func Run(ctx context.Context, opts Options) error {
 	// 8. Print the launch plan so the user sees what's about to happen.
 	printLaunchPlan(opts.Stderr, wsDir, imageTag, containerName, &pin)
 
+	// 8b. Construct the docker client and confirm the daemon actually answers
+	//     BEFORE any step that can touch docker — including step 9 below.
+	//     runIntegrationReadiness's FixNow path (the claude-mem bootstrap)
+	//     runs its own untimed `docker run` psql calls
+	//     (internal/prereq/claudemem.go), so if the preflight ran after step
+	//     9 (as it used to, alongside the old step-11 client construction), a
+	//     hung daemon (suspended Colima/Docker Desktop VM) would hang inside
+	//     that bootstrap instead of failing here with a clean error. The
+	//     client is reused by resolveAndLaunch at step 11 — no second
+	//     construction.
+	dockerCli, err := docker.NewCLIClient()
+	if err != nil {
+		return err
+	}
+	if err := preflightDaemon(ctx, dockerCli); err != nil {
+		return err
+	}
+
 	// 9. Run integration readiness checks. Warns when an integration the
 	//    workspace uses is not fully configured; offers inline bootstrap for
 	//    fixable gaps. Never aborts the launch — a dormant integration is
@@ -365,15 +383,6 @@ func Run(ctx context.Context, opts Options) error {
 
 	// 11. Decision: container exists → reuse / image exists → run /
 	//     neither → build then run.
-	dockerCli, err := docker.NewCLIClient()
-	if err != nil {
-		return err
-	}
-
-	if err := preflightDaemon(ctx, dockerCli); err != nil {
-		return err
-	}
-
 	return resolveAndLaunch(ctx, dockerCli, dfSpec, wsSpec, pin, wsDir, imageTag, containerName, opts)
 }
 

@@ -84,7 +84,7 @@ func TestDockerRuntime_LogsMissingIsEmpty(t *testing.T) {
 func TestDockerRuntime_BuildRunFlagsNoSecretValuesInArgv(t *testing.T) {
 	// Secret values authored in a TOML integration's [env] table (self-hosted
 	// MCP containers) must never land in the docker CLI's argv (visible via
-	// ps//proc/*/cmdline on the host) — same guarantee internal/docker's
+	// ps and /proc/*/cmdline on the host) — same guarantee internal/docker's
 	// CLIClient.Run makes. Only the env var NAME may appear in the flags;
 	// the VALUE travels out-of-band via the returned EnvVar list, which the
 	// caller feeds into docker.WriteEnvFile (--env-file) and the subprocess

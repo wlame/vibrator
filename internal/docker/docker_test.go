@@ -281,7 +281,7 @@ func TestBuildArgsLabelsAreSorted(t *testing.T) {
 
 func TestRunArgsUseNameOnlyEnv(t *testing.T) {
 	// Secret values must never land in the docker CLI's argv (visible via
-	// ps//proc/*/cmdline on the host) — only the env var NAME goes on the
+	// ps and /proc/*/cmdline on the host) — only the env var NAME goes on the
 	// command line; the VALUE travels through the subprocess environment.
 	args := buildRunArgs(RunSpec{
 		Image: "img",
@@ -347,6 +347,24 @@ func TestWriteEnvFile_ProducesPrivateFileWithPairs(t *testing.T) {
 	cleanup()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("expected env file removed after cleanup, stat err = %v", err)
+	}
+}
+
+func TestWriteEnvFile_RejectsNewlineInValue(t *testing.T) {
+	// A value containing '\n' would silently corrupt the env-file format
+	// (docker reads one NAME=VALUE pair per line) — truncating or unsetting
+	// part of a secret rather than failing loudly. WriteEnvFile must reject
+	// it up front and name the offending variable.
+	path, cleanup, err := WriteEnvFile([]EnvVar{{Name: "MULTILINE_SECRET", Value: "line1\nline2"}})
+	defer cleanup()
+	if err == nil {
+		t.Fatal("expected error for newline in env value, got nil")
+	}
+	if !strings.Contains(err.Error(), "MULTILINE_SECRET") {
+		t.Errorf("error should name the offending variable, got %v", err)
+	}
+	if path != "" {
+		t.Errorf("path = %q, want empty on error", path)
 	}
 }
 

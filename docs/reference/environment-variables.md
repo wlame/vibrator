@@ -46,6 +46,35 @@ Listed by source, in precedence order (later wins on name collision).
     the `CLAUDE_MEM_SERVER_BETA_*` token/IDs above are forwarded into the container — the DSN
     itself is never set as a container env var.
 
+### How forwarded values reach the container, and their residual exposure
+
+`vibrate` never puts secret values on the `docker run`/`docker exec` command line. It passes
+only the variable *name* via `-e NAME` (the docker CLI then resolves it from its own process
+environment) and separately writes `NAME=VALUE` pairs to a private, mode-`0600` `--env-file`
+temp file that's cleaned up after the call. Neither form is visible via `ps` or
+`/proc/*/cmdline` while the command runs.
+
+That said, two residual exposures are inherent and worth knowing about:
+
+- **`docker inspect` shows container env regardless of how it was passed.** Once a container
+  is running, `docker inspect <container> --format '{{.Config.Env}}'` (or the `Config.Env`
+  field in the full JSON) lists every env var baked into it, including secrets forwarded at
+  `docker run` time. This is true for *any* container on the host, not a vibrator-specific
+  gap — env vars are not a confidentiality mechanism once a container exists. Anyone able to
+  run `docker inspect` against your containers can already reach your host process list, so
+  this doesn't introduce a new privilege boundary, but it's worth remembering if you share
+  Docker access with others. Avoiding it entirely would require file-mounted secrets instead
+  of env vars, which vibrator doesn't currently do (tracked as future work, not implemented).
+- **The claude-mem bootstrap's psql DSN has a narrow argv fallback.** The one-shot postgres
+  container that [claude-mem](../integrations/claude-mem.md) bootstrapping uses normally
+  receives the connection details as `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env
+  vars, not as a positional DSN argument. Two DSN shapes fall back to the legacy positional
+  argument instead: the rare `key=value` conninfo form (which isn't a URL `net/url` can parse), and any
+  DSN carrying query parameters (e.g. `?sslmode=require&connect_timeout=10`) — dropping those
+  silently via the env-var decomposition would be a connection-security downgrade, so the
+  simpler and safer choice is to keep the full DSN as a single positional argument in those two
+  cases. The argv-visibility window described above only applies to those two fallback shapes.
+
 ## Baked into the image
 
 Set in the Dockerfile [runtime stage](../lifecycle/build.md#stage-5-runtime); readable

@@ -41,7 +41,7 @@ func TestBuildManifest_FiltersByHarness(t *testing.T) {
 	// Expect alpha (matched explicitly) + beta (matched via *).
 	// Gamma is opencode-only and should be filtered.
 	if len(cc) != 2 || ids[0] != "alpha" || ids[1] != "beta" {
-		t.Errorf("BuildManifest(claudecode) IDs = %v, want [alpha beta]", ids)
+		t.Errorf("BuildManifest(claude-code) IDs = %v, want [alpha beta]", ids)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/wlame/vibrator/internal/harness"
 )
 
 // tomlIntegration is the on-disk schema for a user-defined integration
@@ -263,6 +264,12 @@ func tomlToIntegration(ti *tomlIntegration) (*Integration, error) {
 	for _, w := range ti.Wiring {
 		if w.Harness == "" {
 			return nil, fmt.Errorf("[[wiring]].harness is required")
+		}
+		if w.Harness != "*" {
+			if _, ok := harness.ByID(w.Harness); !ok {
+				return nil, fmt.Errorf("[[wiring]].harness %q is not a known harness (valid: %s, or \"*\")",
+					w.Harness, strings.Join(harness.IDs(), ", "))
+			}
 		}
 		entry := Wiring{Harness: w.Harness, EnvVars: w.Env}
 		if w.MCP != nil {

@@ -4,7 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	_ "github.com/wlame/vibrator/internal/harness/all"
 )
 
 const tomlBookmarks = `
@@ -264,5 +267,77 @@ name = "Second"
 	}
 	if len(LoadErrors()) == 0 {
 		t.Error("expected duplicate-ID load error")
+	}
+}
+
+func TestLoadFromDir_RejectsUnknownWiringHarness(t *testing.T) {
+	resetRegistry()
+	dir := t.TempDir()
+	writeToml(t, dir, "bad.toml", `
+[integration]
+id   = "bad"
+name = "Bad"
+
+[[wiring]]
+harness = "unknown-harness-id"
+
+[wiring.mcp]
+name = "bad-mcp"
+
+[wiring.mcp.http]
+url = "http://example.com/mcp"
+`)
+
+	n, err := LoadFromDir(dir)
+	if err != nil {
+		t.Fatalf("LoadFromDir: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("loaded = %d, want 0 (unknown harness should fail)", n)
+	}
+	errs := LoadErrors()
+	if len(errs) != 1 {
+		t.Fatalf("LoadErrors = %d, want 1", len(errs))
+	}
+	errMsg := errs[0].Error()
+	if !strings.Contains(errMsg, "unknown-harness-id") {
+		t.Errorf("error should name the unknown harness: %v", errMsg)
+	}
+	if !strings.Contains(errMsg, "claude-code") {
+		t.Errorf("error should list valid harnesses: %v", errMsg)
+	}
+}
+
+func TestLoadFromDir_AcceptsWildcardWiring(t *testing.T) {
+	resetRegistry()
+	dir := t.TempDir()
+	writeToml(t, dir, "wild.toml", `
+[integration]
+id   = "wild"
+name = "Wildcard"
+
+[[wiring]]
+harness = "*"
+
+[wiring.mcp]
+name = "wild-mcp"
+
+[wiring.mcp.http]
+url = "http://example.com/mcp"
+`)
+
+	n, err := LoadFromDir(dir)
+	if err != nil {
+		t.Fatalf("LoadFromDir: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("loaded = %d, want 1", n)
+	}
+	integ, ok := Get("wild")
+	if !ok {
+		t.Fatal("Get(wild) should be true")
+	}
+	if len(integ.Wiring) != 1 || integ.Wiring[0].Harness != "*" {
+		t.Errorf("wiring harness = %q, want *", integ.Wiring[0].Harness)
 	}
 }

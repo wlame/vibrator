@@ -109,6 +109,14 @@ func (codex) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
 	return env
 }
 
+// PermissionBypassArgs returns Codex's bypass-approvals flag. Confirmed
+// against `codex --help` (codex-cli 0.142.5, 2026-07): "Skip all
+// confirmation prompts and execute commands without sandboxing." Container
+// is the sandbox, so vibrator runs with it by default.
+func (codex) PermissionBypassArgs() []string {
+	return []string{"--dangerously-bypass-approvals-and-sandbox"}
+}
+
 func init() {
 	harness.Register(New())
 }

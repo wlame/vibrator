@@ -117,6 +117,14 @@ func (pi) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
 	return env
 }
 
+// PermissionBypassArgs returns nil — Pi's core CLI has no permission-prompt
+// system to bypass in the first place (its README states plainly: "No
+// permission popups. Run in a container..."). Third-party extensions add
+// permission gates, but those aren't part of the harness's own CLI surface.
+// If a future core release adds a native bypass flag, return it here and
+// its image gets the YOLO alias for free.
+func (pi) PermissionBypassArgs() []string { return nil }
+
 func init() {
 	harness.Register(New())
 }

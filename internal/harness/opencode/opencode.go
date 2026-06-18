@@ -155,6 +155,15 @@ func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]strin
 	return env
 }
 
+// PermissionBypassArgs returns nil — OpenCode has no single skip-approvals
+// flag as of 2026-07 (checked https://opencode.ai/docs/permissions/). Its
+// closest analogue, --auto, only auto-approves requests that aren't
+// explicitly denied — it doesn't bypass the sandbox or override deny rules
+// the way claude-code's/codex's flags do, so it's not a match for "YOLO
+// mode". If upstream ships a true bypass flag, return it here and its
+// image gets the YOLO alias for free.
+func (opencode) PermissionBypassArgs() []string { return nil }
+
 func init() {
 	harness.Register(New())
 }

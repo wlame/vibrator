@@ -126,6 +126,16 @@ type Harness interface {
 	// configuration (claude-code) return an empty map; the existing
 	// AuthEnvVars surface still does its job.
 	LLMEnvVars(provider, model, baseURL, apiKey string) map[string]string
+
+	// PermissionBypassArgs returns the argv fragment that puts the harness
+	// into its "skip approvals / YOLO" mode — vibrator's default, since the
+	// container is the blast-radius boundary. nil means the harness has no
+	// such flag (no bypass applied, no alias emitted).
+	//
+	// Single source of truth: this drives BOTH the direct-launch argv (bare
+	// `vibrate`) AND the shell alias baked into the image, so the two can
+	// never diverge.
+	PermissionBypassArgs() []string
 }
 
 // MountKind tells the orchestrator how to treat a HostMount's source

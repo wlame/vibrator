@@ -158,6 +158,12 @@ func (claudeCode) ExtraDirArgs(dirs []string) []string {
 // release into `~/.local/bin/claude`.
 func (claudeCode) UpdateCommand() []string { return []string{"claude", "update"} }
 
+// PermissionBypassArgs returns Claude Code's skip-approvals flag. The
+// container is the sandbox, so vibrator runs with it by default.
+func (claudeCode) PermissionBypassArgs() []string {
+	return []string{"--dangerously-skip-permissions"}
+}
+
 func init() {
 	harness.Register(New())
 }

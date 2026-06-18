@@ -218,6 +218,53 @@ func TestExtraDirArgs(t *testing.T) {
 	}
 }
 
+// PermissionBypassArgs is the single source of truth for each harness's
+// "skip approvals / YOLO" flag. Pin the known values so an upstream flag
+// rename (or a harness losing/gaining a bypass flag) is a deliberate edit
+// here, not a silent behavior change picked up at launch time.
+func TestPermissionBypassArgs_KnownValues(t *testing.T) {
+	cc, ok := harness.ByID("claude-code")
+	if !ok {
+		t.Fatal("claude-code harness not registered")
+	}
+	if got := cc.PermissionBypassArgs(); len(got) != 1 || got[0] != "--dangerously-skip-permissions" {
+		t.Errorf("claude-code PermissionBypassArgs = %v, want [--dangerously-skip-permissions]", got)
+	}
+
+	// codex: verified against `codex --help` (codex-cli 0.142.5, 2026-07) —
+	// --dangerously-bypass-approvals-and-sandbox is documented as "Skip all
+	// confirmation prompts and execute commands without sandboxing."
+	cx, ok := harness.ByID("codex")
+	if !ok {
+		t.Fatal("codex harness not registered")
+	}
+	if got := cx.PermissionBypassArgs(); len(got) != 1 || got[0] != "--dangerously-bypass-approvals-and-sandbox" {
+		t.Errorf("codex PermissionBypassArgs = %v, want [--dangerously-bypass-approvals-and-sandbox]", got)
+	}
+
+	// opencode/pi: no confirmed single-flag bypass as of 2026-07 (opencode's
+	// closest analogue, --auto, still honors explicit deny rules and isn't a
+	// full bypass; pi's core CLI has no permission system to bypass at all).
+	// nil is the honest default until upstream ships one.
+	for _, id := range []string{"opencode", "pi"} {
+		h, ok := harness.ByID(id)
+		if !ok {
+			t.Fatalf("harness %q not registered", id)
+		}
+		if got := h.PermissionBypassArgs(); got != nil {
+			t.Errorf("%s PermissionBypassArgs = %v, want nil (no confirmed bypass flag)", id, got)
+		}
+	}
+}
+
+// Every registered harness must implement PermissionBypassArgs without
+// panicking (nil is a valid return).
+func TestRegistry_AllHavePermissionBypassArgs(t *testing.T) {
+	for _, h := range harness.Registry {
+		_ = h.PermissionBypassArgs() // must not panic
+	}
+}
+
 // Specifically pin the launch commands so a rename in upstream
 // projects (e.g., claude → claude-cli) is a deliberate edit, not a
 // silent change.

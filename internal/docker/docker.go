@@ -382,8 +382,8 @@ func (c *CLIClient) Run(ctx context.Context, spec RunSpec) error {
 	// environment, which cmd.Env below supplies. --env-file additionally
 	// supplies the same values via a file docker reads directly, which
 	// keeps working even when something between us and the real docker
-	// client (e.g. a sudo wrapper) strips cmd.Env first. See writeEnvFile.
-	envFile, cleanup, err := writeEnvFile(spec.Env)
+	// client (e.g. a sudo wrapper) strips cmd.Env first. See WriteEnvFile.
+	envFile, cleanup, err := WriteEnvFile(spec.Env)
 	if err != nil {
 		return fmt.Errorf("docker run: %w", err)
 	}
@@ -424,7 +424,7 @@ func (c *CLIClient) Exec(ctx context.Context, spec ExecSpec) error {
 		args = append(args, "--workdir", spec.WorkingDir)
 	}
 
-	envFile, cleanup, err := writeEnvFile(spec.Env)
+	envFile, cleanup, err := WriteEnvFile(spec.Env)
 	if err != nil {
 		return fmt.Errorf("docker exec: %w", err)
 	}
@@ -604,7 +604,7 @@ func (c *CLIClient) Start(ctx context.Context, nameOrID string) error {
 // buildRunArgs is split out so the mock can mirror the same flag-ordering
 // logic for assertion-friendly call traces. It's a thin wrapper over
 // buildRunFlags — split out so CLIClient.Run can splice a --env-file flag
-// in just before the image/cmd tail (see writeEnvFile) without fragile
+// in just before the image/cmd tail (see WriteEnvFile) without fragile
 // string-index math over a fully-assembled slice.
 func buildRunArgs(spec RunSpec) []string {
 	args := buildRunFlags(spec)
@@ -699,7 +699,7 @@ func envPairs(env []EnvVar) []string {
 	return pairs
 }
 
-// writeEnvFile persists env as NAME=VALUE lines in a private (mode 0600)
+// WriteEnvFile persists env as NAME=VALUE lines in a private (mode 0600)
 // temp file and returns its path plus a cleanup func that removes it.
 // Returns ("", a no-op cleanup, nil) when env is empty — callers can call
 // cleanup unconditionally.
@@ -717,7 +717,12 @@ func envPairs(env []EnvVar) []string {
 // sudo (or any other wrapping layer) decided to preserve. Verified live
 // against both `docker run` and `docker exec` in exactly that sudo-wrapped
 // configuration.
-func writeEnvFile(env []EnvVar) (path string, cleanup func(), err error) {
+//
+// Exported so callers outside this package that assemble their own
+// `docker run` argv directly (e.g. integration.DockerRuntime, which has no
+// docker.Client of its own) can reuse this exact mechanism instead of
+// duplicating tempfile-permission-and-cleanup logic.
+func WriteEnvFile(env []EnvVar) (path string, cleanup func(), err error) {
 	noop := func() {}
 	if len(env) == 0 {
 		return "", noop, nil

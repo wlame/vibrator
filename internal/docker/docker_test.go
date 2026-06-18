@@ -319,12 +319,12 @@ func TestEnvArgsNameOnly(t *testing.T) {
 }
 
 func TestWriteEnvFile_ProducesPrivateFileWithPairs(t *testing.T) {
-	// The env-file fallback (see writeEnvFile's doc comment) must produce
+	// The env-file fallback (see WriteEnvFile's doc comment) must produce
 	// a 0600 file so the values aren't world/group-readable on disk even
 	// briefly.
-	path, cleanup, err := writeEnvFile([]EnvVar{{Name: "A", Value: "1"}, {Name: "B", Value: "x=y"}})
+	path, cleanup, err := WriteEnvFile([]EnvVar{{Name: "A", Value: "1"}, {Name: "B", Value: "x=y"}})
 	if err != nil {
-		t.Fatalf("writeEnvFile: %v", err)
+		t.Fatalf("WriteEnvFile: %v", err)
 	}
 	defer cleanup()
 
@@ -351,9 +351,9 @@ func TestWriteEnvFile_ProducesPrivateFileWithPairs(t *testing.T) {
 }
 
 func TestWriteEnvFile_EmptyEnvReturnsNoPath(t *testing.T) {
-	path, cleanup, err := writeEnvFile(nil)
+	path, cleanup, err := WriteEnvFile(nil)
 	if err != nil {
-		t.Fatalf("writeEnvFile: %v", err)
+		t.Fatalf("WriteEnvFile: %v", err)
 	}
 	defer cleanup() // must be safe to call even with nothing written
 	if path != "" {

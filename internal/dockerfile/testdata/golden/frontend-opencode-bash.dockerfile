@@ -283,6 +283,8 @@ ENV VIBRATOR_FEATURES_LIST="node,playwright"
 ENV VIBRATOR_EXTENSIONS_LIST="(none)"
 ENV VIBRATOR_VERSION="test-1.0"
 ENV VIBRATOR_BUILD_ID="2026-05-27-1558"
+ENV VIBRATOR_LAUNCH_BIN="opencode"
+ENV VIBRATOR_YOLO_ARGS=""
 
 # Labels — used by `vibrate variants list` and upgrade workflows.
 LABEL vibrator.version="test-1.0"

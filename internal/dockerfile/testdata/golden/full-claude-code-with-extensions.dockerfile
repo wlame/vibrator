@@ -306,6 +306,8 @@ ENV VIBRATOR_FEATURES_LIST="python,node,ralphex"
 ENV VIBRATOR_EXTENSIONS_LIST="context7,sequential-thinking"
 ENV VIBRATOR_VERSION="test-1.0"
 ENV VIBRATOR_BUILD_ID="2026-05-27-1558"
+ENV VIBRATOR_LAUNCH_BIN="claude"
+ENV VIBRATOR_YOLO_ARGS="--dangerously-skip-permissions"
 
 # Labels — used by `vibrate variants list` and upgrade workflows.
 LABEL vibrator.version="test-1.0"

@@ -9,8 +9,10 @@ set -U fish_history_max 50000 2>/dev/null
 # --- aliases ----------------------------------------------------------
 alias ll 'ls -la'
 
-# See zshrc for the rationale on `--dangerously-skip-permissions`.
-alias claude 'claude --dangerously-skip-permissions'
+# See zshrc for the rationale. Driven by VIBRATOR_YOLO_ARGS.
+if test -n "$VIBRATOR_LAUNCH_BIN"; and test -n "$VIBRATOR_YOLO_ARGS"
+    alias $VIBRATOR_LAUNCH_BIN "$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+end
 alias claude-safe 'command claude'
 
 if type -q nvim

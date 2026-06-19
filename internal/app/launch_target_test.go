@@ -191,3 +191,38 @@ func TestResolveLaunchCmd_NoYoloOmitsBypass(t *testing.T) {
 		}
 	}
 }
+
+// TestYoloEnvVar pins the runtime override yoloEnvVar computes for
+// VIBRATOR_YOLO_ARGS — the env var the in-container shell alias (see
+// templates/shells/{zshrc,bashrc,config.fish}) keys off of. This is a
+// SEPARATE decision from resolveLaunchCmd's argv append above: the argv
+// append affects the direct-launch `vibrate` invocation, while this env var
+// overrides the build-baked ENV default so an already-built image's alias
+// reflects --no-yolo without a rebuild.
+func TestYoloEnvVar(t *testing.T) {
+	cases := []struct {
+		name    string
+		harness string
+		noYolo  bool
+		want    string
+	}{
+		{"claude-code default is bypass args", "claude-code", false, "--dangerously-skip-permissions"},
+		{"claude-code no-yolo blanks it", "claude-code", true, ""},
+		{"codex default is its own bypass args", "codex", false, "--dangerously-bypass-approvals-and-sandbox"},
+		{"codex no-yolo blanks it", "codex", true, ""},
+		{"opencode has no bypass args regardless", "opencode", false, ""},
+		{"unknown harness degrades to empty", "totally-not-a-harness", false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pin := config.Pin{Harness: tc.harness}
+			got := yoloEnvVar(pin, Options{NoYolo: tc.noYolo})
+			if got.Name != "VIBRATOR_YOLO_ARGS" {
+				t.Errorf("Name = %q, want VIBRATOR_YOLO_ARGS", got.Name)
+			}
+			if got.Value != tc.want {
+				t.Errorf("Value = %q, want %q", got.Value, tc.want)
+			}
+		})
+	}
+}

@@ -603,6 +603,22 @@ FROM extensions AS runtime
 	fmt.Fprintf(b, "ENV VIBRATOR_VERSION=%q\n", versionOrDev(spec.VibratorVersion))
 	fmt.Fprintf(b, "ENV VIBRATOR_BUILD_ID=%q\n", buildID)
 
+	// VIBRATOR_LAUNCH_BIN / VIBRATOR_YOLO_ARGS drive the env-driven shell
+	// alias in templates/shells/{zshrc,bashrc,config.fish} — the alias reads
+	// these two vars instead of a hardcoded "claude --dangerously-skip-
+	// permissions", so it can never drift from the harness's own
+	// PermissionBypassArgs (the same source resolveLaunchCmd uses for the
+	// direct-launch path). These are the build-time DEFAULTS; the launch
+	// code overrides VIBRATOR_YOLO_ARGS at `docker run`/`docker exec` time
+	// (via yoloEnvVar in internal/app/launch.go) so --no-yolo blanks the
+	// alias without requiring a rebuild.
+	launchBin := ""
+	if lc := spec.Harness.LaunchCommand(); len(lc) > 0 {
+		launchBin = lc[0]
+	}
+	fmt.Fprintf(b, "ENV VIBRATOR_LAUNCH_BIN=%q\n", launchBin)
+	fmt.Fprintf(b, "ENV VIBRATOR_YOLO_ARGS=%q\n", strings.Join(spec.Harness.PermissionBypassArgs(), " "))
+
 	// Labels — used by `vibrate variants list` and image upgrade workflows.
 	b.WriteString("\n# Labels — used by `vibrate variants list` and upgrade workflows.\n")
 	fmt.Fprintf(b, "LABEL vibrator.version=%q\n", versionOrDev(spec.VibratorVersion))

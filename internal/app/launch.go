@@ -131,6 +131,11 @@ func runContainer(ctx context.Context, dc docker.Client,
 	// (which carries the server URL + runtime mode). Without both, the
 	// entrypoint's claude-mem block stays dormant.
 	envVars = append(envVars, buildClaudeMemEnv(pin)...)
+	// Runtime override of the build-baked VIBRATOR_YOLO_ARGS default (see
+	// dockerfile.writeRuntimeStage). Appended LAST so it always wins,
+	// making --no-yolo take effect on every launch without a rebuild — the
+	// in-container alias reads this var, not the image's baked-in default.
+	envVars = append(envVars, yoloEnvVar(pin, opts))
 
 	labels := map[string]string{
 		"vibrator.managed":   "true",
@@ -329,8 +334,16 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 		// from the docker exec invocation, not from the run-time env.
 		// Re-pass it here so the welcome banner shows the right path
 		// on re-entry to an existing container.
+		//
+		// VIBRATOR_YOLO_ARGS is re-passed for the same reason: re-entering
+		// an already-running container via `docker exec` gets a fresh
+		// shell env from THIS invocation, not from whatever `docker run`
+		// set originally — so a --no-yolo toggled on a later `vibrate`
+		// call against the same live container still overrides the
+		// image's baked-in default.
 		Env: []docker.EnvVar{
 			{Name: "WORKSPACE_PATH", Value: wsDir},
+			yoloEnvVar(pin, opts),
 		},
 		Cmd:    cmd,
 		Stdin:  opts.Stdin,
@@ -389,6 +402,33 @@ func resolveLaunchCmd(pin config.Pin, opts Options, extraDirs []string) ([]strin
 
 	// Unreachable — effective() normalizes "" to LaunchHarness.
 	return nil, fmt.Errorf("unknown launch target %q", opts.LaunchTarget)
+}
+
+// yoloEnvVar computes the runtime VIBRATOR_YOLO_ARGS override that
+// runContainer/execIntoContainer pass via `docker run -e`/`docker exec -e`.
+//
+// The Dockerfile bakes VIBRATOR_YOLO_ARGS as an ENV default equal to the
+// harness's PermissionBypassArgs (see dockerfile.writeRuntimeStage) so the
+// in-container shell alias works out of the box. This function supplies
+// the LAUNCH-TIME value that overrides that default on every run/exec:
+// empty under --no-yolo (blanks the alias, matching resolveLaunchCmd's
+// argv omission on the same flag), otherwise the same joined bypass args
+// the Dockerfile already baked in. Overriding at launch time — rather than
+// only at build time — means toggling --no-yolo takes effect immediately,
+// with no image rebuild required.
+//
+// An unregistered pin.Harness (should never happen post-validation)
+// degrades to an empty value rather than panicking or erroring — the
+// alias is cosmetic; a bad harness ID is caught elsewhere (resolveLaunchCmd
+// on the LaunchHarness path returns a proper error for the actual launch).
+func yoloEnvVar(pin config.Pin, opts Options) docker.EnvVar {
+	val := ""
+	if !opts.NoYolo {
+		if h, ok := harness.ByID(pin.Harness); ok {
+			val = strings.Join(h.PermissionBypassArgs(), " ")
+		}
+	}
+	return docker.EnvVar{Name: "VIBRATOR_YOLO_ARGS", Value: val}
 }
 
 // mountVolumes maps validated user mounts into docker bind mounts. Each

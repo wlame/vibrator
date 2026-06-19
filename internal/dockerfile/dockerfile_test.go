@@ -509,3 +509,44 @@ func TestGenerate_CopiesIntegrationsManifest(t *testing.T) {
 	mustContain(t, s, "COPY integrations.json /etc/vibrator/integrations.json")
 	mustContain(t, s, "RUN mkdir -p /etc/vibrator")
 }
+
+// TestGenerate_BakesYoloEnv pins the two build-time defaults that drive the
+// in-container shell alias: VIBRATOR_LAUNCH_BIN (the harness's own binary,
+// from LaunchCommand()[0]) and VIBRATOR_YOLO_ARGS (the harness's joined
+// PermissionBypassArgs). Baking both from the harness interface — rather
+// than hardcoding "claude --dangerously-skip-permissions" in the shell rc
+// templates — is what lets the alias and the direct-launch argv
+// (resolveLaunchCmd) share a single source of truth and never diverge.
+func TestGenerate_BakesYoloEnv(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "claude-code"),
+		Shell:   "zsh",
+		Profile: "minimal",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	s := string(out)
+	mustContain(t, s, `ENV VIBRATOR_LAUNCH_BIN="claude"`)
+	mustContain(t, s, `ENV VIBRATOR_YOLO_ARGS="--dangerously-skip-permissions"`)
+}
+
+// TestGenerate_BakesYoloEnvEmptyForNoBypassHarness covers a harness with no
+// PermissionBypassArgs (opencode returns nil): VIBRATOR_YOLO_ARGS must bake
+// as an empty string so the shell alias stays suppressed by default, rather
+// than the ENV line being omitted entirely (which would leave the shell
+// variable unset instead of empty — a subtly different condition the rc
+// templates key off of with `-n "$VIBRATOR_YOLO_ARGS"`).
+func TestGenerate_BakesYoloEnvEmptyForNoBypassHarness(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{
+		Harness: hrn(t, "opencode"),
+		Shell:   "zsh",
+		Profile: "minimal",
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	s := string(out)
+	mustContain(t, s, `ENV VIBRATOR_LAUNCH_BIN="opencode"`)
+	mustContain(t, s, `ENV VIBRATOR_YOLO_ARGS=""`)
+}

@@ -68,6 +68,13 @@ type Mock struct {
 	// supersede RunErr.
 	RunHandler func(ctx context.Context, spec RunSpec) error
 
+	// ExecHandler, if non-nil, is called by Exec() before returning ExecErr.
+	// Mirrors RunHandler: gives tests full access to the ExecSpec (including
+	// Env values, which the recorded Calls argv deliberately omits — see
+	// envArgs) so callers can assert exactly what was forwarded into an
+	// already-running container.
+	ExecHandler func(ctx context.Context, spec ExecSpec) error
+
 	// Listed stubs for List* responses, keyed by labelFilter.
 	ListedImages     map[string][]ImageInfo
 	ListedContainers map[string][]ContainerInfo
@@ -174,6 +181,9 @@ func (m *Mock) Exec(ctx context.Context, spec ExecSpec) error {
 	argv = append(argv, spec.Container)
 	argv = append(argv, spec.Cmd...)
 	m.recordCall(argv...)
+	if m.ExecHandler != nil {
+		return m.ExecHandler(ctx, spec)
+	}
 	return m.ExecErr
 }
 

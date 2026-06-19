@@ -91,6 +91,96 @@ func TestExecIntoContainerAnnouncesMounts(t *testing.T) {
 	}
 }
 
+// TestRunContainerCarriesYoloEnvOverride pins that runContainer forwards
+// the runtime VIBRATOR_YOLO_ARGS override in RunSpec.Env — the mechanism
+// that lets --no-yolo blank the in-container alias without a rebuild. Uses
+// RunHandler (not the recorded Calls argv) because the recorded argv only
+// captures env NAMEs (see docker.envArgs) — the VALUE only appears on the
+// full RunSpec the handler receives.
+func TestRunContainerCarriesYoloEnvOverride(t *testing.T) {
+	ws := t.TempDir()
+
+	for _, tc := range []struct {
+		name    string
+		noYolo  bool
+		wantVal string
+	}{
+		{"bypass on by default", false, "--dangerously-skip-permissions"},
+		{"no-yolo blanks it", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dc := docker.NewMock()
+			var captured docker.RunSpec
+			dc.RunHandler = func(_ context.Context, spec docker.RunSpec) error {
+				captured = spec
+				return nil
+			}
+
+			pin := config.Pin{Harness: "claude-code", Shell: "zsh"}
+			opts := Options{LaunchTarget: LaunchHarness, NoYolo: tc.noYolo, Stdout: io.Discard, Stderr: io.Discard}
+
+			err := runContainer(context.Background(), dc, "img:tag", "ctr", ws,
+				workspace.Spec{Harness: "claude-code"}, pin, nil, opts)
+			if err != nil {
+				t.Fatalf("runContainer: %v", err)
+			}
+
+			if !envContains(captured.Env, "VIBRATOR_YOLO_ARGS", tc.wantVal) {
+				t.Errorf("RunSpec.Env = %+v, want VIBRATOR_YOLO_ARGS=%q", captured.Env, tc.wantVal)
+			}
+		})
+	}
+}
+
+// TestExecIntoContainerCarriesYoloEnvOverride mirrors the run-path test
+// above for the re-entry path: exec'ing into an already-running container
+// must ALSO carry the override, so toggling --no-yolo on a second `vibrate`
+// invocation against a live container still takes effect (the alias lives
+// in the shell process env, not baked into a long-lived container state).
+func TestExecIntoContainerCarriesYoloEnvOverride(t *testing.T) {
+	ws := t.TempDir()
+
+	for _, tc := range []struct {
+		name    string
+		noYolo  bool
+		wantVal string
+	}{
+		{"bypass on by default", false, "--dangerously-skip-permissions"},
+		{"no-yolo blanks it", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dc := docker.NewMock()
+			var captured docker.ExecSpec
+			dc.ExecHandler = func(_ context.Context, spec docker.ExecSpec) error {
+				captured = spec
+				return nil
+			}
+
+			pin := config.Pin{Harness: "claude-code", Shell: "zsh"}
+			opts := Options{LaunchTarget: LaunchHarness, NoYolo: tc.noYolo, Stdout: io.Discard, Stderr: io.Discard}
+
+			err := execIntoContainer(context.Background(), dc, "ctr", ws, pin, opts)
+			if err != nil {
+				t.Fatalf("execIntoContainer: %v", err)
+			}
+
+			if !envContains(captured.Env, "VIBRATOR_YOLO_ARGS", tc.wantVal) {
+				t.Errorf("ExecSpec.Env = %+v, want VIBRATOR_YOLO_ARGS=%q", captured.Env, tc.wantVal)
+			}
+		})
+	}
+}
+
+// envContains reports whether env has an entry matching name/value exactly.
+func envContains(env []docker.EnvVar, name, value string) bool {
+	for _, e := range env {
+		if e.Name == name && e.Value == value {
+			return true
+		}
+	}
+	return false
+}
+
 func TestMountVolumesAndDirs(t *testing.T) {
 	rs := []mount.Resolved{
 		{Path: "/data/refs", ReadOnly: true},

@@ -27,11 +27,14 @@ PROMPT='%F{yellow}%n@%m%f %F{green}%~%f %# '
 # --- aliases ----------------------------------------------------------
 alias ll='ls -la'
 
-# Claude is aliased to dangerously-skip-permissions because the whole
-# point of the vibrator sandbox is to give the agent unrestricted
-# access inside an isolated container. `claude-safe` bypasses this if
-# you want the normal flow.
-alias claude='claude --dangerously-skip-permissions'
+# The harness is aliased to its permission-bypass ("YOLO") flag because the
+# whole point of the vibrator sandbox is unrestricted agent access inside an
+# isolated container. Driven by VIBRATOR_YOLO_ARGS (set at build; overridden
+# at launch by --no-yolo → empty). `claude-safe` bypasses this via `command`
+# if you want the normal flow.
+if [ -n "$VIBRATOR_LAUNCH_BIN" ] && [ -n "$VIBRATOR_YOLO_ARGS" ]; then
+    alias "$VIBRATOR_LAUNCH_BIN"="$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+fi
 alias claude-safe='command claude'
 
 # Prefer neovim when available — same muscle memory across hosts.

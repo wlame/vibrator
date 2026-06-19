@@ -16,7 +16,9 @@ import (
 
 func TestResolveLaunchCmd_DefaultLaunchesHarness(t *testing.T) {
 	pin := config.Pin{Harness: "claude-code", Shell: "zsh"}
-	got, err := resolveLaunchCmd(pin, Options{}, nil) // zero-value LaunchTarget
+	// NoYolo isolates this test to the binary-selection concern; the
+	// permission-bypass append is covered by its own tests below.
+	got, err := resolveLaunchCmd(pin, Options{NoYolo: true}, nil) // zero-value LaunchTarget
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
@@ -28,7 +30,9 @@ func TestResolveLaunchCmd_DefaultLaunchesHarness(t *testing.T) {
 
 func TestResolveLaunchCmd_ExplicitHarness(t *testing.T) {
 	pin := config.Pin{Harness: "codex", Shell: "bash"}
-	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness}, nil)
+	// NoYolo isolates this test to the binary-selection concern; the
+	// permission-bypass append is covered by its own tests below.
+	got, err := resolveLaunchCmd(pin, Options{LaunchTarget: LaunchHarness, NoYolo: true}, nil)
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
@@ -131,7 +135,9 @@ func TestResolveLaunchCmdAppendsAddDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveLaunchCmd: %v", err)
 	}
+	// Bypass args land after the harness binary and before add-dir args.
 	want := []string{"/usr/local/bin/claude-exec", "claude",
+		"--dangerously-skip-permissions",
 		"--add-dir", "/data/refs", "--add-dir", "/work/lib"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("got %v, want %v", got, want)
@@ -148,5 +154,40 @@ func TestResolveLaunchCmdShellIgnoresAddDir(t *testing.T) {
 	want := []string{"/usr/local/bin/claude-exec", "/bin/zsh"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// containsSeq reports whether b appears immediately after a somewhere in s.
+func containsSeq(s []string, a, b string) bool {
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] == a && s[i+1] == b {
+			return true
+		}
+	}
+	return false
+}
+
+func TestResolveLaunchCmd_AppendsBypassByDefault(t *testing.T) {
+	pin := config.Pin{Harness: "claude-code"}
+	argv, err := resolveLaunchCmd(pin, Options{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// argv is ["/usr/local/bin/claude-exec", "claude", "--dangerously-skip-permissions"]
+	if !containsSeq(argv, "claude", "--dangerously-skip-permissions") {
+		t.Errorf("argv = %v, want claude followed by the bypass flag", argv)
+	}
+}
+
+func TestResolveLaunchCmd_NoYoloOmitsBypass(t *testing.T) {
+	pin := config.Pin{Harness: "claude-code"}
+	argv, err := resolveLaunchCmd(pin, Options{NoYolo: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range argv {
+		if a == "--dangerously-skip-permissions" {
+			t.Errorf("--no-yolo should omit the bypass flag; argv = %v", argv)
+		}
 	}
 }

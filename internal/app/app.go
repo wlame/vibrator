@@ -182,6 +182,15 @@ type Options struct {
 	// command, including --privileged ones).
 	DinD bool
 
+	// NoYolo suppresses the harness permission-bypass ("YOLO") args on the
+	// launch path and blanks the in-container alias. Bypass is on by default
+	// (the container is the boundary). Persisted to .vb as no_yolo.
+	NoYolo bool
+	// NoYoloSet is true only when the CLI --no-yolo flag was explicitly
+	// passed, so a bare run can't clobber a pinned no_yolo=true (a bool flag
+	// can't tell "unset" from "false"). See applyFlagOverrides.
+	NoYoloSet bool
+
 	// VibratorVersion is the version string baked into the generated
 	// Dockerfile header. Passed through from the CLI layer.
 	VibratorVersion string

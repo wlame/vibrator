@@ -354,6 +354,11 @@ func execIntoContainer(ctx context.Context, dc docker.Client,
 //
 // extraDirs are appended as harness add-dir args on the LaunchHarness path (ignored for the shell).
 //
+// Unless opts.NoYolo is set, the harness's PermissionBypassArgs are appended
+// on the LaunchHarness path, after the harness binary and before the
+// add-dir args, so the container (not a per-prompt approval) is the trust
+// boundary by default.
+//
 // Returns an error only for the harness path, and only when the
 // registered harness has no LaunchCommand (a programming bug — every
 // harness must declare one).
@@ -374,6 +379,9 @@ func resolveLaunchCmd(pin config.Pin, opts Options, extraDirs []string) ([]strin
 		argv := h.LaunchCommand()
 		if len(argv) == 0 {
 			return nil, fmt.Errorf("harness %q declares no LaunchCommand", pin.Harness)
+		}
+		if !opts.NoYolo {
+			argv = append(argv, h.PermissionBypassArgs()...)
 		}
 		argv = append(argv, h.ExtraDirArgs(extraDirs)...)
 		return append([]string{"/usr/local/bin/claude-exec"}, argv...), nil

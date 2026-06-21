@@ -550,3 +550,29 @@ func TestGenerate_BakesYoloEnvEmptyForNoBypassHarness(t *testing.T) {
 	mustContain(t, s, `ENV VIBRATOR_LAUNCH_BIN="opencode"`)
 	mustContain(t, s, `ENV VIBRATOR_YOLO_ARGS=""`)
 }
+
+// TestGenerate_CodexBakedMCPSnapshot pins the codex-only snapshot step that
+// captures the MCP servers extensions baked into ~/.codex/config.toml, as
+// replayable JSON. Without it, the runtime materializer has nothing to
+// replay once the host config mount shadows the baked config.toml. Other
+// harnesses have no equivalent config to snapshot, so the line must not
+// appear for them.
+func TestGenerate_CodexBakedMCPSnapshot(t *testing.T) {
+	codexSpec := dockerfile.Spec{Harness: hrn(t, "codex"), Shell: "zsh", Profile: "backend"}
+	out, err := dockerfile.Generate(codexSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), ".vibrator-codex-baked-mcp.json") {
+		t.Error("codex Dockerfile missing the baked-MCP snapshot step")
+	}
+
+	claudeSpec := dockerfile.Spec{Harness: hrn(t, "claude-code"), Shell: "zsh", Profile: "backend"}
+	cout, err := dockerfile.Generate(claudeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cout), ".vibrator-codex-baked-mcp.json") {
+		t.Error("non-codex Dockerfile should not contain the codex snapshot step")
+	}
+}

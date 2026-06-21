@@ -311,6 +311,7 @@ ENV VIBRATOR_FEATURES_LIST="python,go,node,postgres-client,gh,ralphex"
 ENV VIBRATOR_EXTENSIONS_LIST="(none)"
 ENV VIBRATOR_VERSION="test-1.0"
 ENV VIBRATOR_BUILD_ID="2026-05-27-1558"
+RUN codex mcp list --json > "$HOME/.vibrator-codex-baked-mcp.json" 2>/dev/null || echo '[]' > "$HOME/.vibrator-codex-baked-mcp.json"
 ENV VIBRATOR_LAUNCH_BIN="codex"
 ENV VIBRATOR_YOLO_ARGS="--dangerously-bypass-approvals-and-sandbox"
 

@@ -603,6 +603,15 @@ FROM extensions AS runtime
 	fmt.Fprintf(b, "ENV VIBRATOR_VERSION=%q\n", versionOrDev(spec.VibratorVersion))
 	fmt.Fprintf(b, "ENV VIBRATOR_BUILD_ID=%q\n", buildID)
 
+	// Codex: snapshot the MCP servers the extensions just baked into
+	// ~/.codex/config.toml, as replayable JSON. The runtime materializer
+	// (codex-materialize.sh) re-adds these on top of the user's host config
+	// after seeding it, since the host mount would otherwise shadow them.
+	// `|| echo '[]'` keeps a codex image with zero MCP extensions valid.
+	if spec.Harness.ID() == "codex" {
+		b.WriteString(`RUN codex mcp list --json > "$HOME/.vibrator-codex-baked-mcp.json" 2>/dev/null || echo '[]' > "$HOME/.vibrator-codex-baked-mcp.json"` + "\n")
+	}
+
 	// VIBRATOR_LAUNCH_BIN / VIBRATOR_YOLO_ARGS drive the env-driven shell
 	// alias in templates/shells/{zshrc,bashrc,config.fish} — the alias reads
 	// these two vars instead of a hardcoded "claude --dangerously-skip-

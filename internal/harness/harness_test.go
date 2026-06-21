@@ -186,6 +186,37 @@ func TestUpdateCommand_KnownValues(t *testing.T) {
 	}
 }
 
+// TestSessionPersistenceMounts verifies codex and opencode each declare a
+// MountDirEnsure entry for their session/rollout history directory, so a
+// fresh container still gets a writable dir and history survives container
+// recreation — parity with claude-code's session-persist dirs. Confirmed
+// against the real paths: codex writes rollout jsonl files under
+// ~/.codex/sessions/<year>/<month>/<day>/ (verified by running `codex exec`
+// locally and inspecting the resulting tree); opencode stores session/
+// message/part data under ~/.local/share/opencode/storage (documented at
+// https://deepwiki.com/sst/opencode/2.9-storage-and-database).
+func TestSessionPersistenceMounts(t *testing.T) {
+	cases := []struct {
+		id       string
+		wantHost string
+	}{
+		{"codex", ".codex/sessions"},
+		{"opencode", ".local/share/opencode/storage"},
+	}
+	for _, tc := range cases {
+		h, _ := harness.ByID(tc.id)
+		found := false
+		for _, m := range h.HostMounts(harness.HostMountContext{WorkspaceDir: "/w"}) {
+			if m.HostRel == tc.wantHost && m.Kind == harness.MountDirEnsure {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s HostMounts missing MountDirEnsure %s", tc.id, tc.wantHost)
+		}
+	}
+}
+
 func TestExtraDirArgs(t *testing.T) {
 	dirs := []string{"/data/refs", "/work/lib"}
 

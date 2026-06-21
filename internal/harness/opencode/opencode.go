@@ -65,6 +65,12 @@ func (opencode) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 	return []harness.HostMount{
 		{HostRel: ".local/share/opencode/auth.json", ContainerRel: ".local/share/opencode/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
 		{HostRel: ".config/opencode", ContainerRel: ".config/opencode", ReadOnly: true, Kind: harness.MountDirIfExists},
+		// Message/session storage — MountDirEnsure for cross-recreation
+		// history persistence (parity with claude-code). Confirmed via
+		// documented OpenCode storage layout (message/, part/, session/,
+		// session_diff/ subdirs under this path): see
+		// https://deepwiki.com/sst/opencode/2.9-storage-and-database.
+		{HostRel: ".local/share/opencode/storage", ContainerRel: ".local/share/opencode/storage", Kind: harness.MountDirEnsure},
 	}
 }
 

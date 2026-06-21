@@ -49,6 +49,12 @@ func (pi) AuthEnvVars() []string {
 // Coarse on purpose: Pi's on-disk layout is less settled than the other
 // harnesses', so a single dir mount avoids missing a state file. Split
 // into finer-grained ro/rw mounts once the layout stabilizes.
+//
+// No separate MountDirEnsure session-dir entry (unlike codex/opencode):
+// the coarse ~/.pi rw mount above already covers wherever Pi keeps its
+// session/history state, since it's a single-tree passthrough. Adding a
+// dedicated session-dir entry here would be redundant — don't add one
+// unless Pi's layout splits and this coarse mount narrows.
 func (pi) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 	return []harness.HostMount{
 		{HostRel: ".pi", ContainerRel: ".pi", ReadOnly: false, Kind: harness.MountDirIfExists},

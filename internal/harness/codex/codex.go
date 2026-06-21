@@ -49,6 +49,12 @@ func (codex) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 	return []harness.HostMount{
 		{HostRel: ".codex/auth.json", ContainerRel: ".codex/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
 		{HostRel: ".codex/config.toml", ContainerRel: ".codex/config.toml", ReadOnly: true, Kind: harness.MountFileIfExists},
+		// Session/rollout history — MountDirEnsure so a fresh host still
+		// gets a writable dir and codex history survives container
+		// recreation (parity with claude-code's session-persist dirs).
+		// Confirmed by running `codex exec` locally: rollout jsonl files
+		// land under ~/.codex/sessions/<year>/<month>/<day>/.
+		{HostRel: ".codex/sessions", ContainerRel: ".codex/sessions", Kind: harness.MountDirEnsure},
 	}
 }
 

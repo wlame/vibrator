@@ -72,6 +72,7 @@ Shared with [`build`](build.md). See the [shared table](index.md#spec-resolution
 | `--dind` | `false` | Mount the host's Docker socket so `docker` inside the container drives the host daemon. The `docker` client is always in the image, so toggling this never rebuilds — it just recreates the container with (or without) the socket mounted. See [Docker-in-Docker](../../guides/docker-in-docker.md). |
 | `--mount=PATH[:rw]` | *(none)* | Mount an extra host folder at the same absolute path inside the container. Read-only unless `:rw` is appended. Repeatable. Saved to `.vb` as `mounts = [...]` and re-applied on later runs; for claude-code the folders are also passed to the agent via `--add-dir`. |
 | `--login` | `false` | Run `claude auth login` in the container before launching the harness; opens the auth URL in your host browser and writes auth state back to the host. See [Authentication](../../guides/authentication.md#vibrate-login). |
+| `--no-yolo` | `false` | Run the harness with its normal permission prompts instead of the default skip-approvals ("YOLO") mode. Applies both to the launched agent and its in-container shell alias. Persisted to `.vb` as `no_yolo`; toggling it is a runtime change (no image rebuild). |
 
 ---
 

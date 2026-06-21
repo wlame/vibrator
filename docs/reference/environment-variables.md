@@ -88,6 +88,8 @@ inside the container.
 | `VIBRATOR_EXTENSIONS_LIST` | comma-separated extensions (or `(none)`) |
 | `VIBRATOR_VERSION` | vibrator version (or `dev`) |
 | `VIBRATOR_BUILD_ID` | build sentinel (also at `/etc/vibrator/build`) |
+| `VIBRATOR_LAUNCH_BIN` | the harness's launch binary (e.g. `claude`) — used by the shell rc to build the YOLO alias |
+| `VIBRATOR_YOLO_ARGS` | the harness's permission-bypass args (default), e.g. `--dangerously-skip-permissions`. Overridden at launch to empty by [`--no-yolo`](commands/launch.md); an empty value suppresses the alias |
 | `LANG`, `LC_ALL` | `en_US.UTF-8` |
 | `COLORTERM` | `truecolor` |
 | `PATH`, `NPM_CONFIG_PREFIX`, `UV_TOOL_BIN_DIR`, `UV_PYTHON_INSTALL_DIR` | install/lookup paths |

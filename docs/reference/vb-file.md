@@ -60,6 +60,7 @@ acknowledged_missing = ["node"]
 | `no` | list | — | Feature IDs to disable. |
 | `extensions` | list | — | [Extension](../guides/extensions.md) IDs (scoped to the harness). |
 | `mounts` | list | — | Extra host folders bound into the container at the same absolute path. Each entry is `PATH` or `PATH:rw`; read-only is the default. Written by the `--mount` flag and re-applied on every run. Changing the set recreates the container (the mount set is part of the container identity, not the image fingerprint). For claude-code, mounted folders are also passed to the agent via `--add-dir`. |
+| `no_yolo` | bool | `false` | Disable the default permission-bypass ("YOLO") mode, so the harness shows its normal approval prompts. Written by the [`--no-yolo`](commands/launch.md) flag; a bare run keeps the pinned value (pass `--no-yolo=false` to turn it back on). Runtime-only — toggling never rebuilds the image. |
 
 ## `[llm]` { #llm }
 

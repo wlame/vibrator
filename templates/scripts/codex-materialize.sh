@@ -89,7 +89,15 @@ EOF
 }
 
 # --- 2. Replay baked MCPs (only meaningful after a host seed clobbered them) --
+# Name collisions with a user's own [mcp_servers.<name>] resolve to whichever
+# `codex mcp add` writes last — the user's host entry survives if `codex mcp
+# add` refuses to overwrite it; that host-wins precedence is intentional.
 if [ "$seeded" = true ] && [ -f "$BAKED" ]; then
+    baked_count=$(jq 'length' "$BAKED" 2>/dev/null || echo 0)
+    # A seeded config with an empty baked snapshot means the seed clobbered the
+    # baked MCPs and there is nothing to restore — surface it (verbose) so the
+    # "empty snapshot ate my MCPs" case is diagnosable without a rebuild.
+    [ "$baked_count" = 0 ] && _vb_log "codex: baked MCP snapshot is empty after host seed — no MCPs to restore"
     jq -c '.[]?' "$BAKED" 2>/dev/null | while IFS= read -r obj; do
         printf '%s' "$obj" | _vb_add_mcp
     done

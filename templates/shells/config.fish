@@ -10,10 +10,12 @@ set -U fish_history_max 50000 2>/dev/null
 alias ll 'ls -la'
 
 # See zshrc for the rationale. Driven by VIBRATOR_YOLO_ARGS.
-if test -n "$VIBRATOR_LAUNCH_BIN"; and test -n "$VIBRATOR_YOLO_ARGS"
-    alias $VIBRATOR_LAUNCH_BIN "$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+if test -n "$VIBRATOR_LAUNCH_BIN"
+    if test -n "$VIBRATOR_YOLO_ARGS"
+        alias $VIBRATOR_LAUNCH_BIN "$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+    end
+    alias "$VIBRATOR_LAUNCH_BIN-safe" "command $VIBRATOR_LAUNCH_BIN"
 end
-alias claude-safe 'command claude'
 
 if type -q nvim
     alias vim 'nvim'

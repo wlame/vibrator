@@ -32,10 +32,10 @@ PS1='\[\033[33m\]\u@\h\[\033[0m\] \[\033[32m\]\w\[\033[0m\] \$ '
 alias ll='ls -la'
 
 # See zshrc for the rationale. Driven by VIBRATOR_YOLO_ARGS.
-if [ -n "$VIBRATOR_LAUNCH_BIN" ] && [ -n "$VIBRATOR_YOLO_ARGS" ]; then
-    alias "$VIBRATOR_LAUNCH_BIN"="$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+if [ -n "$VIBRATOR_LAUNCH_BIN" ]; then
+    [ -n "$VIBRATOR_YOLO_ARGS" ] && alias "$VIBRATOR_LAUNCH_BIN"="$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+    alias "${VIBRATOR_LAUNCH_BIN}-safe"="command $VIBRATOR_LAUNCH_BIN"
 fi
-alias claude-safe='command claude'
 
 command -v nvim >/dev/null 2>&1 && { alias vim='nvim'; alias vi='nvim'; }
 

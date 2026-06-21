@@ -30,12 +30,12 @@ alias ll='ls -la'
 # The harness is aliased to its permission-bypass ("YOLO") flag because the
 # whole point of the vibrator sandbox is unrestricted agent access inside an
 # isolated container. Driven by VIBRATOR_YOLO_ARGS (set at build; overridden
-# at launch by --no-yolo → empty). `claude-safe` bypasses this via `command`
-# if you want the normal flow.
-if [ -n "$VIBRATOR_LAUNCH_BIN" ] && [ -n "$VIBRATOR_YOLO_ARGS" ]; then
-    alias "$VIBRATOR_LAUNCH_BIN"="$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+# at launch by --no-yolo → empty). `<bin>-safe` (e.g. claude-safe) bypasses
+# this via `command` if you want the normal flow.
+if [ -n "$VIBRATOR_LAUNCH_BIN" ]; then
+    [ -n "$VIBRATOR_YOLO_ARGS" ] && alias "$VIBRATOR_LAUNCH_BIN"="$VIBRATOR_LAUNCH_BIN $VIBRATOR_YOLO_ARGS"
+    alias "${VIBRATOR_LAUNCH_BIN}-safe"="command $VIBRATOR_LAUNCH_BIN"
 fi
-alias claude-safe='command claude'
 
 # Prefer neovim when available — same muscle memory across hosts.
 command -v nvim >/dev/null 2>&1 && { alias vim='nvim'; alias vi='nvim'; }

@@ -136,6 +136,10 @@ type Harness interface {
 	// `vibrate`) AND the shell alias baked into the image, so the two can
 	// never diverge.
 	PermissionBypassArgs() []string
+
+	// LoginFlow declares how `vibrate --login` authenticates this harness
+	// inside the container, or nil when login is unsupported. See LoginFlow.
+	LoginFlow() *LoginFlow
 }
 
 // MountKind tells the orchestrator how to treat a HostMount's source
@@ -182,6 +186,39 @@ type HostMountContext struct {
 	// that scope state per-project (e.g. Claude Code's projects/<encoded>)
 	// can derive the encoded name from it as a pure string operation.
 	WorkspaceDir string
+}
+
+// LoginFlow, when non-nil, declares how `vibrate --login` authenticates a
+// harness inside the container. nil means login is unsupported for the
+// harness (the data-driven replacement for the old hardcoded gate).
+type LoginFlow struct {
+	// Command is the interactive argv run in the container to start auth,
+	// e.g. []string{"claude","auth","login"}.
+	Command []string
+
+	// URLMarker is the stdout prefix the CLI prints just before the auth
+	// URL; the orchestrator scrapes the URL after it and opens the host
+	// browser (the container has none). "" disables scraping.
+	URLMarker string
+
+	// Writeback, when non-nil, copies auth state from a container file back
+	// to a host file after login — needed when the host auth file is mounted
+	// read-only (claude-code). nil means the auth file is mounted read-write
+	// so login persists to the host directly.
+	Writeback *AuthWriteback
+}
+
+// AuthWriteback describes a post-login container→host auth-state merge.
+type AuthWriteback struct {
+	// ContainerRel / HostRel are home-relative paths (forward slashes),
+	// matching the HostMount convention.
+	ContainerRel string
+	HostRel      string
+
+	// Fields are the JSON top-level keys merged from container into host.
+	// Empty merges every top-level key. A host file that exists but fails to
+	// parse aborts the writeback (never overwrite a config with a partial).
+	Fields []string
 }
 
 // Registry holds every built-in harness, ordered for display in the wizard.

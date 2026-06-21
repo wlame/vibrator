@@ -170,6 +170,16 @@ func (opencode) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]strin
 // image gets the YOLO alias for free.
 func (opencode) PermissionBypassArgs() []string { return nil }
 
+// LoginFlow returns nil: `vibrate --login` is not wired for OpenCode. Its
+// auth is a native `/connect` TUI flow (provider picker + paste-token/OAuth),
+// which doesn't match the "run a login command, scrape a printed URL" model.
+// Workaround: authenticate on the host (`opencode auth login`) —
+// ~/.local/share/opencode/auth.json is mounted read-write, so the container
+// picks it up. To enable: verify the in-container flow's exact prompts and
+// output against a real account, then return a populated LoginFlow with
+// Writeback nil (the mount is rw).
+func (opencode) LoginFlow() *harness.LoginFlow { return nil }
+
 func init() {
 	harness.Register(New())
 }

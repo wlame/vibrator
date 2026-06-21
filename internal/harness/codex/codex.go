@@ -123,6 +123,15 @@ func (codex) PermissionBypassArgs() []string {
 	return []string{"--dangerously-bypass-approvals-and-sandbox"}
 }
 
+// LoginFlow returns nil: `vibrate --login` is not wired for Codex. Codex's
+// auth mechanics don't match the URL-scrape model (localhost-callback OAuth,
+// `--device-auth`, or `--with-api-key` from stdin). Workaround: authenticate
+// on the host (`codex login`) — ~/.codex/auth.json is mounted read-write, so
+// the container picks it up. To enable: verify the in-container auth command
+// and its URL/output format against a real account, then return a populated
+// LoginFlow with Writeback nil (the mount is rw).
+func (codex) LoginFlow() *harness.LoginFlow { return nil }
+
 func init() {
 	harness.Register(New())
 }

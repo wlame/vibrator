@@ -164,6 +164,25 @@ func (claudeCode) PermissionBypassArgs() []string {
 	return []string{"--dangerously-skip-permissions"}
 }
 
+// LoginFlow declares Claude Code's browser-OAuth login. The host
+// ~/.claude.json is mounted read-only (the entrypoint merges it), so login
+// state must be written back to the host after authenticating.
+func (claudeCode) LoginFlow() *harness.LoginFlow {
+	return &harness.LoginFlow{
+		Command:   []string{"claude", "auth", "login"},
+		URLMarker: "If the browser didn't open, visit: ",
+		Writeback: &harness.AuthWriteback{
+			ContainerRel: ".claude.json",
+			HostRel:      ".claude.json",
+			Fields: []string{
+				"oauthAccount", "userID", "hasCompletedOnboarding",
+				"lastOnboardingVersion", "subscriptionNoticeCount",
+				"hasAvailableSubscription", "s1mAccessCache",
+			},
+		},
+	}
+}
+
 func init() {
 	harness.Register(New())
 }

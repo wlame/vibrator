@@ -1,6 +1,7 @@
 package harness_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -317,5 +318,56 @@ func TestLaunchCommand_KnownValues(t *testing.T) {
 				t.Errorf("LaunchCommand[0] = %v, want first element %q", argv, want)
 			}
 		})
+	}
+}
+
+// TestLoginFlow_ClaudeCodeKnownValues pins claude-code's LoginFlow to the
+// exact values previously hardcoded in internal/app/launch.go
+// (claudeAuthURLMarker + authFields), copied verbatim so Task 2's move
+// into the harness package can't silently drift the strings.
+func TestLoginFlow_ClaudeCodeKnownValues(t *testing.T) {
+	cc, _ := harness.ByID("claude-code")
+	f := cc.LoginFlow()
+	if f == nil {
+		t.Fatal("claude-code LoginFlow is nil, want populated")
+	}
+	if len(f.Command) != 3 || f.Command[0] != "claude" || f.Command[1] != "auth" || f.Command[2] != "login" {
+		t.Errorf("Command = %v, want [claude auth login]", f.Command)
+	}
+	if f.URLMarker != "If the browser didn't open, visit: " {
+		t.Errorf("URLMarker = %q", f.URLMarker)
+	}
+	if f.Writeback == nil {
+		t.Fatal("claude-code Writeback is nil, want populated")
+	}
+	if f.Writeback.ContainerRel != ".claude.json" || f.Writeback.HostRel != ".claude.json" {
+		t.Errorf("Writeback paths = %q/%q", f.Writeback.ContainerRel, f.Writeback.HostRel)
+	}
+	wantFields := []string{
+		"oauthAccount", "userID", "hasCompletedOnboarding", "lastOnboardingVersion",
+		"subscriptionNoticeCount", "hasAvailableSubscription", "s1mAccessCache",
+	}
+	if !slices.Equal(f.Writeback.Fields, wantFields) {
+		t.Errorf("Writeback.Fields = %v, want %v", f.Writeback.Fields, wantFields)
+	}
+}
+
+// TestLoginFlow_NonClaudeAreNil documents that --login is only wired for
+// claude-code today; the other three harnesses return nil until their
+// in-container auth flow is verified (see each harness's LoginFlow doc
+// comment for the specific blocker).
+func TestLoginFlow_NonClaudeAreNil(t *testing.T) {
+	for _, id := range []string{"codex", "opencode", "pi"} {
+		h, _ := harness.ByID(id)
+		if f := h.LoginFlow(); f != nil {
+			t.Errorf("%s LoginFlow = %+v, want nil", id, f)
+		}
+	}
+}
+
+// Every registered harness implements LoginFlow nil-safely.
+func TestRegistry_AllHaveLoginFlow(t *testing.T) {
+	for _, h := range harness.Registry {
+		_ = h.LoginFlow() // must not panic; nil is valid
 	}
 }

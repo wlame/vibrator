@@ -131,6 +131,12 @@ func (pi) LLMEnvVars(provider, _, baseURL, apiKey string) map[string]string {
 // its image gets the YOLO alias for free.
 func (pi) PermissionBypassArgs() []string { return nil }
 
+// LoginFlow returns nil: Pi has no documented browser-auth flow to wire
+// `vibrate --login` against — it's BYOK via env vars (see AuthEnvVars) or
+// ~/.pi config, not an interactive OAuth login command. nil until upstream
+// ships one.
+func (pi) LoginFlow() *harness.LoginFlow { return nil }
+
 func init() {
 	harness.Register(New())
 }

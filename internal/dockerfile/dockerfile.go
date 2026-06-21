@@ -295,7 +295,22 @@ RUN chmod 0755 /opt/vibrator/entrypoint.sh
 # it does on each invocation.
 COPY scripts/claude-exec.sh /usr/local/bin/claude-exec
 RUN chmod 0755 /usr/local/bin/claude-exec
+`)
 
+	// --- codex config materializer (codex-gated) ---------------------------
+	// Reconciles the host config.host.toml sidecar (added by the --mount
+	// flip) with vibrator's baked MCP servers at container startup. Only
+	// codex images need it; entrypoint.sh gates the call on both
+	// VIBRATOR_HARNESS and this file's presence. See
+	// scripts/codex-materialize.sh for the reconciliation logic.
+	if spec.Harness.ID() == "codex" {
+		b.WriteString(`
+COPY scripts/codex-materialize.sh /usr/local/bin/codex-materialize
+RUN chmod 0755 /usr/local/bin/codex-materialize
+`)
+	}
+
+	b.WriteString(`
 # --- integrations manifest (per-harness wiring; data-driven probes) ---
 # Generated at build time from the integrations registry filtered by
 # the harness being built. claude-exec.sh reads this file on every

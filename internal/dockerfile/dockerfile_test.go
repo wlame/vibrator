@@ -576,3 +576,26 @@ func TestGenerate_CodexBakedMCPSnapshot(t *testing.T) {
 		t.Error("non-codex Dockerfile should not contain the codex snapshot step")
 	}
 }
+
+// TestGenerate_CodexMaterializeCopy pins the codex-only COPY of
+// codex-materialize.sh (the runtime script that reconciles the host
+// config.host.toml sidecar with vibrator's baked MCP servers). Other
+// harnesses have no codex config to materialize, so the COPY must not
+// appear for them.
+func TestGenerate_CodexMaterializeCopy(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "codex"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "codex-materialize") {
+		t.Error("codex Dockerfile missing the materializer COPY")
+	}
+
+	cout, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "claude-code"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cout), "codex-materialize") {
+		t.Error("non-codex Dockerfile should not COPY the codex materializer")
+	}
+}

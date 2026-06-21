@@ -485,6 +485,16 @@ if command -v jq >/dev/null 2>&1 && [ -f "$CONTAINER_SETTINGS" ]; then
     fi
 fi
 
+# --- 9. Codex config materialization ----------------------------------------
+# Codex mounts the host config.toml to a .host sidecar; reconcile it with the
+# vibrator-baked MCP servers here (see codex-materialize.sh). Gated on the
+# harness + the script's presence (only codex images ship it), so this is a
+# silent no-op on every other harness.
+if [ "$VIBRATOR_HARNESS" = "codex" ] && [ -x /usr/local/bin/codex-materialize ]; then
+    /usr/local/bin/codex-materialize
+    log "codex: config materialized"
+fi
+
 # --- readiness signal -------------------------------------------------------
 # Drop a sentinel file so `vibrate --login` can poll-wait for the full
 # entrypoint setup (config merge, rules copy, settings merge) to finish

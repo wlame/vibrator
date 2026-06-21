@@ -24,5 +24,7 @@ core
 .idea/
 .vscode/
 
-# Manual build-matrix testing scratch dir
-test-scenarios/
+# Manual build-matrix testing scratch dir (configs/results/logs stay local;
+# the codex-materialize gate is a real deliverable and is tracked below).
+test-scenarios/*
+!test-scenarios/codex-materialize-test.sh

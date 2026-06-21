@@ -67,7 +67,7 @@ func installLaunchStubs(t *testing.T) *launchProbe {
 		p.entrypointWaited = true
 		return nil
 	}
-	runLoginStepFn = func(_ context.Context, _ docker.Client, _, _ string, _ Options) error {
+	runLoginStepFn = func(_ context.Context, _ docker.Client, _, _ string, _ *harness.LoginFlow, _ Options) error {
 		p.loggedIn = true
 		return nil
 	}

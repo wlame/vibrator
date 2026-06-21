@@ -576,7 +576,7 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 	case "running":
 		fmt.Fprintln(opts.Stderr, "→ Container already running — exec'ing in")
 		if opts.LoginMode {
-			if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+			if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), loginFlowFor(pin), opts); err != nil {
 				fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
 			}
 		}
@@ -588,7 +588,7 @@ func resolveAndLaunch(ctx context.Context, dc docker.Client,
 			return fmt.Errorf("docker start: %w", err)
 		}
 		if opts.LoginMode {
-			if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+			if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), loginFlowFor(pin), opts); err != nil {
 				fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
 			}
 		}
@@ -632,7 +632,7 @@ func loginLaunch(ctx context.Context, dc docker.Client, containerName, wsDir str
 	if err := waitForEntrypointFn(ctx, dc, containerName); err != nil {
 		fmt.Fprintf(opts.Stderr, "⚠  entrypoint readiness check timed out: %v\n", err)
 	}
-	if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), opts); err != nil {
+	if err := runLoginStepFn(ctx, dc, containerName, defaultUsername(opts), loginFlowFor(pin), opts); err != nil {
 		fmt.Fprintf(opts.Stderr, "⚠  login step failed: %v\n", err)
 	}
 	if err := execIntoContainerFn(ctx, dc, containerName, wsDir, pin, opts); err != nil {
@@ -908,6 +908,17 @@ func defaultUsername(opts Options) string {
 		return opts.Username
 	}
 	return HostUsername()
+}
+
+// loginFlowFor resolves the pin harness's LoginFlow, or nil if the harness
+// isn't registered or declares no login. runLoginStep treats a nil flow as
+// a defensive no-op.
+func loginFlowFor(pin config.Pin) *harness.LoginFlow {
+	h, ok := harness.ByID(pin.Harness)
+	if !ok {
+		return nil
+	}
+	return h.LoginFlow()
 }
 
 // defaultUID resolves the host UID to bake in.

@@ -3,12 +3,16 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/wlame/vibrator/internal/config"
 	"github.com/wlame/vibrator/internal/docker"
+	"github.com/wlame/vibrator/internal/harness"
 	"github.com/wlame/vibrator/internal/mount"
 	"github.com/wlame/vibrator/internal/workspace"
 )
@@ -199,5 +203,213 @@ func TestMountVolumesAndDirs(t *testing.T) {
 	dirs := mountDirs(rs)
 	if len(dirs) != 2 || dirs[0] != "/data/refs" || dirs[1] != "/work/lib" {
 		t.Fatalf("dirs = %v", dirs)
+	}
+}
+
+// ─── authURLWriter / writebackAuthToHost (LoginFlow-driven) ────────────────
+
+// The URL scraper must honor an arbitrary marker (proves it's not hardcoded
+// to claude's string).
+func TestAuthURLWriter_ParameterizedMarker(t *testing.T) {
+	var out bytes.Buffer
+	w := newAuthURLWriter(&out, "GO HERE: ")
+	// openBrowser is best-effort/non-blocking; we only assert passthrough +
+	// that scraping doesn't corrupt the stream.
+	in := "please auth\nGO HERE: https://example.com/device xyz\ndone\n"
+	if _, err := w.Write([]byte(in)); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != in {
+		t.Errorf("passthrough altered: %q", out.String())
+	}
+}
+
+// execHandlerReturning builds an ExecHandler that writes body to Stdout for
+// any `cat` invocation — the shape writebackAuthToHost uses to read the
+// container's auth file.
+func execHandlerReturning(body string) func(context.Context, docker.ExecSpec) error {
+	return func(_ context.Context, spec docker.ExecSpec) error {
+		if len(spec.Cmd) > 0 && spec.Cmd[0] == "cat" {
+			_, _ = spec.Stdout.Write([]byte(body))
+		}
+		return nil
+	}
+}
+
+// Fields=["a"] merges only the named field, leaving other container keys
+// out of the host file.
+func TestWritebackAuthToHost_NamedFieldsMergesOnlyThose(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	dc := docker.NewMock()
+	dc.ExecHandler = execHandlerReturning(`{"a":"1","b":"2"}`)
+
+	wb := &harness.AuthWriteback{
+		ContainerRel: ".claude.json",
+		HostRel:      ".claude.json",
+		Fields:       []string{"a"},
+	}
+	if err := writebackAuthToHost(context.Background(), dc, "ctr", "alice", wb); err != nil {
+		t.Fatalf("writebackAuthToHost: %v", err)
+	}
+
+	got := readJSONFile(t, filepath.Join(tmp, ".claude.json"))
+	if _, ok := got["a"]; !ok {
+		t.Errorf("expected field %q to be merged, got %v", "a", got)
+	}
+	if _, ok := got["b"]; ok {
+		t.Errorf("field %q should NOT have been merged when Fields=[%q], got %v", "b", "a", got)
+	}
+}
+
+// Fields=nil merges every top-level key from the container file.
+func TestWritebackAuthToHost_EmptyFieldsMergesAllKeys(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	dc := docker.NewMock()
+	dc.ExecHandler = execHandlerReturning(`{"a":"1","b":"2"}`)
+
+	wb := &harness.AuthWriteback{
+		ContainerRel: ".claude.json",
+		HostRel:      ".claude.json",
+		// Fields intentionally nil.
+	}
+	if err := writebackAuthToHost(context.Background(), dc, "ctr", "alice", wb); err != nil {
+		t.Fatalf("writebackAuthToHost: %v", err)
+	}
+
+	got := readJSONFile(t, filepath.Join(tmp, ".claude.json"))
+	for _, key := range []string{"a", "b"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf("expected field %q to be merged when Fields is empty, got %v", key, got)
+		}
+	}
+}
+
+// A pre-existing host file that fails to parse aborts the writeback entirely
+// (no clobber) — silently continuing would erase every other host setting.
+func TestWritebackAuthToHost_InvalidHostFileAborts(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	hostPath := filepath.Join(tmp, ".claude.json")
+	const invalid = "{not valid json"
+	mustWriteFile(t, hostPath, invalid)
+
+	dc := docker.NewMock()
+	dc.ExecHandler = execHandlerReturning(`{"a":"1"}`)
+
+	wb := &harness.AuthWriteback{
+		ContainerRel: ".claude.json",
+		HostRel:      ".claude.json",
+		Fields:       []string{"a"},
+	}
+	if err := writebackAuthToHost(context.Background(), dc, "ctr", "alice", wb); err == nil {
+		t.Fatal("expected an error when the host file is invalid JSON, got nil")
+	}
+
+	data, err := os.ReadFile(hostPath)
+	if err != nil {
+		t.Fatalf("re-read host file: %v", err)
+	}
+	if string(data) != invalid {
+		t.Errorf("host file was modified despite invalid JSON: got %q, want unchanged %q", data, invalid)
+	}
+}
+
+// readJSONFile parses path as a JSON object, failing the test on any error.
+func readJSONFile(t *testing.T, path string) map[string]json.RawMessage {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	return got
+}
+
+// TestRunLoginStep_ClaudeCodeFlow_MatchesLegacyBehavior drives runLoginStep
+// end to end through claude-code's real, registered harness.LoginFlow (not a
+// hand-built fixture) to pin the byte-identical invariant: the exec argv, the
+// URL marker, and the writeback field set must be exactly what the old
+// hardcoded claudeAuthURLMarker/authFields machinery produced.
+func TestRunLoginStep_ClaudeCodeFlow_MatchesLegacyBehavior(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	flow := loginFlowFor(config.Pin{Harness: "claude-code"})
+	if flow == nil {
+		t.Fatal("loginFlowFor(claude-code) = nil, want a populated LoginFlow")
+	}
+
+	var loginCmd []string
+	dc := docker.NewMock()
+	dc.ExecHandler = func(_ context.Context, spec docker.ExecSpec) error {
+		if len(spec.Cmd) > 0 && spec.Cmd[0] == "cat" {
+			// The container's ~/.claude.json — includes an extra field that
+			// must NOT be merged, proving the field set is still scoped.
+			_, _ = spec.Stdout.Write([]byte(`{
+				"oauthAccount": "acct-1",
+				"userID": "u-1",
+				"hasCompletedOnboarding": true,
+				"lastOnboardingVersion": "1.2.3",
+				"subscriptionNoticeCount": 2,
+				"hasAvailableSubscription": false,
+				"s1mAccessCache": {"ok": true},
+				"someUnrelatedSetting": "must-not-leak"
+			}`))
+			return nil
+		}
+		// The login exec itself — record the argv and emit the legacy URL line
+		// through spec.Stdout to prove the marker scrape still fires.
+		loginCmd = append([]string(nil), spec.Cmd...)
+		_, _ = spec.Stdout.Write([]byte("If the browser didn't open, visit: https://example.com/oauth\n"))
+		return nil
+	}
+
+	var stdout, stderr bytes.Buffer
+	opts := Options{Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr}
+
+	if err := runLoginStep(context.Background(), dc, "ctr", "alice", flow, opts); err != nil {
+		t.Fatalf("runLoginStep: %v", err)
+	}
+
+	// Same exec argv as the old hardcoded []string{"claude", "auth", "login"}.
+	wantCmd := []string{"claude", "auth", "login"}
+	if len(loginCmd) != len(wantCmd) {
+		t.Fatalf("login exec argv = %v, want %v", loginCmd, wantCmd)
+	}
+	for i, c := range wantCmd {
+		if loginCmd[i] != c {
+			t.Fatalf("login exec argv = %v, want %v", loginCmd, wantCmd)
+		}
+	}
+
+	// The marker line still reaches the user's stdout (scraping is passthrough).
+	if !strings.Contains(stdout.String(), "If the browser didn't open, visit: https://example.com/oauth") {
+		t.Errorf("expected the auth URL line to pass through to stdout, got: %q", stdout.String())
+	}
+
+	// Same 7 writeback fields as the old hardcoded authFields — no more, no less.
+	got := readJSONFile(t, filepath.Join(tmp, ".claude.json"))
+	wantFields := []string{
+		"oauthAccount", "userID", "hasCompletedOnboarding",
+		"lastOnboardingVersion", "subscriptionNoticeCount",
+		"hasAvailableSubscription", "s1mAccessCache",
+	}
+	for _, f := range wantFields {
+		if _, ok := got[f]; !ok {
+			t.Errorf("expected writeback field %q to be merged, got %v", f, got)
+		}
+	}
+	if _, ok := got["someUnrelatedSetting"]; ok {
+		t.Errorf("unrelated field leaked into the host writeback: %v", got)
+	}
+	if len(got) != len(wantFields) {
+		t.Errorf("host file has %d fields, want exactly %d (%v): got %v", len(got), len(wantFields), wantFields, got)
 	}
 }

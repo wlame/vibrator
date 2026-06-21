@@ -922,17 +922,21 @@ func waitForEntrypoint(ctx context.Context, dc docker.Client, containerName stri
 	return fmt.Errorf("timed out waiting for entrypoint ready signal in %s", containerName)
 }
 
-// claudeAuthURLMarker is the prefix claude auth login prints before the
-// URL the user should open. We scan for this in the docker exec output.
-const claudeAuthURLMarker = "If the browser didn't open, visit: "
-
-// authURLWriter wraps an io.Writer and scans for the claude auth URL.
-// When found, it opens it in the host browser (best-effort, non-blocking).
-// All bytes pass through unchanged so the user still sees the full output.
+// authURLWriter wraps an io.Writer and scans for a harness-declared auth URL
+// marker (harness.LoginFlow.URLMarker). When found, it opens the URL in the
+// host browser (best-effort, non-blocking). All bytes pass through unchanged
+// so the user still sees the full output.
 type authURLWriter struct {
-	w    io.Writer
-	buf  []byte
-	done bool
+	w      io.Writer
+	marker string
+	buf    []byte
+	done   bool
+}
+
+// newAuthURLWriter constructs an authURLWriter that scrapes for marker
+// (e.g. "If the browser didn't open, visit: ") in whatever passes through w.
+func newAuthURLWriter(w io.Writer, marker string) *authURLWriter {
+	return &authURLWriter{w: w, marker: marker}
 }
 
 func (a *authURLWriter) Write(p []byte) (int, error) {
@@ -941,8 +945,8 @@ func (a *authURLWriter) Write(p []byte) (int, error) {
 		return n, err
 	}
 	a.buf = append(a.buf, p...)
-	if idx := bytes.Index(a.buf, []byte(claudeAuthURLMarker)); idx >= 0 {
-		rest := a.buf[idx+len(claudeAuthURLMarker):]
+	if idx := bytes.Index(a.buf, []byte(a.marker)); idx >= 0 {
+		rest := a.buf[idx+len(a.marker):]
 		if end := bytes.IndexAny(rest, " \r\n\t"); end >= 0 {
 			url := strings.TrimSpace(string(rest[:end]))
 			if strings.HasPrefix(url, "https://") {
@@ -978,71 +982,91 @@ func openBrowser(url string) {
 	_ = exec.Command(cmd, args...).Start()
 }
 
-// runLoginStep runs `claude auth login` interactively (stdin connected, no TTY
-// so stdout stays a pipe Go can scan). It intercepts the OAuth URL and opens
-// the host browser, then writes the resulting auth state back to the host's
-// ~/.claude.json so future launches are pre-authenticated without --login.
+// runLoginStep runs a harness's declared login flow (harness.LoginFlow)
+// interactively (stdin connected, no TTY so stdout stays a pipe Go can scan).
+// When the flow declares a URLMarker, it intercepts the OAuth URL and opens
+// the host browser; when it declares a Writeback, it copies the resulting
+// auth state back to the host so future launches are pre-authenticated
+// without --login.
+//
+// flow == nil means the harness has no login flow wired — a defensive
+// no-op, since validateLoginTarget's gate is expected to keep --login from
+// reaching a harness without one.
 //
 // --login always runs the auth flow. We deliberately do NOT short-circuit when
 // the host is already authenticated: passing --login is an explicit request to
 // (re)authenticate — e.g. to switch accounts — so we honour it every time.
 // Subsequent launches without --login still pick up the saved auth via the
 // entrypoint's host→container config merge.
-func runLoginStep(ctx context.Context, dc docker.Client, containerName, containerUser string, opts Options) error {
-	fmt.Fprintln(opts.Stderr, "→ Running claude auth login (browser will open automatically)…")
+func runLoginStep(ctx context.Context, dc docker.Client, containerName, containerUser string,
+	flow *harness.LoginFlow, opts Options,
+) error {
+	if flow == nil {
+		return nil // gate guarantees non-nil before login; defensive no-op
+	}
 
-	err := dc.Exec(ctx, docker.ExecSpec{
+	fmt.Fprintf(opts.Stderr, "→ Running %s (browser will open automatically)…\n", strings.Join(flow.Command, " "))
+
+	stdout := opts.Stdout
+	if flow.URLMarker != "" {
+		stdout = newAuthURLWriter(opts.Stdout, flow.URLMarker)
+	}
+	if err := dc.Exec(ctx, docker.ExecSpec{
 		Container:   containerName,
 		Interactive: true,
 		NoTTY:       true, // -i only; stdout is a pipe we can scan for the URL
-		Cmd:         []string{"claude", "auth", "login"},
+		Cmd:         flow.Command,
 		Stdin:       opts.Stdin,
-		Stdout:      &authURLWriter{w: opts.Stdout},
+		Stdout:      stdout,
 		Stderr:      opts.Stderr,
-	})
-	if err != nil {
-		return fmt.Errorf("claude auth login: %w", err)
+	}); err != nil {
+		return fmt.Errorf("%s: %w", strings.Join(flow.Command, " "), err)
 	}
 
-	fmt.Fprintln(opts.Stderr, "→ Login complete — saving auth state to host ~/.claude.json…")
-	if wbErr := writebackAuthToHost(ctx, dc, containerName, containerUser); wbErr != nil {
-		// Non-fatal: auth still works for this session; it just won't persist.
-		fmt.Fprintf(opts.Stderr, "⚠  auth writeback failed (auth works this session only): %v\n", wbErr)
+	if flow.Writeback != nil {
+		fmt.Fprintln(opts.Stderr, "→ Login complete — saving auth state to host…")
+		if wbErr := writebackAuthToHost(ctx, dc, containerName, containerUser, flow.Writeback); wbErr != nil {
+			// Non-fatal: auth still works for this session; it just won't persist.
+			fmt.Fprintf(opts.Stderr, "⚠  auth writeback failed (auth works this session only): %v\n", wbErr)
+		}
 	}
 	return nil
 }
 
-// writebackAuthToHost reads the container's ~/.claude.json and merges the
-// auth/onboarding fields back into the host's ~/.claude.json. This makes
-// the login state persist across container recreations: on the next launch
-// the entrypoint merges the host config into the container config (D1 mount),
-// so no re-authentication is needed.
-func writebackAuthToHost(ctx context.Context, dc docker.Client, containerName, containerUser string) error {
+// writebackAuthToHost reads the container's auth file (wb.ContainerRel, under
+// /home/<containerUser>) and merges the fields it declares back into the
+// host's copy (wb.HostRel, under the host's home dir). This makes the login
+// state persist across container recreations: on the next launch the
+// entrypoint merges the host config into the container config (D1 mount), so
+// no re-authentication is needed.
+func writebackAuthToHost(ctx context.Context, dc docker.Client, containerName, containerUser string,
+	wb *harness.AuthWriteback,
+) error {
 	hostHome, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("resolve home: %w", err)
 	}
-	hostConfigPath := filepath.Join(hostHome, ".claude.json")
+	hostConfigPath := filepath.Join(hostHome, wb.HostRel)
 
-	// Read the container's ~/.claude.json.
+	// Read the container's auth file.
 	var containerBuf bytes.Buffer
 	if err := dc.Exec(ctx, docker.ExecSpec{
 		Container: containerName,
-		Cmd:       []string{"cat", "/home/" + containerUser + "/.claude.json"},
+		Cmd:       []string{"cat", "/home/" + containerUser + "/" + wb.ContainerRel},
 		Stdout:    &containerBuf,
 		Stderr:    io.Discard,
 	}); err != nil {
-		return fmt.Errorf("read container ~/.claude.json: %w", err)
+		return fmt.Errorf("read container %s: %w", wb.ContainerRel, err)
 	}
 
 	var cConfig map[string]json.RawMessage
 	if err := json.Unmarshal(containerBuf.Bytes(), &cConfig); err != nil {
-		return fmt.Errorf("parse container ~/.claude.json: %w", err)
+		return fmt.Errorf("parse container %s: %w", wb.ContainerRel, err)
 	}
 
 	// Read (or initialise) the host config. A host file that exists but
 	// fails to parse ABORTS the writeback: silently continuing would
-	// rewrite ~/.claude.json with only the auth fields, erasing every
+	// rewrite the host file with only the auth fields, erasing every
 	// other setting the user has (theme, keybindings, MCP servers, ...).
 	var hConfig map[string]json.RawMessage
 	if data, err := os.ReadFile(hostConfigPath); err == nil {
@@ -1057,19 +1081,18 @@ func writebackAuthToHost(ctx context.Context, dc docker.Client, containerName, c
 		hConfig = make(map[string]json.RawMessage)
 	}
 
-	// Merge only the auth / onboarding fields — same set the entrypoint
-	// extracts when it goes the other direction (host → container).
-	authFields := []string{
-		"oauthAccount",
-		"userID",
-		"hasCompletedOnboarding",
-		"lastOnboardingVersion",
-		"subscriptionNoticeCount",
-		"hasAvailableSubscription",
-		"s1mAccessCache",
+	// Merge only the declared fields — empty Fields means "merge every
+	// top-level key" (sorted so the merge order, and any tie-breaking
+	// among equal-content runs, stays deterministic).
+	fields := wb.Fields
+	if len(fields) == 0 {
+		for k := range cConfig {
+			fields = append(fields, k)
+		}
+		sort.Strings(fields)
 	}
 	changed := false
-	for _, key := range authFields {
+	for _, key := range fields {
 		if v, ok := cConfig[key]; ok && string(v) != "null" {
 			hConfig[key] = v
 			changed = true

@@ -1059,6 +1059,40 @@ func TestValidateLoginTarget(t *testing.T) {
 	}
 }
 
+// loginFlowFor must resolve a registered harness's LoginFlow verbatim —
+// runLoginStepFn's third argument at every call site depends on this.
+func TestLoginFlowFor_ClaudeCodeReturnsHarnessFlow(t *testing.T) {
+	h, ok := harness.ByID("claude-code")
+	if !ok {
+		t.Fatal("claude-code harness not registered")
+	}
+	want := h.LoginFlow()
+
+	got := loginFlowFor(config.Pin{Harness: "claude-code"})
+	if got == nil {
+		t.Fatal("loginFlowFor(claude-code) = nil, want the harness's LoginFlow")
+	}
+	if len(got.Command) != len(want.Command) {
+		t.Fatalf("loginFlowFor(claude-code).Command = %v, want %v", got.Command, want.Command)
+	}
+	for i := range want.Command {
+		if got.Command[i] != want.Command[i] {
+			t.Fatalf("loginFlowFor(claude-code).Command = %v, want %v", got.Command, want.Command)
+		}
+	}
+	if got.URLMarker != want.URLMarker {
+		t.Errorf("loginFlowFor(claude-code).URLMarker = %q, want %q", got.URLMarker, want.URLMarker)
+	}
+}
+
+// An unregistered/unknown harness must degrade to nil (defensive — runLoginStep
+// treats nil as a no-op) rather than panicking.
+func TestLoginFlowFor_UnknownHarnessReturnsNil(t *testing.T) {
+	if got := loginFlowFor(config.Pin{Harness: "not-a-real-harness"}); got != nil {
+		t.Errorf("loginFlowFor(unknown) = %+v, want nil", got)
+	}
+}
+
 // --- helper ---------------------------------------------------------------
 
 func envToMap(vars []docker.EnvVar) map[string]string {

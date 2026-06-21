@@ -46,6 +46,9 @@ func EquivalentCommand(p config.Pin) string {
 		sort.Strings(sorted)
 		fmt.Fprintf(&b, " --extensions=%s", strings.Join(sorted, ","))
 	}
+	if p.NoYolo {
+		b.WriteString(" --no-yolo")
+	}
 
 	var pastedKeyNote bool
 	if p.LLM != nil {

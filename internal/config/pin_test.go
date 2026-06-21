@@ -465,6 +465,27 @@ func TestAppendToGitignore_NoFile_DoesNothing(t *testing.T) {
 	}
 }
 
+func TestPin_NoYoloRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+	if err := Save(path, &Pin{Harness: "claude-code", NoYolo: true}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.NoYolo {
+		t.Error("no_yolo did not roundtrip")
+	}
+}
+
+func TestIsEmpty_NoYolo(t *testing.T) {
+	if (Pin{NoYolo: true}).IsEmpty() {
+		t.Error("a pin with NoYolo set is not empty")
+	}
+}
+
 func TestPinMountsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".vb")

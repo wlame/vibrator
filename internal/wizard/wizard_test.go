@@ -174,6 +174,14 @@ func TestEquivalentCommand_LocalProvider_NoAuthFlags(t *testing.T) {
 	}
 }
 
+func TestEquivalentCommand_NoYolo(t *testing.T) {
+	got := EquivalentCommand(config.Pin{
+		Harness: "claude-code",
+		NoYolo:  true,
+	})
+	mustContain(t, got, "--no-yolo")
+}
+
 // --- Summary --------------------------------------------------------------
 
 func TestSummary_RendersAllSections(t *testing.T) {

@@ -55,6 +55,10 @@ type Pin struct {
 	// stored raw so the file round-trips exactly what the user typed.
 	Mounts []string `toml:"mounts,omitempty"`
 
+	// NoYolo, when true, suppresses the harness permission-bypass args and
+	// the in-container YOLO alias. Bypass is on by default.
+	NoYolo bool `toml:"no_yolo,omitempty"`
+
 	// LLM is the chosen LLM provider + model + auth shape. nil for harnesses
 	// that don't need it (Claude Code is Anthropic-only and uses the existing
 	// AuthEnvVars forwarding). See LLMSpec for the per-field semantics.
@@ -224,6 +228,7 @@ func (p Pin) HasSecrets() bool {
 func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
 		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 && len(p.Mounts) == 0 &&
+		!p.NoYolo &&
 		p.LLM == nil &&
 		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0 &&
 		p.Hooks == nil && p.Identity == nil
@@ -270,6 +275,7 @@ func Save(path string, p *Pin) error {
 		No         []string   `toml:"no,omitempty"`
 		Extensions []string   `toml:"extensions,omitempty"`
 		Mounts     []string   `toml:"mounts,omitempty"`
+		NoYolo     bool       `toml:"no_yolo,omitempty"`
 		LLM        *LLMSpec   `toml:"llm,omitempty"`
 		Identity   *Identity  `toml:"identity,omitempty"`
 		Hooks      *HookPrefs `toml:"hooks,omitempty"`
@@ -281,6 +287,7 @@ func Save(path string, p *Pin) error {
 		No:         p.No,
 		Extensions: p.Extensions,
 		Mounts:     p.Mounts,
+		NoYolo:     p.NoYolo,
 		LLM:        p.LLM,
 		Identity:   p.Identity,
 		Hooks:      p.Hooks,

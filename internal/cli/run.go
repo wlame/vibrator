@@ -26,6 +26,7 @@ type runFlags struct {
 	rebuild    bool
 	dind       bool
 	login      bool
+	noYolo     bool
 }
 
 var runFlagsState runFlags
@@ -77,6 +78,8 @@ func buildAppOptions(cmd *cobra.Command, target app.LaunchTarget) app.Options {
 		Rebuild:         runFlagsState.rebuild,
 		DinD:            runFlagsState.dind,
 		LoginMode:       runFlagsState.login,
+		NoYolo:          runFlagsState.noYolo,
+		NoYoloSet:       cmd.Flags().Changed("no-yolo"),
 		LaunchTarget:    target,
 		VibratorVersion: Version,
 		Stdout:          cmd.OutOrStdout(),
@@ -125,6 +128,9 @@ func init() {
 			"Opens the auth URL in your host browser automatically. "+
 			"Auth state is saved to ~/.claude.json so subsequent runs are pre-authenticated. "+
 			"Always runs the auth flow when passed — use it to re-authenticate or switch accounts.")
+	runCmd.Flags().BoolVar(&runFlagsState.noYolo, "no-yolo", false,
+		"Run the harness with its permission prompts (disable the default YOLO "+
+			"skip-approvals mode). Persisted to .vb.")
 
 	rootCmd.AddCommand(runCmd)
 

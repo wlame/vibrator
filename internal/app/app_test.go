@@ -98,6 +98,73 @@ func TestApplyFlagOverridesMounts(t *testing.T) {
 	}
 }
 
+// A pinned no_yolo=true survives a bare run (bool flag can't say "unset");
+// only an explicit flag change overrides it.
+func TestApplyFlagOverrides_NoYoloClobberSafe(t *testing.T) {
+	pin := config.Pin{Harness: "claude-code", NoYolo: true}
+	applyFlagOverrides(&pin, Options{NoYoloSet: false}) // bare run
+	if !pin.NoYolo {
+		t.Error("bare run cleared a pinned no_yolo")
+	}
+	applyFlagOverrides(&pin, Options{NoYoloSet: true, NoYolo: false}) // --no-yolo=false
+	if pin.NoYolo {
+		t.Error("explicit --no-yolo=false did not turn it off")
+	}
+}
+
+// TestResolveNoYolo covers the 4-way matrix for the flag/pin resolution that
+// Run() applies after applyFlagOverrides: the flag wins when explicitly set,
+// otherwise the pinned value carries through so a bare `vibrate` honors a
+// pinned no_yolo=true.
+func TestResolveNoYolo(t *testing.T) {
+	tests := []struct {
+		name    string
+		pin     bool
+		flag    bool
+		flagSet bool
+		want    bool
+	}{
+		{
+			name:    "bare run honors pinned true",
+			pin:     true,
+			flag:    false,
+			flagSet: false,
+			want:    true,
+		},
+		{
+			name:    "bare run honors pinned false",
+			pin:     false,
+			flag:    false,
+			flagSet: false,
+			want:    false,
+		},
+		{
+			name:    "explicit --no-yolo=false flips off a pinned true",
+			pin:     true,
+			flag:    false,
+			flagSet: true,
+			want:    false,
+		},
+		{
+			name:    "explicit --no-yolo=true wins over a pinned false",
+			pin:     false,
+			flag:    true,
+			flagSet: true,
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveNoYolo(tt.pin, tt.flag, tt.flagSet)
+			if got != tt.want {
+				t.Errorf("resolveNoYolo(pin=%v, flag=%v, flagSet=%v) = %v, want %v",
+					tt.pin, tt.flag, tt.flagSet, got, tt.want)
+			}
+		})
+	}
+}
+
 // --- validatePin ----------------------------------------------------------
 
 func TestValidatePin_FailsWithoutHarness(t *testing.T) {

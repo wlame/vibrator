@@ -274,6 +274,12 @@ func Run(ctx context.Context, opts Options) error {
 	// 2. Apply CLI flag overrides on top of pin values.
 	applyFlagOverrides(&pin, opts)
 
+	// The launch/runtime path (resolveLaunchCmd, yoloEnvVar) reads
+	// opts.NoYolo directly, not pin.NoYolo. Resolve it here so a pinned
+	// no_yolo=true takes effect on a bare `vibrate` too, not just when
+	// --no-yolo is passed on that particular invocation. See resolveNoYolo.
+	opts.NoYolo = resolveNoYolo(pin.NoYolo, opts.NoYolo, opts.NoYoloSet)
+
 	// 3. Run the wizard for anything still unset.
 	saveAfterWizard := false
 	if needsWizard(pin) && !opts.NoWizard {
@@ -707,6 +713,24 @@ func applyFlagOverrides(pin *config.Pin, opts Options) {
 	if len(opts.Mounts) > 0 {
 		pin.Mounts = append([]string{}, opts.Mounts...)
 	}
+	// Bool flags can't distinguish "unset" from "false", so NoYolo is only
+	// applied when the CLI flag was explicitly passed (NoYoloSet) — a bare
+	// `vibrate` in a workspace pinned no_yolo=true must not clobber it.
+	if opts.NoYoloSet {
+		pin.NoYolo = opts.NoYolo
+	}
+}
+
+// resolveNoYolo returns the effective NoYolo for launch: the flag value when
+// it was explicitly set, otherwise the pinned value. A bool flag can't tell
+// "unset" from "false", so flagSet is the guard against a bare run
+// clobbering a pinned no_yolo=true. Pure and unit-testable in isolation from
+// Run's I/O; see TestResolveNoYolo for the 4-way matrix.
+func resolveNoYolo(pinNoYolo, flagNoYolo, flagSet bool) bool {
+	if flagSet {
+		return flagNoYolo
+	}
+	return pinNoYolo
 }
 
 // needsWizard reports whether any required field is missing after

@@ -36,6 +36,7 @@ type buildFlags struct {
 	tag          string // build only — overrides the workspace-fingerprinted tag
 	hostUID      int
 	hostGID      int
+	noYolo       bool // launch/runtime-only; accepted here for flag-surface parity with `run`
 }
 
 // flag defaults — match the wizard's "if the user picks nothing" answers.
@@ -103,6 +104,14 @@ func registerBuildFlags(cmd *cobra.Command, flags *buildFlags, buildOnly bool) {
 		"Host UID baked as ARG so mounted file permissions match the caller.")
 	cmd.Flags().IntVar(&flags.hostGID, "host-gid", os.Getgid(),
 		"Host GID baked as ARG so mounted file permissions match the caller.")
+	// NoYolo affects only the launch/runtime path (`vibrate run`/shell), not
+	// the generated Dockerfile — the harness permission-bypass args are
+	// always baked as the VIBRATOR_YOLO_ARGS default and overridden at
+	// `docker run`/`exec` time instead. Accepted here anyway so the flag
+	// surface stays consistent across build/build-dockerfile/run and a
+	// script that always passes --no-yolo doesn't break on `vibrate build`.
+	cmd.Flags().BoolVar(&flags.noYolo, "no-yolo", false,
+		"Accepted for flag-surface parity with `vibrate run`; has no effect on the generated image.")
 
 	if buildOnly {
 		cmd.Flags().BoolVar(&flags.noCache, "no-cache", false,

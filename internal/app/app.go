@@ -779,14 +779,17 @@ func validatePin(pin config.Pin) error {
 	return nil
 }
 
-// validateLoginTarget rejects --login for harnesses whose login flow is
-// not wired: runLoginStep is claude-code-specific end to end (it execs
-// `claude auth login`, scans its stdout for the auth URL, and writes
-// tokens back to ~/.claude.json). The literal ID matches the pattern
-// used by runHookReadiness.
+// validateLoginTarget rejects --login for harnesses that declare no
+// LoginFlow (login is unsupported for them). Data-driven: the harness's
+// LoginFlow() is the single source, so a newly login-capable harness needs
+// no change here.
 func validateLoginTarget(harnessID string, loginMode bool) error {
-	if loginMode && harnessID != "claude-code" {
-		return fmt.Errorf("--login is only supported for claude-code (the %s login flow is not wired yet — authenticate via its env vars or host config mounts instead)", harnessID)
+	if !loginMode {
+		return nil
+	}
+	h, ok := harness.ByID(harnessID)
+	if !ok || h.LoginFlow() == nil {
+		return fmt.Errorf("--login is not supported for the %s harness", harnessID)
 	}
 	return nil
 }

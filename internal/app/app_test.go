@@ -1049,12 +1049,17 @@ func TestValidateLoginTarget(t *testing.T) {
 		{"opencode", true, true},
 		{"pi", true, true},
 		{"codex", false, false},
+		{"bogus", true, true},
 	}
 	for _, tc := range cases {
 		err := validateLoginTarget(tc.harness, tc.loginMode)
 		if (err != nil) != tc.wantErr {
 			t.Errorf("validateLoginTarget(%q, %v) err = %v, wantErr %v",
 				tc.harness, tc.loginMode, err, tc.wantErr)
+		}
+		// Error message should name the harness and not contain old phrasing.
+		if tc.wantErr && err != nil && !strings.Contains(err.Error(), tc.harness) {
+			t.Errorf("error should name the harness %q: %v", tc.harness, err)
 		}
 	}
 }

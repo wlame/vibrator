@@ -218,6 +218,31 @@ func TestSessionPersistenceMounts(t *testing.T) {
 	}
 }
 
+// TestCodexConfigMountsToSidecar verifies that Codex's config.toml mounts to
+// the .host sidecar (config.host.toml) rather than shadowing the baked
+// config.toml (which contains vibrator's MCP extensions). The materializer
+// entrypoint seeds the sidecar copy into the writable config.toml and replays
+// the baked MCPs on top — same pattern as claude-code's .claude.host.json.
+func TestCodexConfigMountsToSidecar(t *testing.T) {
+	h, _ := harness.ByID("codex")
+	mounts := h.HostMounts(harness.HostMountContext{WorkspaceDir: "/w"})
+	var sidecar, shadowing bool
+	for _, m := range mounts {
+		if m.HostRel == ".codex/config.toml" && m.ContainerRel == ".codex/config.host.toml" {
+			sidecar = true
+		}
+		if m.ContainerRel == ".codex/config.toml" {
+			shadowing = true
+		}
+	}
+	if !sidecar {
+		t.Error("codex config.toml should mount to the .host sidecar")
+	}
+	if shadowing {
+		t.Error("codex must NOT mount over container .codex/config.toml (shadows baked MCPs)")
+	}
+}
+
 func TestExtraDirArgs(t *testing.T) {
 	dirs := []string{"/data/refs", "/work/lib"}
 

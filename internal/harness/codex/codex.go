@@ -33,22 +33,28 @@ func (codex) RequiredFeatures() []string {
 	return []string{"node"}
 }
 
-// HostMounts wires the host's ~/.codex state into the container. Unlike
-// Claude Code (whose entrypoint merges a *.host.json copy), Codex reads
-// its config natively, so these mount directly onto the container's real
-// config paths — no entrypoint support needed.
+// HostMounts wires the host's ~/.codex state into the container. The
+// materializer pattern (codex-materialize.sh entrypoint) seeds host config
+// from a sidecar copy, avoiding shadow of baked MCPs.
 //
 //   - auth.json is mounted READ-WRITE so an OAuth token refreshed inside
 //     the container (or a fresh `codex login`) persists back to the host.
-//   - config.toml is mounted READ-ONLY: it's user-authored, so a buggy
-//     container can read but not corrupt it.
+//   - config.toml mounts to config.host.toml (read-only sidecar). The baked
+//     ~/.codex/config.toml (with vibrator's MCP extensions) must NOT be
+//     shadowed by the host mount, so the host copy lands at a sidecar path;
+//     codex-materialize.sh (entrypoint) seeds it into the writable config.toml
+//     and replays the baked MCPs on top. Same pattern as claude-code's
+//     .claude.host.json.
+//   - sessions/ is mounted READ-WRITE for history persistence.
 //
-// Both are MountFileIfExists: a host that has never run Codex gets no
-// mounts and Codex inside the container starts fresh.
+// Both auth.json and config.host.toml are MountFileIfExists: a host that
+// has never run Codex gets no mounts and Codex inside the container starts
+// fresh.
 func (codex) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 	return []harness.HostMount{
 		{HostRel: ".codex/auth.json", ContainerRel: ".codex/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
-		{HostRel: ".codex/config.toml", ContainerRel: ".codex/config.toml", ReadOnly: true, Kind: harness.MountFileIfExists},
+		// config.toml → config.host.toml sidecar (see the doc comment above).
+		{HostRel: ".codex/config.toml", ContainerRel: ".codex/config.host.toml", ReadOnly: true, Kind: harness.MountFileIfExists},
 		// Session/rollout history — MountDirEnsure so a fresh host still
 		// gets a writable dir and codex history survives container
 		// recreation (parity with claude-code's session-persist dirs).

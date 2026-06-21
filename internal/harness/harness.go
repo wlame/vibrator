@@ -216,8 +216,11 @@ type AuthWriteback struct {
 	HostRel      string
 
 	// Fields are the JSON top-level keys merged from container into host.
-	// Empty merges every top-level key. A host file that exists but fails to
-	// parse aborts the writeback (never overwrite a config with a partial).
+	// Empty merges every top-level key — use with care: for a rich config
+	// file (e.g. ~/.claude.json) that copies ALL container state (project
+	// history, MCP entries, …) back to the host, so prefer naming the exact
+	// auth fields. A host file that exists but fails to parse aborts the
+	// writeback (never overwrite a config with a partial).
 	Fields []string
 }
 

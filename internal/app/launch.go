@@ -1082,8 +1082,7 @@ func writebackAuthToHost(ctx context.Context, dc docker.Client, containerName, c
 	}
 
 	// Merge only the declared fields — empty Fields means "merge every
-	// top-level key" (sorted so the merge order, and any tie-breaking
-	// among equal-content runs, stays deterministic).
+	// top-level key" (sorted for a stable merge order).
 	fields := wb.Fields
 	if len(fields) == 0 {
 		for k := range cConfig {

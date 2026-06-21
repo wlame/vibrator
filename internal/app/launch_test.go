@@ -332,6 +332,23 @@ func readJSONFile(t *testing.T, path string) map[string]json.RawMessage {
 	return got
 }
 
+// TestRunLoginStep_NilFlowIsNoOp pins the defensive contract: a nil LoginFlow
+// (a harness that declares no login) returns nil without running any exec.
+func TestRunLoginStep_NilFlowIsNoOp(t *testing.T) {
+	m := docker.NewMock()
+	execCalled := false
+	m.ExecHandler = func(context.Context, docker.ExecSpec) error {
+		execCalled = true
+		return nil
+	}
+	if err := runLoginStep(context.Background(), m, "c", "u", nil, Options{Stdout: io.Discard, Stderr: io.Discard}); err != nil {
+		t.Fatalf("nil flow should no-op, got %v", err)
+	}
+	if execCalled {
+		t.Error("nil flow must not run any docker exec")
+	}
+}
+
 // TestRunLoginStep_ClaudeCodeFlow_MatchesLegacyBehavior drives runLoginStep
 // end to end through claude-code's real, registered harness.LoginFlow (not a
 // hand-built fixture) to pin the byte-identical invariant: the exec argv, the

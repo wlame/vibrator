@@ -599,3 +599,26 @@ func TestGenerate_CodexMaterializeCopy(t *testing.T) {
 		t.Error("non-codex Dockerfile should not COPY the codex materializer")
 	}
 }
+
+// TestGenerate_OpencodeLiveReleasePin pins the opencode download source to
+// the canonical anomalyco/opencode repo and a release that still exists.
+// The original sst/opencode v0.5.0 tag was deleted when the project moved,
+// so images pinned to it fail to build with a curl 404.
+func TestGenerate_OpencodeLiveReleasePin(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "opencode"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if !strings.Contains(s, `OPENCODE_VERSION="1.17.18"`) {
+		t.Error("opencode Dockerfile not pinned to 1.17.18")
+	}
+	if !strings.Contains(s, "github.com/anomalyco/opencode/releases/download") {
+		t.Error("opencode Dockerfile should download from the canonical anomalyco/opencode repo")
+	}
+	// NOTE: don't assert on bare "x86_64"/"aarch64" — the base stage's
+	// ripgrep install legitimately uses those triples in every Dockerfile.
+	if strings.Contains(s, "sst/opencode") || strings.Contains(s, `OC_ARCH="x86_64"`) || strings.Contains(s, `OC_ARCH="aarch64"`) {
+		t.Error("opencode Dockerfile still references the dead sst/opencode release naming")
+	}
+}

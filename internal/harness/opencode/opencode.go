@@ -15,12 +15,16 @@ func (opencode) Name() string { return "OpenCode" }
 func (opencode) Dockerfile() string {
 	// OpenCode publishes a prebuilt binary per-arch on GitHub Releases.
 	// Pin to a recent stable version to avoid surprise breakage; bump in
-	// the same PR as a extensions refresh.
+	// the same PR as an extensions refresh. The project moved from
+	// sst/opencode to anomalyco/opencode in 2026 and renamed its release
+	// assets (x86_64/aarch64 → x64/arm64); pin the canonical repo — the
+	// old sst URLs only resolve through a repo redirect that breaks if
+	// that name is ever re-registered.
 	return `RUN ARCH=$(dpkg --print-architecture) && \
-    OPENCODE_VERSION="0.5.0" && \
-    if [ "$ARCH" = "amd64" ]; then OC_ARCH="x86_64"; else OC_ARCH="aarch64"; fi && \
+    OPENCODE_VERSION="1.17.18" && \
+    if [ "$ARCH" = "amd64" ]; then OC_ARCH="x64"; else OC_ARCH="arm64"; fi && \
     curl -fsSL --retry 3 --retry-delay 5 \
-      "https://github.com/sst/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OC_ARCH}.tar.gz" \
+      "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OC_ARCH}.tar.gz" \
       -o opencode.tar.gz && \
     tar -xzf opencode.tar.gz opencode && \
     mv opencode /usr/local/bin/ && chmod +x /usr/local/bin/opencode && \

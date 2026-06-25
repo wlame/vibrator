@@ -627,6 +627,18 @@ FROM extensions AS runtime
 		b.WriteString(`RUN codex mcp list --json > "$HOME/.vibrator-codex-baked-mcp.json" 2>/dev/null || echo '[]' > "$HOME/.vibrator-codex-baked-mcp.json"` + "\n")
 	}
 
+	// OpenCode: snapshot the whole baked ~/.config/opencode directory
+	// (config.json MCPs plus agent/, themes/, tui.json baked by
+	// extensions). The runtime materializer (opencode-materialize.sh)
+	// restores it as the deterministic merge base after the host sidecar
+	// seeds the container config — snapshotting only config.json would
+	// lose the other baked artifacts and make restarts non-idempotent.
+	// `|| mkdir -p` keeps a zero-extension opencode image valid (empty
+	// snapshot, nothing to restore).
+	if spec.Harness.ID() == "opencode" {
+		b.WriteString(`RUN cp -a "$HOME/.config/opencode" "$HOME/.vibrator-opencode-baked" 2>/dev/null || mkdir -p "$HOME/.vibrator-opencode-baked"` + "\n")
+	}
+
 	// VIBRATOR_LAUNCH_BIN / VIBRATOR_YOLO_ARGS drive the env-driven shell
 	// alias in templates/shells/{zshrc,bashrc,config.fish} — the alias reads
 	// these two vars instead of a hardcoded "claude --dangerously-skip-

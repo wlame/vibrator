@@ -622,3 +622,27 @@ func TestGenerate_OpencodeLiveReleasePin(t *testing.T) {
 		t.Error("opencode Dockerfile still references the dead sst/opencode release naming")
 	}
 }
+
+// TestGenerate_OpencodeBakedConfigSnapshot pins the opencode-only snapshot
+// step that copies the pristine baked ~/.config/opencode directory (MCPs in
+// config.json plus agent/, themes/, tui.json baked by extensions) aside for
+// the runtime materializer. Without it the materializer has no deterministic
+// merge base once the host sidecar seeds the container config. Other
+// harnesses must not carry the line.
+func TestGenerate_OpencodeBakedConfigSnapshot(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "opencode"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), ".vibrator-opencode-baked") {
+		t.Error("opencode Dockerfile missing the baked-config snapshot step")
+	}
+
+	cout, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "claude-code"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cout), ".vibrator-opencode-baked") {
+		t.Error("non-opencode Dockerfile should not contain the opencode snapshot step")
+	}
+}

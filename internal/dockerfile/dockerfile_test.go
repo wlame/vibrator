@@ -646,3 +646,26 @@ func TestGenerate_OpencodeBakedConfigSnapshot(t *testing.T) {
 		t.Error("non-opencode Dockerfile should not contain the opencode snapshot step")
 	}
 }
+
+// TestGenerate_OpencodeMaterializeCopy pins the opencode-only COPY of
+// opencode-materialize.sh (the runtime script that reconciles the host
+// .config/opencode.host sidecar dir with the baked extension artifacts).
+// Other harnesses have no opencode config to materialize, so the COPY must
+// not appear for them.
+func TestGenerate_OpencodeMaterializeCopy(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "opencode"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "opencode-materialize") {
+		t.Error("opencode Dockerfile missing the materializer COPY")
+	}
+
+	cout, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "claude-code"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cout), "opencode-materialize") {
+		t.Error("non-opencode Dockerfile should not COPY the opencode materializer")
+	}
+}

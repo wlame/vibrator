@@ -495,6 +495,16 @@ if [ "$VIBRATOR_HARNESS" = "codex" ] && [ -x /usr/local/bin/codex-materialize ];
     log "codex: config materialized"
 fi
 
+# --- 10. OpenCode config materialization -------------------------------------
+# OpenCode mounts the host ~/.config/opencode to a .host sidecar dir;
+# reconcile it with the baked extension artifacts here (see
+# opencode-materialize.sh). Gated on the harness + the script's presence
+# (only opencode images ship it), so this is a silent no-op elsewhere.
+if [ "$VIBRATOR_HARNESS" = "opencode" ] && [ -x /usr/local/bin/opencode-materialize ]; then
+    /usr/local/bin/opencode-materialize
+    log "opencode: config materialized"
+fi
+
 # --- readiness signal -------------------------------------------------------
 # Drop a sentinel file so `vibrate --login` can poll-wait for the full
 # entrypoint setup (config merge, rules copy, settings merge) to finish

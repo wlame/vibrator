@@ -25,6 +25,8 @@ core
 .vscode/
 
 # Manual build-matrix testing scratch dir (configs/results/logs stay local;
-# the codex-materialize gate is a real deliverable and is tracked below).
+# the codex-materialize and opencode-materialize gates are real deliverables
+# and are tracked below).
 test-scenarios/*
 !test-scenarios/codex-materialize-test.sh
+!test-scenarios/opencode-materialize-test.sh

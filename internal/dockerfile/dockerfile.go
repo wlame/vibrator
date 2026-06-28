@@ -310,6 +310,19 @@ RUN chmod 0755 /usr/local/bin/codex-materialize
 `)
 	}
 
+	// --- opencode config materializer (opencode-gated) ----------------------
+	// Reconciles the host .config/opencode.host sidecar dir (added by the
+	// mount flip) with vibrator's baked extension artifacts at container
+	// startup. Only opencode images need it; entrypoint.sh gates the call
+	// on both VIBRATOR_HARNESS and this file's presence. See
+	// scripts/opencode-materialize.sh for the merge logic.
+	if spec.Harness.ID() == "opencode" {
+		b.WriteString(`
+COPY scripts/opencode-materialize.sh /usr/local/bin/opencode-materialize
+RUN chmod 0755 /usr/local/bin/opencode-materialize
+`)
+	}
+
 	b.WriteString(`
 # --- integrations manifest (per-harness wiring; data-driven probes) ---
 # Generated at build time from the integrations registry filtered by

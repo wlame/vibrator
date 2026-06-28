@@ -691,3 +691,27 @@ func TestGenerate_PiMaintainedPackagePin(t *testing.T) {
 		t.Error("pi Dockerfile still references the frozen legacy package")
 	}
 }
+
+// TestGenerate_PiBakedConfigSnapshot pins the pi-only snapshot step that
+// copies the pristine baked ~/.pi tree (agent/mcp.json MCPs, the
+// agent/settings.json extension registry, providers/, themes/, prompts/
+// baked by extensions) aside for the runtime materializer. Without it the
+// materializer has no deterministic merge base once the host sidecar seeds
+// the container tree. Other harnesses must not carry the line.
+func TestGenerate_PiBakedConfigSnapshot(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "pi"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), ".vibrator-pi-baked") {
+		t.Error("pi Dockerfile missing the baked-config snapshot step")
+	}
+
+	cout, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "claude-code"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cout), ".vibrator-pi-baked") {
+		t.Error("non-pi Dockerfile should not contain the pi snapshot step")
+	}
+}

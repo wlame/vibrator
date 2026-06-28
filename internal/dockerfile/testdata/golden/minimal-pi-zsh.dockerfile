@@ -267,6 +267,7 @@ ENV VIBRATOR_FEATURES_LIST="node"
 ENV VIBRATOR_EXTENSIONS_LIST="(none)"
 ENV VIBRATOR_VERSION="test-1.0"
 ENV VIBRATOR_BUILD_ID="2026-05-27-1558"
+RUN cp -a "$HOME/.pi" "$HOME/.vibrator-pi-baked" 2>/dev/null || mkdir -p "$HOME/.vibrator-pi-baked"
 ENV VIBRATOR_LAUNCH_BIN="pi"
 ENV VIBRATOR_YOLO_ARGS=""
 

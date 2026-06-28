@@ -652,6 +652,17 @@ FROM extensions AS runtime
 		b.WriteString(`RUN cp -a "$HOME/.config/opencode" "$HOME/.vibrator-opencode-baked" 2>/dev/null || mkdir -p "$HOME/.vibrator-opencode-baked"` + "\n")
 	}
 
+	// Pi: snapshot the whole baked ~/.pi tree (agent/mcp.json MCPs, the
+	// agent/settings.json extension registry, providers/, themes/,
+	// prompts/ baked by extensions). The runtime materializer
+	// (pi-materialize.sh) copies it back as the deterministic merge base
+	// after the host sidecar seeds the container tree. `|| mkdir -p`
+	// keeps a zero-extension pi image valid (empty snapshot, nothing to
+	// restore).
+	if spec.Harness.ID() == "pi" {
+		b.WriteString(`RUN cp -a "$HOME/.pi" "$HOME/.vibrator-pi-baked" 2>/dev/null || mkdir -p "$HOME/.vibrator-pi-baked"` + "\n")
+	}
+
 	// VIBRATOR_LAUNCH_BIN / VIBRATOR_YOLO_ARGS drive the env-driven shell
 	// alias in templates/shells/{zshrc,bashrc,config.fish} — the alias reads
 	// these two vars instead of a hardcoded "claude --dangerously-skip-

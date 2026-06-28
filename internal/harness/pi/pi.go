@@ -15,12 +15,18 @@ func (pi) Name() string { return "Pi (pi-coding-agent)" }
 func (pi) Dockerfile() string {
 	// pi-coding-agent ships as an npm package. RequiredFeatures pulls in node.
 	//
+	// Installed from the @earendil-works scope (the project's home since
+	// its 2026 rebrand; the legacy @mariozechner package froze at 0.73.1)
+	// and pinned to a verified release so image builds are reproducible.
+	// UpdateCommand tracks @latest on the same scope, so `vibrate update`
+	// can advance past the pin in place.
+	//
 	// `pi --version` runs WITHOUT a `|| true` fallthrough on purpose: if
-	// the install produces no working `pi` binary (e.g. the package
-	// rebrands and the bin name changes) the build must fail here rather
-	// than bake a broken image that only errors when the user launches.
-	// This matches claude-code and codex, which also verify their binary.
-	return `RUN npm install -g @mariozechner/pi-coding-agent \
+	// the install produces no working `pi` binary (e.g. the bin name
+	// changes again) the build must fail here rather than bake a broken
+	// image that only errors when the user launches. This matches
+	// claude-code and codex, which also verify their binary.
+	return `RUN npm install -g @earendil-works/pi-coding-agent@0.80.6 \
  && pi --version`
 }
 
@@ -80,17 +86,11 @@ func (pi) LaunchCommand() []string { return []string{"pi"} }
 func (pi) ExtraDirArgs([]string) []string { return nil }
 
 // UpdateCommand returns the argv for upgrading Pi in place. Pi is an
-// npm package (see Dockerfile); re-running install with @latest picks
-// up the newest release and overwrites the global bin symlink.
-//
-// NOTE: Pi rebranded from `@mariozechner/pi-coding-agent` to
-// `@earendil-works/pi-coding-agent` in 2026; the install command in
-// Dockerfile still uses the legacy name for compatibility. Update
-// here uses the SAME package name to avoid a partial migration where
-// `npm update` would install the rebranded package alongside the old
-// one. Switch both call sites together in a separate change.
+// npm package (see Dockerfile); installs pin a verified release, while
+// update tracks @latest on the same @earendil-works scope so the two
+// call sites can never point at different packages.
 func (pi) UpdateCommand() []string {
-	return []string{"npm", "install", "-g", "@mariozechner/pi-coding-agent@latest"}
+	return []string{"npm", "install", "-g", "@earendil-works/pi-coding-agent@latest"}
 }
 
 // LLMEnvVars maps the LLM choice into Pi's OpenAI-compatible env vars.

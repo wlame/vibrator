@@ -234,7 +234,7 @@ ENV PATH=/home/${USERNAME}/.npm-global/bin:/home/${USERNAME}/.local/bin:/usr/loc
 FROM features AS harness
 
 # --- harness: pi (Pi (pi-coding-agent)) ---
-RUN npm install -g @mariozechner/pi-coding-agent \
+RUN npm install -g @earendil-works/pi-coding-agent@0.80.6 \
  && pi --version
 
 # ============================================================================

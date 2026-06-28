@@ -165,7 +165,7 @@ func TestUpdateCommand_KnownValues(t *testing.T) {
 		"claude-code": {"claude", "update"},
 		"codex":       {"npm", "install", "-g", "@openai/codex@latest"},
 		"opencode":    {"opencode", "upgrade"},
-		"pi":          {"npm", "install", "-g", "@mariozechner/pi-coding-agent@latest"},
+		"pi":          {"npm", "install", "-g", "@earendil-works/pi-coding-agent@latest"},
 	}
 	for id, want := range cases {
 		t.Run(id, func(t *testing.T) {

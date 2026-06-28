@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// piProber detects Pi (mariozechner/pi-coding-agent) installation.
+// piProber detects Pi (earendil-works/pi-coding-agent) installation.
 //
 // Pi has no plugin manifest — extensions are npm packages or git
 // repos resolved at runtime. We detect installation via two heuristics:

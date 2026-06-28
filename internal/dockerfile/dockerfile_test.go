@@ -672,3 +672,22 @@ func TestGenerate_OpencodeMaterializeCopy(t *testing.T) {
 		t.Error("non-opencode Dockerfile should not COPY the opencode materializer")
 	}
 }
+
+// TestGenerate_PiMaintainedPackagePin pins the pi install source to the
+// maintained @earendil-works package at a verified release. The legacy
+// @mariozechner package froze at 0.73.1 when the project rebranded, so
+// images pinned to it silently stop receiving fixes and `vibrate update`
+// inside a pi container can never advance.
+func TestGenerate_PiMaintainedPackagePin(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "pi"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if !strings.Contains(s, "@earendil-works/pi-coding-agent@0.80.6") {
+		t.Error("pi Dockerfile not pinned to @earendil-works/pi-coding-agent@0.80.6")
+	}
+	if strings.Contains(s, "@mariozechner/pi-coding-agent") {
+		t.Error("pi Dockerfile still references the frozen legacy package")
+	}
+}

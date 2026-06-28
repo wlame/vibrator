@@ -60,15 +60,23 @@ func (opencode) RequiredFeatures() []string {
 //   - ~/.local/share/opencode/auth.json (the OAuth/credential store the
 //     hostprobe uses as the primary "is it installed?" signal) is mounted
 //     READ-WRITE so a `/connect` login inside the container persists back.
-//   - ~/.config/opencode (user config: opencode.json, agents, …) is
-//     mounted READ-ONLY so the container can't corrupt user-authored
-//     config.
-//
-// OpenCode reads these natively, so no entrypoint support is needed.
+//   - ~/.config/opencode (user config: config.json, agents, themes, …) is
+//     mounted READ-ONLY to the ~/.config/opencode.host SIDECAR, not over
+//     the real config dir — mounting it there would shadow the artifacts
+//     vibrator's extensions baked at build time (MCPs in config.json,
+//     agent/*.md, themes/*.json, tui.json). At container startup,
+//     opencode-materialize.sh (entrypoint-gated) seeds the real config
+//     dir from the baked snapshot, copies the sidecar's files over it
+//     (host wins per-file), and jq-deep-merges config.json/tui.json
+//     (host wins per-key) so host settings and baked extensions coexist.
+//     The container's ~/.config/opencode is a plain writable copy — in-
+//     container writes never reach the host, preserving the invariant the
+//     old read-only direct mount protected.
 func (opencode) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 	return []harness.HostMount{
 		{HostRel: ".local/share/opencode/auth.json", ContainerRel: ".local/share/opencode/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
-		{HostRel: ".config/opencode", ContainerRel: ".config/opencode", ReadOnly: true, Kind: harness.MountDirIfExists},
+		// config dir → .host sidecar (see the doc comment above).
+		{HostRel: ".config/opencode", ContainerRel: ".config/opencode.host", ReadOnly: true, Kind: harness.MountDirIfExists},
 		// Message/session storage — MountDirEnsure for cross-recreation
 		// history persistence (parity with claude-code). Confirmed via
 		// documented OpenCode storage layout (message/, part/, session/,

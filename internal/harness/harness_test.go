@@ -243,6 +243,38 @@ func TestCodexConfigMountsToSidecar(t *testing.T) {
 	}
 }
 
+// TestOpencodeConfigMountsToHostSidecar verifies that OpenCode's config dir
+// mounts to the .host sidecar (.config/opencode.host) rather than shadowing
+// the baked directory (which contains vibrator's extension artifacts: MCPs
+// in config.json, agent/, themes/, tui.json). The materializer entrypoint
+// seeds the real config dir from the baked snapshot and merges the sidecar
+// over it — same pattern as codex's config.host.toml.
+func TestOpencodeConfigMountsToHostSidecar(t *testing.T) {
+	h, _ := harness.ByID("opencode")
+	mounts := h.HostMounts(harness.HostMountContext{WorkspaceDir: "/w"})
+	var sidecar, shadowing bool
+	for _, m := range mounts {
+		if m.HostRel == ".config/opencode" && m.ContainerRel == ".config/opencode.host" {
+			sidecar = true
+			if !m.ReadOnly {
+				t.Error("the .config/opencode.host sidecar must be read-only")
+			}
+			if m.Kind != harness.MountDirIfExists {
+				t.Errorf("sidecar mount kind = %v, want MountDirIfExists", m.Kind)
+			}
+		}
+		if m.ContainerRel == ".config/opencode" {
+			shadowing = true
+		}
+	}
+	if !sidecar {
+		t.Error("opencode config dir should mount to the .config/opencode.host sidecar")
+	}
+	if shadowing {
+		t.Error("opencode must NOT mount over container .config/opencode (shadows baked extension artifacts)")
+	}
+}
+
 func TestExtraDirArgs(t *testing.T) {
 	dirs := []string{"/data/refs", "/work/lib"}
 

@@ -11,6 +11,8 @@
 #   2. Merge: jq deep-merge (baked * host) the two extension-managed JSON
 #      files, config.json and tui.json — host wins per-key, baked .mcp
 #      entries and theme keys survive unless the host names the same key.
+#      Keep jq's -c (compact) output: the verification gate matches
+#      compact substrings against the merged files.
 #   3. Replay manifest: apply integration-manifest opencode entries (off
 #      removes, other modes with an http url add). Gated on the seed so an
 #      unseeded baked config is never mutated. No opencode integration

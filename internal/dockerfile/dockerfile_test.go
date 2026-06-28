@@ -616,6 +616,9 @@ func TestGenerate_OpencodeLiveReleasePin(t *testing.T) {
 	if !strings.Contains(s, "github.com/anomalyco/opencode/releases/download") {
 		t.Error("opencode Dockerfile should download from the canonical anomalyco/opencode repo")
 	}
+	if !strings.Contains(s, `OC_ARCH="x64"`) || !strings.Contains(s, `OC_ARCH="arm64"`) {
+		t.Error("opencode Dockerfile missing the x64/arm64 asset-arch mapping")
+	}
 	// NOTE: don't assert on bare "x86_64"/"aarch64" — the base stage's
 	// ripgrep install legitimately uses those triples in every Dockerfile.
 	if strings.Contains(s, "sst/opencode") || strings.Contains(s, `OC_ARCH="x86_64"`) || strings.Contains(s, `OC_ARCH="aarch64"`) {

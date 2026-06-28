@@ -1,4 +1,4 @@
-// Package opencode implements the SST OpenCode harness.
+// Package opencode implements the OpenCode harness (formerly SST, now anomalyco/opencode).
 package opencode
 
 import "github.com/wlame/vibrator/internal/harness"

@@ -715,3 +715,25 @@ func TestGenerate_PiBakedConfigSnapshot(t *testing.T) {
 		t.Error("non-pi Dockerfile should not contain the pi snapshot step")
 	}
 }
+
+// TestGenerate_PiMaterializeCopy pins the pi-only COPY of pi-materialize.sh
+// (the runtime script that reconciles the host .pi.host sidecar tree with
+// the baked extension artifacts). Other harnesses have no pi config to
+// materialize, so the COPY must not appear for them.
+func TestGenerate_PiMaterializeCopy(t *testing.T) {
+	out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "pi"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "pi-materialize") {
+		t.Error("pi Dockerfile missing the materializer COPY")
+	}
+
+	cout, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "claude-code"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cout), "pi-materialize") {
+		t.Error("non-pi Dockerfile should not COPY the pi materializer")
+	}
+}

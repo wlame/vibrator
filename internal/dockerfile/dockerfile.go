@@ -323,6 +323,19 @@ RUN chmod 0755 /usr/local/bin/opencode-materialize
 `)
 	}
 
+	// --- pi config materializer (pi-gated) ----------------------------------
+	// Reconciles the host .pi.host sidecar tree (added by the mount flip)
+	// with vibrator's baked extension artifacts at container startup. Only
+	// pi images need it; entrypoint.sh gates the call on both
+	// VIBRATOR_HARNESS and this file's presence. See
+	// scripts/pi-materialize.sh for the merge logic.
+	if spec.Harness.ID() == "pi" {
+		b.WriteString(`
+COPY scripts/pi-materialize.sh /usr/local/bin/pi-materialize
+RUN chmod 0755 /usr/local/bin/pi-materialize
+`)
+	}
+
 	b.WriteString(`
 # --- integrations manifest (per-harness wiring; data-driven probes) ---
 # Generated at build time from the integrations registry filtered by

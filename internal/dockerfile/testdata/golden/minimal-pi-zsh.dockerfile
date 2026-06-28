@@ -89,6 +89,9 @@ RUN chmod 0755 /opt/vibrator/entrypoint.sh
 COPY scripts/claude-exec.sh /usr/local/bin/claude-exec
 RUN chmod 0755 /usr/local/bin/claude-exec
 
+COPY scripts/pi-materialize.sh /usr/local/bin/pi-materialize
+RUN chmod 0755 /usr/local/bin/pi-materialize
+
 # --- integrations manifest (per-harness wiring; data-driven probes) ---
 # Generated at build time from the integrations registry filtered by
 # the harness being built. claude-exec.sh reads this file on every

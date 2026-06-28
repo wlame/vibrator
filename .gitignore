@@ -30,3 +30,4 @@ core
 test-scenarios/*
 !test-scenarios/codex-materialize-test.sh
 !test-scenarios/opencode-materialize-test.sh
+!test-scenarios/pi-materialize-test.sh

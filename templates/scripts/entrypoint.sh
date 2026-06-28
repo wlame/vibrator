@@ -505,6 +505,17 @@ if [ "$VIBRATOR_HARNESS" = "opencode" ] && [ -x /usr/local/bin/opencode-material
     log "opencode: config materialized"
 fi
 
+# --- 11. Pi config materialization --------------------------------------------
+# Pi mounts the host ~/.pi to a .host sidecar tree (with rw carve-outs for
+# agent/auth.json and agent/sessions); reconcile it with the baked extension
+# artifacts here (see pi-materialize.sh). Gated on the harness + the
+# script's presence (only pi images ship it), so this is a silent no-op
+# elsewhere.
+if [ "$VIBRATOR_HARNESS" = "pi" ] && [ -x /usr/local/bin/pi-materialize ]; then
+    /usr/local/bin/pi-materialize
+    log "pi: config materialized"
+fi
+
 # --- readiness signal -------------------------------------------------------
 # Drop a sentinel file so `vibrate --login` can poll-wait for the full
 # entrypoint setup (config merge, rules copy, settings merge) to finish

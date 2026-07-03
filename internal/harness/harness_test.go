@@ -275,6 +275,59 @@ func TestOpencodeConfigMountsToHostSidecar(t *testing.T) {
 	}
 }
 
+// TestPiMountsSidecarWithCarveOuts verifies pi's restructured mounts: the
+// host ~/.pi tree lands read-only at the .pi.host sidecar (so it can no
+// longer shadow baked extension artifacts or be corrupted by the
+// container), while agent/auth.json (login writeback) and agent/sessions
+// (history persistence) keep today's read-write behavior via granular
+// mounts. No mount may target the container's real .pi root — the
+// materializer owns it.
+func TestPiMountsSidecarWithCarveOuts(t *testing.T) {
+	h, _ := harness.ByID("pi")
+	mounts := h.HostMounts(harness.HostMountContext{WorkspaceDir: "/w"})
+	var sidecar, auth, sessions, shadowing bool
+	for _, m := range mounts {
+		switch {
+		case m.HostRel == ".pi" && m.ContainerRel == ".pi.host":
+			sidecar = true
+			if !m.ReadOnly {
+				t.Error("the .pi.host sidecar must be read-only")
+			}
+			if m.Kind != harness.MountDirIfExists {
+				t.Errorf("sidecar mount kind = %v, want MountDirIfExists", m.Kind)
+			}
+		case m.HostRel == ".pi/agent/auth.json" && m.ContainerRel == ".pi/agent/auth.json":
+			auth = true
+			if m.ReadOnly {
+				t.Error("agent/auth.json must stay read-write (login writeback)")
+			}
+			if m.Kind != harness.MountFileIfExists {
+				t.Errorf("auth mount kind = %v, want MountFileIfExists", m.Kind)
+			}
+		case m.HostRel == ".pi/agent/sessions" && m.ContainerRel == ".pi/agent/sessions":
+			sessions = true
+			if m.Kind != harness.MountDirEnsure {
+				t.Errorf("sessions mount kind = %v, want MountDirEnsure", m.Kind)
+			}
+		}
+		if m.ContainerRel == ".pi" {
+			shadowing = true
+		}
+	}
+	if !sidecar {
+		t.Error("missing the .pi.host sidecar mount")
+	}
+	if !auth {
+		t.Error("missing the agent/auth.json rw carve-out mount")
+	}
+	if !sessions {
+		t.Error("missing the agent/sessions persistence mount")
+	}
+	if shadowing {
+		t.Error("pi must NOT mount over container .pi (shadows baked extension artifacts)")
+	}
+}
+
 func TestExtraDirArgs(t *testing.T) {
 	dirs := []string{"/data/refs", "/work/lib"}
 

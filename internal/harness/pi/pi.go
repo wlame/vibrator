@@ -46,24 +46,33 @@ func (pi) AuthEnvVars() []string {
 }
 
 // HostMounts wires the host's ~/.pi state into the container. Pi keeps
-// its config (agent settings, ~/.pi/agent/mcp.json) and any credential
-// state under a single ~/.pi tree, so this is a coarse whole-directory
-// passthrough — mounted READ-WRITE so in-container config/login changes
-// persist back to the host. MountDirIfExists makes it a no-op for a host
-// that has never run Pi.
+// everything under one tree (~/.pi/agent/: mcp.json, settings.json,
+// auth.json, sessions/, bin/, themes/, ...), which vibrator's extensions
+// also bake into at image build. The host tree therefore mounts as a
+// READ-ONLY SIDECAR at ~/.pi.host, not over the real ~/.pi — a direct
+// mount would shadow every baked artifact (and, mounted rw as it once
+// was, let the container corrupt the host's real .pi). At container
+// startup, pi-materialize.sh (entrypoint-gated) copies the baked
+// snapshot over ~/.pi, copies the sidecar's files over that (host wins
+// per-file; agent/bin excluded — pi's managed fd/rg binaries are
+// arch-specific, the container keeps its own), and jq-merges
+// agent/mcp.json and agent/settings.json (host wins per-key; the
+// settings packages array is unioned).
 //
-// Coarse on purpose: Pi's on-disk layout is less settled than the other
-// harnesses', so a single dir mount avoids missing a state file. Split
-// into finer-grained ro/rw mounts once the layout stabilizes.
+// Two host paths keep today's read-write behavior via granular mounts:
 //
-// No separate MountDirEnsure session-dir entry (unlike codex/opencode):
-// the coarse ~/.pi rw mount above already covers wherever Pi keeps its
-// session/history state, since it's a single-tree passthrough. Adding a
-// dedicated session-dir entry here would be redundant — don't add one
-// unless Pi's layout splits and this coarse mount narrows.
+//   - ~/.pi/agent/auth.json (rw) so in-container logins persist back.
+//   - ~/.pi/agent/sessions (MountDirEnsure) for cross-recreation session
+//     history, parity with codex/opencode session mounts.
+//
+// The materializer never writes through either mount (it excludes both
+// paths from its copies), so the host tree outside them is untouchable
+// by the container.
 func (pi) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 	return []harness.HostMount{
-		{HostRel: ".pi", ContainerRel: ".pi", ReadOnly: false, Kind: harness.MountDirIfExists},
+		{HostRel: ".pi", ContainerRel: ".pi.host", ReadOnly: true, Kind: harness.MountDirIfExists},
+		{HostRel: ".pi/agent/auth.json", ContainerRel: ".pi/agent/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
+		{HostRel: ".pi/agent/sessions", ContainerRel: ".pi/agent/sessions", Kind: harness.MountDirEnsure},
 	}
 }
 

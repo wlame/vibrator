@@ -372,3 +372,41 @@ func keysOf(m map[string]*Entry) []string {
 	}
 	return out
 }
+
+// parseEntryForTest parses a single entry from raw markdown bytes and returns
+// the Entry, or fails the test if parsing fails.
+func parseEntryForTest(t *testing.T, harness, id string, src []byte) *Entry {
+	t.Helper()
+	e, err := parseEntry(harness, id, src)
+	if err != nil {
+		t.Fatalf("parseEntry(%q, %q): %v", harness, id, err)
+	}
+	return e
+}
+
+// TestEntry_PinnedModelsParsed pins the optional pinned_models frontmatter
+// list: present -> parsed in order; absent -> nil. The wizard's
+// keep-or-strip question and the build-time strip step are both driven by
+// this field, so its spelling is a contract.
+func TestEntry_PinnedModelsParsed(t *testing.T) {
+	src := []byte(`---
+name: Pinned thing
+kind: subagent
+pinned_models: ["gpt-5.4", "gpt-5.4-mini"]
+install: |
+  true
+source: https://example.com/pinned
+---
+Body.
+`)
+	e := parseEntryForTest(t, "codex", "pinned-thing.md", src)
+	if got := e.PinnedModels; len(got) != 2 || got[0] != "gpt-5.4" || got[1] != "gpt-5.4-mini" {
+		t.Errorf("PinnedModels = %v, want [gpt-5.4 gpt-5.4-mini]", got)
+	}
+
+	plain := []byte("---\nname: Plain\nkind: mcp\ninstall: |\n  true\nsource: https://example.com/plain\n---\nBody.\n")
+	p := parseEntryForTest(t, "codex", "plain.md", plain)
+	if p.PinnedModels != nil {
+		t.Errorf("PinnedModels = %v, want nil when absent", p.PinnedModels)
+	}
+}

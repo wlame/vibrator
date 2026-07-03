@@ -238,6 +238,14 @@ type Entry struct {
 	// Best-effort, informational only.
 	SizeMB int `yaml:"size_mb,omitempty"`
 
+	// PinnedModels lists model IDs this entry's vendored content pins
+	// (e.g. a subagent TOML with a hardcoded `model = "gpt-5.4"`). The
+	// wizard surfaces the pins in the picker label and, when any
+	// selected entry declares them, asks once whether to keep or strip
+	// them at build. Data, not prose — nothing parses install snippets
+	// to discover pins.
+	PinnedModels []string `yaml:"pinned_models,omitempty"`
+
 	// Deps lists features + other extension entries this one needs.
 	Deps Deps `yaml:"deps,omitempty"`
 

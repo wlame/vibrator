@@ -59,6 +59,13 @@ type Pin struct {
 	// the in-container YOLO alias. Bypass is on by default.
 	NoYolo bool `toml:"no_yolo,omitempty"`
 
+	// StripPinnedModels strips `model` / `model_reasoning_effort` lines
+	// from vendored subagent TOMLs at image build, so those agents
+	// inherit the session model instead of their curated pins. Zero
+	// value = keep pins (vendored content ships verbatim); set only by
+	// an explicit wizard choice.
+	StripPinnedModels bool `toml:"strip_pinned_models,omitempty"`
+
 	// LLM is the chosen LLM provider + model + auth shape. nil for harnesses
 	// that don't need it (Claude Code is Anthropic-only and uses the existing
 	// AuthEnvVars forwarding). See LLMSpec for the per-field semantics.
@@ -228,7 +235,7 @@ func (p Pin) HasSecrets() bool {
 func (p Pin) IsEmpty() bool {
 	return p.Harness == "" && p.Profile == "" && p.Shell == "" &&
 		len(p.With) == 0 && len(p.No) == 0 && len(p.Extensions) == 0 && len(p.Mounts) == 0 &&
-		!p.NoYolo &&
+		!p.NoYolo && !p.StripPinnedModels &&
 		p.LLM == nil &&
 		len(p.Prereqs) == 0 && len(p.Env) == 0 && len(p.Integrations) == 0 &&
 		p.Hooks == nil && p.Identity == nil
@@ -268,29 +275,31 @@ func Save(path string, p *Pin) error {
 	// included here so the encoder emits [llm] and [llm.auth] subtables
 	// in deterministic field order — no manual assembly needed.
 	scalars := struct {
-		Harness    string     `toml:"harness,omitempty"`
-		Profile    string     `toml:"profile,omitempty"`
-		Shell      string     `toml:"shell,omitempty"`
-		With       []string   `toml:"with,omitempty"`
-		No         []string   `toml:"no,omitempty"`
-		Extensions []string   `toml:"extensions,omitempty"`
-		Mounts     []string   `toml:"mounts,omitempty"`
-		NoYolo     bool       `toml:"no_yolo,omitempty"`
-		LLM        *LLMSpec   `toml:"llm,omitempty"`
-		Identity   *Identity  `toml:"identity,omitempty"`
-		Hooks      *HookPrefs `toml:"hooks,omitempty"`
+		Harness           string     `toml:"harness,omitempty"`
+		Profile           string     `toml:"profile,omitempty"`
+		Shell             string     `toml:"shell,omitempty"`
+		With              []string   `toml:"with,omitempty"`
+		No                []string   `toml:"no,omitempty"`
+		Extensions        []string   `toml:"extensions,omitempty"`
+		Mounts            []string   `toml:"mounts,omitempty"`
+		NoYolo            bool       `toml:"no_yolo,omitempty"`
+		StripPinnedModels bool       `toml:"strip_pinned_models,omitempty"`
+		LLM               *LLMSpec   `toml:"llm,omitempty"`
+		Identity          *Identity  `toml:"identity,omitempty"`
+		Hooks             *HookPrefs `toml:"hooks,omitempty"`
 	}{
-		Harness:    p.Harness,
-		Profile:    p.Profile,
-		Shell:      p.Shell,
-		With:       p.With,
-		No:         p.No,
-		Extensions: p.Extensions,
-		Mounts:     p.Mounts,
-		NoYolo:     p.NoYolo,
-		LLM:        p.LLM,
-		Identity:   p.Identity,
-		Hooks:      p.Hooks,
+		Harness:           p.Harness,
+		Profile:           p.Profile,
+		Shell:             p.Shell,
+		With:              p.With,
+		No:                p.No,
+		Extensions:        p.Extensions,
+		Mounts:            p.Mounts,
+		NoYolo:            p.NoYolo,
+		StripPinnedModels: p.StripPinnedModels,
+		LLM:               p.LLM,
+		Identity:          p.Identity,
+		Hooks:             p.Hooks,
 	}
 	if err := toml.NewEncoder(&b).Encode(scalars); err != nil {
 		return fmt.Errorf("encode pin scalars: %w", err)

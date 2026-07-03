@@ -486,6 +486,43 @@ func TestIsEmpty_NoYolo(t *testing.T) {
 	}
 }
 
+// TestPin_StripPinnedModelsRoundTrip pins the new field's TOML shape:
+// true survives a save/load cycle; false is omitted entirely (zero value
+// = keep pins, so old .vb files behave identically).
+func TestPin_StripPinnedModelsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".vb")
+	if err := Save(path, &Pin{Harness: "codex", StripPinnedModels: true}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "strip_pinned_models = true") {
+		t.Errorf("serialized pin missing strip_pinned_models: %s", raw)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.StripPinnedModels {
+		t.Error("StripPinnedModels lost in round-trip")
+	}
+
+	offPath := filepath.Join(dir, ".vb.off")
+	if err := Save(offPath, &Pin{Harness: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	offRaw, err := os.ReadFile(offPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(offRaw), "strip_pinned_models") {
+		t.Errorf("zero value must be omitted: %s", offRaw)
+	}
+}
+
 func TestPinMountsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".vb")

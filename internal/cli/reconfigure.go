@@ -98,10 +98,11 @@ func runReconfigureCommand(cmd *cobra.Command, _ []string) error {
 	//    `pin := in.Initial` and only overwrites the fields it asks about,
 	//    so Prereqs and Env flow through untouched by design.
 	seed := config.Pin{
-		Prereqs: oldPin.Prereqs, // minted API keys, project/team IDs, etc.
-		Env:     oldPin.Env,     // custom host→container env forwarding
-		With:    oldPin.With,    // per-workspace feature additions
-		No:      oldPin.No,      // per-workspace feature removals
+		Prereqs:           oldPin.Prereqs,           // minted API keys, project/team IDs, etc.
+		Env:               oldPin.Env,               // custom host→container env forwarding
+		With:              oldPin.With,              // per-workspace feature additions
+		No:                oldPin.No,                // per-workspace feature removals
+		StripPinnedModels: oldPin.StripPinnedModels, // keep/strip choice for pinned subagent models
 		// Harness, Profile, Shell, Extensions, LLM, Integrations: all zero
 		// so the wizard asks about them from scratch.
 	}

@@ -203,3 +203,44 @@ func TestFormatEntryLabel_AllBadgesAtOnce(t *testing.T) {
 // builder). That function was retired with the huh per-kind groups;
 // the same sort + filter contract lives in `pickerEntriesFor` now,
 // and the equivalent tests landed in extensions_picker_test.go.
+
+// TestFormatEntryLabel_PinnedModelsBadge pins the picker disclosure: an
+// entry that declares pinned_models must show them inline so the user
+// knows a hardcoded model ships before selecting it.
+func TestFormatEntryLabel_PinnedModelsBadge(t *testing.T) {
+	e := &extensions.Entry{
+		ID:           "agent-x",
+		Name:         "Agent X",
+		Description:  "Does agent things",
+		PinnedModels: []string{"gpt-5.4"},
+	}
+	got := formatEntryLabel(e)
+	if !strings.Contains(got, "[pins: gpt-5.4]") {
+		t.Errorf("label missing pinned-models badge: %q", got)
+	}
+
+	plain := &extensions.Entry{ID: "y", Name: "Y"}
+	if strings.Contains(formatEntryLabel(plain), "[pins:") {
+		t.Errorf("badge must not appear without pinned_models: %q", formatEntryLabel(plain))
+	}
+}
+
+// TestPinnedModelsIn pins the selection->question predicate: union of the
+// selected entries' pinned models, deduplicated, first-seen order; empty
+// when no selected entry pins anything (no wizard question).
+func TestPinnedModelsIn(t *testing.T) {
+	entries := []*extensions.Entry{
+		{ID: "a", PinnedModels: []string{"gpt-5.4"}},
+		{ID: "b", PinnedModels: []string{"gpt-5.4", "o5"}},
+		{ID: "c"},
+	}
+	if got := pinnedModelsIn(entries, []string{"a", "b", "c"}); len(got) != 2 || got[0] != "gpt-5.4" || got[1] != "o5" {
+		t.Errorf("pinnedModelsIn = %v, want [gpt-5.4 o5]", got)
+	}
+	if got := pinnedModelsIn(entries, []string{"c"}); got != nil {
+		t.Errorf("pinnedModelsIn = %v, want nil for pin-free selection", got)
+	}
+	if got := pinnedModelsIn(entries, nil); got != nil {
+		t.Errorf("pinnedModelsIn = %v, want nil for empty selection", got)
+	}
+}

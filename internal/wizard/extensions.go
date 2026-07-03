@@ -79,6 +79,9 @@ func formatEntryLabel(e *extensions.Entry) string {
 	if b := runtimeBadges(e); b != "" {
 		label += "  " + b
 	}
+	if len(e.PinnedModels) > 0 {
+		label += "  [pins: " + strings.Join(e.PinnedModels, ", ") + "]"
+	}
 
 	if e.Description != "" {
 		// Description path moved the id out of the prefix — add it as

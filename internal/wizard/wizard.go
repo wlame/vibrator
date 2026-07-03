@@ -31,6 +31,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 
@@ -222,9 +223,64 @@ func Run(ctx context.Context, in Input) (Result, error) {
 			return Result{Pin: pin, Cancelled: true}, nil
 		}
 		pin.Extensions = res.SelectedIDs
+
+		// Model-pinned subagents: if any selected entry declares pinned
+		// models, ask ONCE whether to keep them or strip them at build.
+		// Keep (false) is the default — vendored content ships as
+		// curated unless the user explicitly opts out.
+		var harnessEntries []*extensions.Entry
+		for _, e := range in.Extensions {
+			if e.Harness == pin.Harness {
+				harnessEntries = append(harnessEntries, e)
+			}
+		}
+		if pinned := pinnedModelsIn(harnessEntries, pin.Extensions); len(pinned) > 0 {
+			form := huh.NewForm(huh.NewGroup(
+				huh.NewSelect[bool]().
+					Title("Pinned subagent models").
+					Description(fmt.Sprintf(
+						"Selected subagents pin specific models (%s). Keep the pins, or strip them so the agents inherit your session model?",
+						strings.Join(pinned, ", "))).
+					Options(
+						huh.NewOption("Keep pinned models (as curated)", false),
+						huh.NewOption("Strip pins — inherit the session model", true),
+					).
+					Value(&pin.StripPinnedModels),
+			)).WithTheme(huh.ThemeCharm())
+			if err := form.RunWithContext(ctx); err != nil {
+				if errors.Is(err, huh.ErrUserAborted) {
+					return Result{Pin: pin, Cancelled: true}, nil
+				}
+				return Result{}, fmt.Errorf("pinned-models step: %w", err)
+			}
+		}
 	}
 
 	return Result{Pin: pin}, nil
+}
+
+// pinnedModelsIn returns the union of PinnedModels across the selected
+// entry IDs, deduplicated, first-seen order. Drives the one-shot
+// keep-or-strip wizard question: empty result = question never shown.
+func pinnedModelsIn(entries []*extensions.Entry, selected []string) []string {
+	sel := make(map[string]bool, len(selected))
+	for _, id := range selected {
+		sel[id] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, e := range entries {
+		if !sel[e.ID] {
+			continue
+		}
+		for _, m := range e.PinnedModels {
+			if !seen[m] {
+				seen[m] = true
+				out = append(out, m)
+			}
+		}
+	}
+	return out
 }
 
 // buildCoreGroups assembles the harness/profile/shell groups based on

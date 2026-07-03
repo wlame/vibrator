@@ -77,14 +77,14 @@ Releases (architecture-aware, pinned to `0.5.0`), so it needs no base feature.
 
 ## Pi { #pi }
 
-`@mariozechner/pi-coding-agent`. Installed with `npm install -g`, so it requires the `node`
+`@earendil-works/pi-coding-agent@0.80.6`. Installed with `npm install -g`, so it requires the `node`
 feature.
 
 - **Auth env vars:** `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
   `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `HF_TOKEN`.
 - **Host config:** `~/.pi`.
 - **LLM provider step:** shown (OpenAI-compatible mapping).
-- **Update:** `npm install -g @mariozechner/pi-coding-agent@latest`.
+- **Update:** `npm install -g @earendil-works/pi-coding-agent@latest`.
 
 !!! note "ECC and Pi"
     The [ECC bundle](ecc.md) ships no `pi` adapter, so there are no `ecc-*` extensions for

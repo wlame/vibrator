@@ -137,7 +137,7 @@ by emitting its install fragment. Examples:
   `/usr/local/bin/claude`.
 - **codex** — `npm install -g @openai/codex` (requires the `node` feature).
 - **opencode** — architecture-aware download of the prebuilt binary from GitHub Releases.
-- **pi** — `npm install -g @mariozechner/pi-coding-agent` (requires `node`).
+- **pi** — `npm install -g @earendil-works/pi-coding-agent@0.80.6` (requires `node`).
 
 ### Stage 4 — `extensions`
 

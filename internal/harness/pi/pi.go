@@ -54,7 +54,7 @@ func (pi) AuthEnvVars() []string {
 // was, let the container corrupt the host's real .pi). At container
 // startup, pi-materialize.sh (entrypoint-gated) copies the baked
 // snapshot over ~/.pi, copies the sidecar's files over that (host wins
-// per-file; agent/bin excluded — pi's managed fd/rg binaries are
+// per-file; BOTH copies exclude agent/bin — pi's managed fd/rg binaries are
 // arch-specific, the container keeps its own), and jq-merges
 // agent/mcp.json and agent/settings.json (host wins per-key; the
 // settings packages array is unioned).

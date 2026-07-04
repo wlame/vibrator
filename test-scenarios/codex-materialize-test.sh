@@ -82,4 +82,26 @@ FAKEBIN="$T4/fakebin"; mkdir -p "$FAKEBIN"
 check exact "$?" '0' "missing jq/codex: exits 0 without crashing"
 check exact "$(ls -A "$CODEX_HOME" 2>/dev/null)" '' "missing jq/codex: no config written"
 
+# --- Case 5: host custom agents merge into the baked agents dir --------------
+T5=$(mktemp -d); export CODEX_HOME="$T5/.codex"
+mkdir -p "$CODEX_HOME/agents" "$CODEX_HOME/agents.host"
+printf 'name = "baked-only"\n' > "$CODEX_HOME/agents/baked-only.toml"
+printf 'name = "shared"\nmodel = "baked"\n' > "$CODEX_HOME/agents/shared.toml"
+printf 'name = "shared"\nmodel = "host"\n' > "$CODEX_HOME/agents.host/shared.toml"
+printf 'name = "host-only"\n' > "$CODEX_HOME/agents.host/host-only.toml"
+export VIBRATOR_CODEX_BAKED_MCP="$T5/baked.json"; echo '[]' > "$VIBRATOR_CODEX_BAKED_MCP"
+export VIBRATOR_MANIFEST="$T5/manifest.json"; echo '[]' > "$VIBRATOR_MANIFEST"
+sh "$MAT"
+check contains "$(cat "$CODEX_HOME/agents/shared.toml")" 'model = "host"' "host wins on agent name collision"
+[ -f "$CODEX_HOME/agents/baked-only.toml" ] && echo "ok: baked-only agent survives" || { echo "FAIL: baked-only agent missing"; fail=1; }
+[ -f "$CODEX_HOME/agents/host-only.toml" ] && echo "ok: host-only agent copied in" || { echo "FAIL: host-only agent missing"; fail=1; }
+
+# --- Case 5b: no host agents dir -> baked agents untouched -------------------
+T5B=$(mktemp -d); export CODEX_HOME="$T5B/.codex"; mkdir -p "$CODEX_HOME/agents"
+printf 'name = "keep"\n' > "$CODEX_HOME/agents/keep.toml"
+export VIBRATOR_CODEX_BAKED_MCP="$T5B/baked.json"; echo '[]' > "$VIBRATOR_CODEX_BAKED_MCP"
+export VIBRATOR_MANIFEST="$T5B/manifest.json"; echo '[]' > "$VIBRATOR_MANIFEST"
+sh "$MAT"
+check exact "$(ls "$CODEX_HOME/agents")" 'keep.toml' "no host agents dir: baked agents untouched"
+
 exit $fail

@@ -481,3 +481,34 @@ func TestRegistry_AllHaveLoginFlow(t *testing.T) {
 		_ = h.LoginFlow() // must not panic; nil is valid
 	}
 }
+
+// TestCodexAgentsMountToHostSidecar verifies the host ~/.codex/agents
+// parity mount: it must land at the .host sidecar (read-only) so it can
+// never shadow the baked agent TOMLs; the materializer merges it in with
+// host-wins-per-file precedence at startup. No mount may target the
+// container's real .codex/agents.
+func TestCodexAgentsMountToHostSidecar(t *testing.T) {
+	h, _ := harness.ByID("codex")
+	mounts := h.HostMounts(harness.HostMountContext{WorkspaceDir: "/w"})
+	var sidecar, shadowing bool
+	for _, m := range mounts {
+		if m.HostRel == ".codex/agents" && m.ContainerRel == ".codex/agents.host" {
+			sidecar = true
+			if !m.ReadOnly {
+				t.Error("the .codex/agents.host sidecar must be read-only")
+			}
+			if m.Kind != harness.MountDirIfExists {
+				t.Errorf("agents sidecar kind = %v, want MountDirIfExists", m.Kind)
+			}
+		}
+		if m.ContainerRel == ".codex/agents" {
+			shadowing = true
+		}
+	}
+	if !sidecar {
+		t.Error("missing the .codex/agents.host sidecar mount")
+	}
+	if shadowing {
+		t.Error("codex must NOT mount over container .codex/agents (shadows baked subagents)")
+	}
+}

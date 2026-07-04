@@ -119,4 +119,17 @@ if [ -f "$MANIFEST" ]; then
     done
 fi
 
+# --- 4. Merge host custom agents (independent of the config seed) ------------
+# Host ~/.codex/agents mounts read-only at ~/.codex/agents.host (see
+# codex.go HostMounts); copy its files over the baked agents dir so the
+# user's own subagents work in-container. Host wins per-file on a name
+# collision; baked agents without a host counterpart survive. Writes only
+# the container dir — never the ro sidecar.
+HOST_AGENTS="$CODEX_DIR/agents.host"
+if [ -d "$HOST_AGENTS" ]; then
+    mkdir -p "$CODEX_DIR/agents"
+    cp -a "$HOST_AGENTS/." "$CODEX_DIR/agents/" 2>/dev/null
+    _vb_log "codex: merged host custom agents"
+fi
+
 exit 0

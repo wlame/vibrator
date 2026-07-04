@@ -46,6 +46,10 @@ func (codex) RequiredFeatures() []string {
 //     and replays the baked MCPs on top. Same pattern as claude-code's
 //     .claude.host.json.
 //   - sessions/ is mounted READ-WRITE for history persistence.
+//   - agents/ (custom subagent TOMLs) follows the same sidecar pattern: it
+//     mounts to agents.host (read-only) so it can't shadow the baked
+//     subagent TOMLs, and codex-materialize.sh merges it into the writable
+//     agents dir at startup (host wins per-file on a name collision).
 //
 // Both auth.json and config.host.toml are MountFileIfExists: a host that
 // has never run Codex gets no mounts and Codex inside the container starts
@@ -55,6 +59,11 @@ func (codex) HostMounts(_ harness.HostMountContext) []harness.HostMount {
 		{HostRel: ".codex/auth.json", ContainerRel: ".codex/auth.json", ReadOnly: false, Kind: harness.MountFileIfExists},
 		// config.toml → config.host.toml sidecar (see the doc comment above).
 		{HostRel: ".codex/config.toml", ContainerRel: ".codex/config.host.toml", ReadOnly: true, Kind: harness.MountFileIfExists},
+		// Custom agents dir → .host sidecar: baked subagent TOMLs live in
+		// the container's ~/.codex/agents; a direct mount would shadow
+		// them. The materializer merges the sidecar in at startup
+		// (host wins per-file).
+		{HostRel: ".codex/agents", ContainerRel: ".codex/agents.host", ReadOnly: true, Kind: harness.MountDirIfExists},
 		// Session/rollout history — MountDirEnsure so a fresh host still
 		// gets a writable dir and codex history survives container
 		// recreation (parity with claude-code's session-persist dirs).

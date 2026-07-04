@@ -788,3 +788,32 @@ func TestGenerate_JustInBaseStage(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerate_BaseToolCompletions pins the completions block for the
+// always-on GitHub-release tools (rg, just): self-generated at build so
+// they always match the installed versions, written to all three shells'
+// standard lookup dirs. Stage 1 is shared, so every harness gets them.
+func TestGenerate_BaseToolCompletions(t *testing.T) {
+	targets := []string{
+		"/usr/local/share/zsh/site-functions/_rg",
+		"/usr/share/bash-completion/completions/rg",
+		"/usr/share/fish/vendor_completions.d/rg.fish",
+		"/usr/local/share/zsh/site-functions/_just",
+		"/usr/share/bash-completion/completions/just",
+		"/usr/share/fish/vendor_completions.d/just.fish",
+	}
+	for _, id := range []string{"claude-code", "codex", "opencode", "pi"} {
+		t.Run(id, func(t *testing.T) {
+			out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, id), Shell: "zsh", Profile: "minimal"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := string(out)
+			for _, target := range targets {
+				if !strings.Contains(s, target) {
+					t.Errorf("base stage missing completion target %s", target)
+				}
+			}
+		})
+	}
+}

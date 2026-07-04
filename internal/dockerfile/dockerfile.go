@@ -388,6 +388,15 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -xzf rg.tar.gz --strip-components=1 -C /usr/local/bin/ "ripgrep-${RG_VERSION}-${RG_TRIPLE}/rg" && \
     rm rg.tar.gz && rg --version
 
+# just — task runner (make replacement). Always-on, static musl build.
+RUN ARCH=$(dpkg --print-architecture) && \
+    JUST_VERSION="1.56.0" && \
+    if [ "$ARCH" = "amd64" ]; then JUST_TRIPLE="x86_64-unknown-linux-musl"; else JUST_TRIPLE="aarch64-unknown-linux-musl"; fi && \
+    curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_TRIPLE}.tar.gz" \
+      -o just.tar.gz && \
+    tar -xzf just.tar.gz -C /usr/local/bin/ just && \
+    rm just.tar.gz && just --version
+
 # fd-find via apt (Ubuntu names the binary fdfind; we symlink to fd).
 RUN apt-get update && apt-get install -y --no-install-recommends fd-find fzf \
  && ln -sf /usr/bin/fdfind /usr/local/bin/fd \

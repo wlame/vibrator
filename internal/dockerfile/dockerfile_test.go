@@ -767,3 +767,24 @@ func TestGenerate_CodexStripPinnedModels(t *testing.T) {
 		t.Error("non-codex Dockerfile must not contain the pin-strip step even with the flag set")
 	}
 }
+
+// TestGenerate_JustInBaseStage pins the always-on just install: stage 1 is
+// shared by every harness, so the pinned casey/just release line must
+// appear in every generated Dockerfile regardless of harness or profile.
+func TestGenerate_JustInBaseStage(t *testing.T) {
+	for _, id := range []string{"claude-code", "codex", "opencode", "pi"} {
+		t.Run(id, func(t *testing.T) {
+			out, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, id), Shell: "zsh", Profile: "minimal"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := string(out)
+			if !strings.Contains(s, `JUST_VERSION="1.56.0"`) {
+				t.Error("base stage missing the pinned just install")
+			}
+			if !strings.Contains(s, "github.com/casey/just/releases/download") {
+				t.Error("just must install from the pinned casey/just release")
+			}
+		})
+	}
+}

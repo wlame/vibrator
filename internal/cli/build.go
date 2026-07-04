@@ -114,7 +114,7 @@ func registerBuildFlags(cmd *cobra.Command, flags *buildFlags, buildOnly bool) {
 	cmd.Flags().BoolVar(&flags.noYolo, "no-yolo", false,
 		"Accepted for flag-surface parity with `vibrate run`; has no effect on the generated image.")
 	cmd.Flags().BoolVar(&flags.stripPinnedModels, "strip-pinned-models", false,
-		"strip pinned model lines from vendored subagent definitions so they inherit the session model")
+		"Strip pinned model lines from vendored subagent definitions so they inherit the session model.")
 
 	if buildOnly {
 		cmd.Flags().BoolVar(&flags.noCache, "no-cache", false,

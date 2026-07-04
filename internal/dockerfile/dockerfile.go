@@ -664,6 +664,9 @@ FROM extensions AS runtime
 	// vendored pins (wizard choice persisted in the pin). Build-time and
 	// baked files only — host agents merged at runtime are never touched.
 	// `|| true` keeps a codex image with zero agent extensions valid.
+	// NOTE: the sed is line-based, not TOML-aware — when re-vendoring an
+	// agent, check its developer_instructions has no column-0 "model ="
+	// prose line, which this step would silently delete.
 	if spec.Harness.ID() == "codex" && spec.StripPinnedModels {
 		b.WriteString(`RUN sed -i '/^model[[:space:]]*=/d; /^model_reasoning_effort[[:space:]]*=/d' "$HOME"/.codex/agents/*.toml 2>/dev/null || true` + "\n")
 	}

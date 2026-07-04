@@ -737,3 +737,33 @@ func TestGenerate_PiMaterializeCopy(t *testing.T) {
 		t.Error("non-pi Dockerfile should not COPY the pi materializer")
 	}
 }
+
+// TestGenerate_CodexStripPinnedModels pins the opt-in build step that
+// strips model pins from vendored subagent TOMLs. It must appear ONLY for
+// codex specs that set StripPinnedModels — never by default and never for
+// other harnesses (the flag is meaningless there today).
+func TestGenerate_CodexStripPinnedModels(t *testing.T) {
+	on, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "codex"), Shell: "zsh", Profile: "backend", StripPinnedModels: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(on), "model_reasoning_effort") {
+		t.Error("codex+strip Dockerfile missing the pin-strip sed step")
+	}
+
+	off, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "codex"), Shell: "zsh", Profile: "backend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(off), "model_reasoning_effort") {
+		t.Error("codex without strip must not contain the pin-strip step")
+	}
+
+	oc, err := dockerfile.Generate(dockerfile.Spec{Harness: hrn(t, "opencode"), Shell: "zsh", Profile: "backend", StripPinnedModels: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(oc), "model_reasoning_effort") {
+		t.Error("non-codex Dockerfile must not contain the pin-strip step even with the flag set")
+	}
+}

@@ -51,6 +51,13 @@ type Spec struct {
 	// (alphabetical-by-ID) order.
 	Extensions []*extensions.Entry
 
+	// StripPinnedModels emits a codex-only build step that strips
+	// `model =` / `model_reasoning_effort =` lines from vendored
+	// ~/.codex/agents/*.toml, so those subagents inherit the session
+	// model. Driven by the pin's strip_pinned_models (explicit wizard
+	// opt-in); false = ship vendored TOMLs verbatim.
+	StripPinnedModels bool
+
 	// Username for the unprivileged user inside the container.
 	// Defaults to "vibrate" if empty.
 	Username string
@@ -651,6 +658,14 @@ FROM extensions AS runtime
 	// `|| echo '[]'` keeps a codex image with zero MCP extensions valid.
 	if spec.Harness.ID() == "codex" {
 		b.WriteString(`RUN codex mcp list --json > "$HOME/.vibrator-codex-baked-mcp.json" 2>/dev/null || echo '[]' > "$HOME/.vibrator-codex-baked-mcp.json"` + "\n")
+	}
+
+	// Codex: strip pinned subagent models when the user opted out of the
+	// vendored pins (wizard choice persisted in the pin). Build-time and
+	// baked files only — host agents merged at runtime are never touched.
+	// `|| true` keeps a codex image with zero agent extensions valid.
+	if spec.Harness.ID() == "codex" && spec.StripPinnedModels {
+		b.WriteString(`RUN sed -i '/^model[[:space:]]*=/d; /^model_reasoning_effort[[:space:]]*=/d' "$HOME"/.codex/agents/*.toml 2>/dev/null || true` + "\n")
 	}
 
 	// OpenCode: snapshot the whole baked ~/.config/opencode directory

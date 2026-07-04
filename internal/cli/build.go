@@ -24,19 +24,20 @@ import (
 // are declared once on the parent so the build/build-dockerfile pair stays
 // consistent.
 type buildFlags struct {
-	harnessID    string
-	profileID    string
-	shell        string
-	with         []string
-	no           []string
-	extensionIDs []string
-	username     string
-	out          string // build-dockerfile only
-	noCache      bool   // build only
-	tag          string // build only — overrides the workspace-fingerprinted tag
-	hostUID      int
-	hostGID      int
-	noYolo       bool // launch/runtime-only; accepted here for flag-surface parity with `run`
+	harnessID         string
+	profileID         string
+	shell             string
+	with              []string
+	no                []string
+	extensionIDs      []string
+	username          string
+	out               string // build-dockerfile only
+	noCache           bool   // build only
+	tag               string // build only — overrides the workspace-fingerprinted tag
+	hostUID           int
+	hostGID           int
+	noYolo            bool // launch/runtime-only; accepted here for flag-surface parity with `run`
+	stripPinnedModels bool
 }
 
 // flag defaults — match the wizard's "if the user picks nothing" answers.
@@ -112,6 +113,8 @@ func registerBuildFlags(cmd *cobra.Command, flags *buildFlags, buildOnly bool) {
 	// script that always passes --no-yolo doesn't break on `vibrate build`.
 	cmd.Flags().BoolVar(&flags.noYolo, "no-yolo", false,
 		"Accepted for flag-surface parity with `vibrate run`; has no effect on the generated image.")
+	cmd.Flags().BoolVar(&flags.stripPinnedModels, "strip-pinned-models", false,
+		"strip pinned model lines from vendored subagent definitions so they inherit the session model")
 
 	if buildOnly {
 		cmd.Flags().BoolVar(&flags.noCache, "no-cache", false,
@@ -190,15 +193,16 @@ func resolveSpec(f *buildFlags) (dockerfile.Spec, workspace.Spec, error) {
 	}
 
 	dfSpec := dockerfile.Spec{
-		Harness:         h,
-		Profile:         f.profileID,
-		Shell:           f.shell,
-		Features:        feats,
-		Extensions:      catEntries,
-		Username:        f.username,
-		HostUID:         f.hostUID,
-		HostGID:         f.hostGID,
-		VibratorVersion: Version,
+		Harness:           h,
+		Profile:           f.profileID,
+		Shell:             f.shell,
+		Features:          feats,
+		Extensions:        catEntries,
+		StripPinnedModels: f.stripPinnedModels,
+		Username:          f.username,
+		HostUID:           f.hostUID,
+		HostGID:           f.hostGID,
+		VibratorVersion:   Version,
 	}
 
 	wsSpec := workspace.Spec{

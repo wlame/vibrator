@@ -1037,15 +1037,16 @@ func buildSpecs(pin config.Pin, opts Options) (dockerfile.Spec, workspace.Spec, 
 	}
 
 	dfSpec := dockerfile.Spec{
-		Harness:         h,
-		Profile:         profileID,
-		Shell:           shell,
-		Features:        feats,
-		Extensions:      catEntries,
-		Username:        defaultUsername(opts),
-		HostUID:         defaultUID(opts),
-		HostGID:         defaultGID(opts),
-		VibratorVersion: opts.VibratorVersion,
+		Harness:           h,
+		Profile:           profileID,
+		Shell:             shell,
+		Features:          feats,
+		Extensions:        catEntries,
+		StripPinnedModels: pin.StripPinnedModels,
+		Username:          defaultUsername(opts),
+		HostUID:           defaultUID(opts),
+		HostGID:           defaultGID(opts),
+		VibratorVersion:   opts.VibratorVersion,
 	}
 
 	wsSpec := workspace.Spec{

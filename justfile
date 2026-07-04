@@ -34,17 +34,44 @@ cmd     := "./cmd/vibrate"
 version := env("VERSION", "dev")
 ldflags := "-s -w -X " + pkg + "/internal/cli.Version=" + version
 
+# Space-separated GOOS/GOARCH targets cross-compiled by `build-all` and `dist`
+# (kept in one place so the two recipes and the release workflow can't drift).
+# Windows is intentionally excluded — the code uses Unix-only syscalls
+# (syscall.Setsid, syscall.Stat_t) and does not cross-compile to windows/*;
+# Windows users run the linux/amd64 binary under WSL2.
+platforms := "linux/amd64 linux/arm64 darwin/amd64 darwin/arm64"
+
 # --- Recipes ---
 
 # Default recipe — show the list of recipes when `just` is invoked bare.
 default:
     @just --list --list-heading $'vibrator (Go) — Just recipes\n'
 
-# Build the vibrate binary into ./build/
+# Build the vibrate binary into ./build/ (native host platform only)
 build:
     @mkdir -p {{bin_dir}}
     {{go}} build -trimpath -ldflags '{{ldflags}}' -o {{binary}} {{cmd}}
     @echo "Built: {{binary}} ({{version}})"
+
+# Cross-compile the binary for every supported platform into ./build/.
+# A quick "does it still build everywhere?" check for local development —
+# outputs build/vibrate_<os>_<arch> per target, no checksums. For the actual
+# release artifacts CI attaches (with checksums.txt), use `just dist` instead.
+build-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p {{bin_dir}}
+    for p in {{platforms}}; do
+      goos="${p%/*}"
+      goarch="${p#*/}"
+      ext=""
+      [[ "$goos" == "windows" ]] && ext=".exe"
+      out="{{bin_dir}}/vibrate_${goos}_${goarch}${ext}"
+      echo "Building ${out}"
+      CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+        {{go}} build -trimpath -ldflags '{{ldflags}}' -o "${out}" {{cmd}}
+    done
+    echo "✓ Built all platforms into {{bin_dir}}/ (version: {{version}})"
 
 # Run unit tests with the race detector
 test:
@@ -227,10 +254,9 @@ dist:
     set -euo pipefail
     rm -rf dist && mkdir -p dist
     # Same targets, ldflags, and naming as the release workflow. Pure-Go
-    # (CGO disabled) cross-compiles cleanly from any host. Windows is omitted —
-    # the code uses Unix-only syscalls and does not build for windows/*.
-    platforms="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64"
-    for p in $platforms; do
+    # (CGO disabled) cross-compiles cleanly from any host. Target list comes
+    # from the shared {{platforms}} variable (Windows omitted — see its note).
+    for p in {{platforms}}; do
       goos="${p%/*}"
       goarch="${p#*/}"
       ext=""

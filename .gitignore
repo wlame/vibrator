@@ -14,8 +14,11 @@ coverage.*
 /site/
 .cache/
 
-# Workspace pin (new format) — contains plaintext claude-mem API key after bootstrap
+# Workspace pin (new format) — contains plaintext claude-mem API key after
+# bootstrap. The glob also covers sidecar files: .vb.env (bootstrapped API
+# key), .vb.lock (per-workspace setup lock), etc.
 .vb
+.vb.*
 
 # OS / editor noise
 .DS_Store

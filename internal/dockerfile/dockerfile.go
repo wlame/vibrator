@@ -379,7 +379,9 @@ ENV UV_TOOL_BIN_DIR=/usr/local/bin
 # this ENV plus the mkdir in the python feature dodges it cleanly.
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
 
-# ripgrep — multi-arch binary release. Always-on.
+# ripgrep — multi-arch binary release. Always-on. arm64 uses the gnu
+# triple (upstream publishes no aarch64 musl asset — unlike just below);
+# don't "align" the two triples on a version bump.
 RUN ARCH=$(dpkg --print-architecture) && \
     RG_VERSION="15.1.0" && \
     if [ "$ARCH" = "amd64" ]; then RG_TRIPLE="x86_64-unknown-linux-musl"; else RG_TRIPLE="aarch64-unknown-linux-gnu"; fi && \

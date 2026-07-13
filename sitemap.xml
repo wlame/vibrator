@@ -2,182 +2,174 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://wlame.github.io/vibrator/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/about/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/faq/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/troubleshooting/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/getting-started/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/getting-started/concepts/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/getting-started/installation/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/getting-started/quickstart/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/authentication/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/configuration/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/docker-in-docker/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/ecc/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/extensions/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/harnesses/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/integrations/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/llm-providers/</loc>
-         <lastmod>2026-06-09</lastmod>
-    </url>
-    <url>
-         <loc>https://wlame.github.io/vibrator/guides/migrating/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/guides/profiles-and-features/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/integrations/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/integrations/claude-mem/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/integrations/serena/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/lifecycle/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/lifecycle/build/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/lifecycle/runtime-detection/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/lifecycle/startup/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/architecture/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/environment-variables/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/features/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/naming-and-labels/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/profiles/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/vb-file/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/build/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/extensions/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/hostprobe/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/integrations/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/launch/</loc>
-         <lastmod>2026-06-09</lastmod>
-    </url>
-    <url>
-         <loc>https://wlame.github.io/vibrator/reference/commands/migrate-pin/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/prereqs/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/runtime/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/update/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/variants/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
     <url>
          <loc>https://wlame.github.io/vibrator/reference/commands/wizard/</loc>
-         <lastmod>2026-06-09</lastmod>
+         <lastmod>2026-07-13</lastmod>
     </url>
 </urlset>

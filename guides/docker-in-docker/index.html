@@ -18,7 +18,7 @@
         <link rel="prev" href="../authentication/">
       
       
-        <link rel="next" href="../migrating/">
+        <link rel="next" href="../../lifecycle/">
       
       
         
@@ -743,8 +743,6 @@
       
         
       
-        
-      
     
     
     
@@ -1156,34 +1154,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../migrating/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migrating from bash
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1366,8 +1336,6 @@
       
         
           
-        
-      
         
       
         
@@ -1711,34 +1679,6 @@
     
   
     runtime
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/commands/migrate-pin/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    migrate-pin
   
 
     
@@ -2328,20 +2268,27 @@ command — including <code>docker run --privileged</code>. That's effectively r
 <code>--dind</code> is opt-in for exactly this reason. Only use it for workspaces you trust.</p>
 </div>
 <h2 id="what-dind-does">What <code>--dind</code> does<a class="headerlink" href="#what-dind-does" title="Permanent link">&para;</a></h2>
+<p>The <code>docker</code> client binary (not a daemon) is <strong>always baked into the base image</strong> of every
+variant and profile, alongside the other always-on tools — there's no feature to install. So
+<code>--dind</code> is a purely <strong>run-time</strong> decision; it does not change the image at all:</p>
 <ol>
-<li><strong>Auto-installs the <code>docker-cli</code> feature</strong> — the container gets a <code>docker</code> client binary
-   (not a daemon). You can still override with <code>--no=docker-cli</code> if you supply your own.</li>
 <li><strong>Mounts the host Docker socket</strong> at <code>/var/run/docker.sock</code> (the path every <code>docker</code> CLI
-   looks for by default, so no <code>DOCKER_HOST</code> needed inside).</li>
+   looks for by default, so no <code>DOCKER_HOST</code> needed inside). Without <code>--dind</code> the <code>docker</code>
+   client is still present, it just has no socket to talk to — commands fail to connect,
+   which is expected.</li>
 <li><strong>Adds the container user to the socket's group</strong> (<code>--group-add</code>) so <code>docker</code> works
    without <code>sudo</code> — where the runtime allows it.</li>
 </ol>
+<p>Because the image content is identical with or without <code>--dind</code>, <strong>toggling it never
+rebuilds the image</strong>. Running <code>vibrate --dind</code> on a workspace whose container was created
+without it simply <strong>recreates the container</strong> from the existing image (fast — seconds) with
+the socket mounted. Dropping <code>--dind</code> again likewise just recreates the container.</p>
 <p>The socket is discovered the same way as <a href="../../lifecycle/runtime-detection/">runtime detection</a>:
 <code>$DOCKER_HOST</code> first, then the well-known per-runtime paths.</p>
 <h2 id="vm-based-runtimes">VM-based runtimes<a class="headerlink" href="#vm-based-runtimes" title="Permanent link">&para;</a></h2>
 <p>On Colima and Rancher Desktop the macOS-side socket is a host-only proxy that containers
 (running inside the Linux VM) can't reach. For these, Vibrator mounts the daemon's own
-<code>/var/run/docker.sock</code> instead, and the <code>docker-cli</code> feature's <strong>sudo wrapper</strong> handles
+<code>/var/run/docker.sock</code> instead, and the base image's docker <strong>sudo wrapper</strong> handles
 group access — <code>docker</code> in the container is a tiny shim that runs <code>sudo /usr/bin/docker</code>,
 and the container user has passwordless sudo inside the sandbox.</p>
 <h2 id="verifying">Verifying<a class="headerlink" href="#verifying" title="Permanent link">&para;</a></h2>
@@ -2351,15 +2298,12 @@ and the container user has passwordless sudo inside the sandbox.</p>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>docker<span class="w"> </span>version<span class="w">     </span><span class="c1"># client + server (the host daemon)</span>
 </span></code></pre></div>
 <h2 id="persisting-it">Persisting it<a class="headerlink" href="#persisting-it" title="Permanent link">&para;</a></h2>
-<p>To make a workspace always use DinD, the cleanest path is the auto-installed feature plus
-the flag each run. You can also pin the client binary by adding the feature explicitly:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>vibrate<span class="w"> </span>--with<span class="o">=</span>docker-cli<span class="w">   </span><span class="c1"># bake the client in</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># then run with --dind when you actually need socket access</span>
-</span></code></pre></div>
+<p>The <code>docker</code> client is already in every image, so there's nothing to bake in — just pass
+<code>--dind</code> on the runs where you actually need socket access. Since toggling the flag only
+recreates the container (never rebuilds), there's no cost to enabling it only when needed.</p>
 <h2 id="related-pages">Related pages<a class="headerlink" href="#related-pages" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../lifecycle/runtime-detection/">Runtime detection</a> — how the socket is found.</li>
-<li><a href="../../reference/features/"><code>docker-cli</code> feature</a> — the client binary + sudo wrapper.</li>
 <li><a href="../../reference/commands/launch/#options"><code>vibrate</code> flags</a> — <code>--dind</code>.</li>
 </ul>
 
@@ -2416,13 +2360,13 @@ the flag each run. You can also pin the client binary by adding the feature expl
         
         
           
-          <a href="../migrating/" class="md-footer__link md-footer__link--next" aria-label="Next: Migrating from bash">
+          <a href="../../lifecycle/" class="md-footer__link md-footer__link--next" aria-label="Next: Lifecycle">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Migrating from bash
+                Lifecycle
               </div>
             </div>
             <div class="md-footer__button md-icon">

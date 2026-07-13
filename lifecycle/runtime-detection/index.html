@@ -741,8 +741,6 @@
       
         
       
-        
-      
     
     
     
@@ -1036,34 +1034,6 @@
     
   
     Docker-in-Docker
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/migrating/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migrating from bash
   
 
     
@@ -1377,8 +1347,6 @@
       
         
           
-        
-      
         
       
         
@@ -1722,34 +1690,6 @@
     
   
     runtime
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/commands/migrate-pin/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    migrate-pin
   
 
     
@@ -2404,8 +2344,8 @@ yourself is reported as <code>custom</code>.</p>
 <p>For VM-based runtimes (Colima, Rancher Desktop), the macOS-side socket is a proxy that
 only listens on the host. When you use <a href="../../guides/docker-in-docker/"><code>--dind</code></a> to mount
 the socket into a container, Vibrator mounts the daemon's own <code>/var/run/docker.sock</code> (which
-the daemon, running inside the VM, resolves to its real socket) and the
-<a href="../../reference/features/"><code>docker-cli</code> feature</a>'s sudo wrapper handles group access.</p>
+the daemon, running inside the VM, resolves to its real socket) and the base image's
+docker sudo wrapper handles group access.</p>
 <h2 id="overriding-detection">Overriding detection<a class="headerlink" href="#overriding-detection" title="Permanent link">&para;</a></h2>
 <p>If detection picks the wrong socket — unusual multi-runtime setups, remote daemons exposed
 locally, etc. — force it:</p>

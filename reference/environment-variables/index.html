@@ -741,8 +741,6 @@
       
         
       
-        
-      
     
     
     
@@ -1049,34 +1047,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/migrating/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migrating from bash
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1259,8 +1229,6 @@
       
         
           
-        
-      
         
       
         
@@ -1617,34 +1585,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../commands/migrate-pin/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    migrate-pin
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1905,6 +1845,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Forwarded into the container">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-forwarded-values-reach-the-container-and-their-residual-exposure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How forwarded values reach the container, and their residual exposure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2247,6 +2204,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Forwarded into the container">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-forwarded-values-reach-the-container-and-their-residual-exposure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How forwarded values reach the container, and their residual exposure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2400,6 +2374,10 @@ Listed by source, in precedence order (later wins on name collision).</p>
 <td>declared by selected <a href="../../guides/extensions/">extensions</a></td>
 </tr>
 <tr>
+<td><code>VIBRATOR_IDENTITY_NAME</code>, <code>VIBRATOR_IDENTITY_EMAIL</code></td>
+<td>Set by vibrate from the pin's <code>[identity]</code> table; the entrypoint uses them to override git identity and rewrite the Claude account email inside the container.</td>
+</tr>
+<tr>
 <td><code>[env]</code> overrides</td>
 <td><a href="../vb-file/"><code>.vb</code> <code>[env]</code></a> — literal or <code>$NAME</code> indirection</td>
 </tr>
@@ -2425,6 +2403,33 @@ non-alphanumerics with <code>_</code> — so <code>claude-mem</code> becomes
 the <code>CLAUDE_MEM_SERVER_BETA_*</code> token/IDs above are forwarded into the container — the DSN
 itself is never set as a container env var.</p>
 </div>
+<h3 id="how-forwarded-values-reach-the-container-and-their-residual-exposure">How forwarded values reach the container, and their residual exposure<a class="headerlink" href="#how-forwarded-values-reach-the-container-and-their-residual-exposure" title="Permanent link">&para;</a></h3>
+<p><code>vibrate</code> never puts secret values on the <code>docker run</code>/<code>docker exec</code> command line. It passes
+only the variable <em>name</em> via <code>-e NAME</code> (the docker CLI then resolves it from its own process
+environment) and separately writes <code>NAME=VALUE</code> pairs to a private, mode-<code>0600</code> <code>--env-file</code>
+temp file that's cleaned up after the call. Neither form is visible via <code>ps</code> or
+<code>/proc/*/cmdline</code> while the command runs.</p>
+<p>That said, two residual exposures are inherent and worth knowing about:</p>
+<ul>
+<li><strong><code>docker inspect</code> shows container env regardless of how it was passed.</strong> Once a container
+  is running, <code>docker inspect &lt;container&gt; --format '{{.Config.Env}}'</code> (or the <code>Config.Env</code>
+  field in the full JSON) lists every env var baked into it, including secrets forwarded at
+  <code>docker run</code> time. This is true for <em>any</em> container on the host, not a vibrator-specific
+  gap — env vars are not a confidentiality mechanism once a container exists. Anyone able to
+  run <code>docker inspect</code> against your containers can already reach your host process list, so
+  this doesn't introduce a new privilege boundary, but it's worth remembering if you share
+  Docker access with others. Avoiding it entirely would require file-mounted secrets instead
+  of env vars, which vibrator doesn't currently do (tracked as future work, not implemented).</li>
+<li><strong>The claude-mem bootstrap's psql DSN has a narrow argv fallback.</strong> The one-shot postgres
+  container that <a href="../../integrations/claude-mem/">claude-mem</a> bootstrapping uses normally
+  receives the connection details as <code>PGHOST</code>/<code>PGPORT</code>/<code>PGUSER</code>/<code>PGPASSWORD</code>/<code>PGDATABASE</code> env
+  vars, not as a positional DSN argument. Two DSN shapes fall back to the legacy positional
+  argument instead: the rare <code>key=value</code> conninfo form (which isn't a URL <code>net/url</code> can parse), and any
+  DSN carrying query parameters (e.g. <code>?sslmode=require&amp;connect_timeout=10</code>) — dropping those
+  silently via the env-var decomposition would be a connection-security downgrade, so the
+  simpler and safer choice is to keep the full DSN as a single positional argument in those two
+  cases. The argv-visibility window described above only applies to those two fallback shapes.</li>
+</ul>
 <h2 id="baked-into-the-image">Baked into the image<a class="headerlink" href="#baked-into-the-image" title="Permanent link">&para;</a></h2>
 <p>Set in the Dockerfile <a href="../../lifecycle/build/#stage-5-runtime">runtime stage</a>; readable
 inside the container.</p>
@@ -2459,6 +2464,14 @@ inside the container.</p>
 <tr>
 <td><code>VIBRATOR_BUILD_ID</code></td>
 <td>build sentinel (also at <code>/etc/vibrator/build</code>)</td>
+</tr>
+<tr>
+<td><code>VIBRATOR_LAUNCH_BIN</code></td>
+<td>the harness's launch binary (e.g. <code>claude</code>) — used by the shell rc to build the YOLO alias</td>
+</tr>
+<tr>
+<td><code>VIBRATOR_YOLO_ARGS</code></td>
+<td>the harness's permission-bypass args (default), e.g. <code>--dangerously-skip-permissions</code>. Overridden at launch to empty by <a href="../commands/launch/"><code>--no-yolo</code></a>; an empty value suppresses the alias</td>
 </tr>
 <tr>
 <td><code>LANG</code>, <code>LC_ALL</code></td>

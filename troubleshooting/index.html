@@ -741,8 +741,6 @@
       
         
       
-        
-      
     
     
     
@@ -1049,34 +1047,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../guides/migrating/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migrating from bash
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1259,8 +1229,6 @@
       
         
           
-        
-      
         
       
         
@@ -1604,34 +1572,6 @@
     
   
     runtime
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../reference/commands/migrate-pin/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    migrate-pin
   
 
     
@@ -2479,7 +2419,7 @@ or Rancher Desktop.</p>
 only listens on the host and is unreachable from inside the VM (and therefore from inside a
 container). Vibrator works around this by mounting the daemon's own
 <code>/var/run/docker.sock</code> — which the daemon, running inside the VM, resolves to its real
-socket — with a sudo wrapper from the <code>docker-cli</code> feature handling group access.</p>
+socket — with a sudo wrapper baked into the base image handling group access.</p>
 <p><strong>Fix.</strong> If docker-in-docker still fails on these runtimes, this proxy/socket mismatch is
 almost always the cause. Confirm the runtime and socket Vibrator is using, then retry:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>vibrate<span class="w"> </span>runtime<span class="w"> </span>detect<span class="w">            </span><span class="c1"># confirm runtime = colima / rancher-desktop</span>

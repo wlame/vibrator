@@ -741,8 +741,6 @@
       
         
       
-        
-      
     
     
     
@@ -1049,34 +1047,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/migrating/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migrating from bash
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1259,8 +1229,6 @@
       
         
           
-        
-      
         
       
         
@@ -1604,34 +1572,6 @@
     
   
     runtime
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../commands/migrate-pin/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    migrate-pin
   
 
     
@@ -2356,13 +2296,6 @@ dependents).</p>
 <td><code>gh</code> from the official apt repo.</td>
 </tr>
 <tr>
-<td><code>docker-cli</code></td>
-<td>Docker CLI</td>
-<td>—</td>
-<td>40 MB</td>
-<td><code>docker</code> client (no daemon) + a sudo wrapper. Auto-added by <a href="../../guides/docker-in-docker/"><code>--dind</code></a>.</td>
-</tr>
-<tr>
 <td><code>audit-toolkit</code></td>
 <td>Production audit toolkit</td>
 <td><code>python</code></td>
@@ -2418,8 +2351,16 @@ dependent too if you really need it gone.</p>
 <p>Independent of features, every image includes a base layer:
 <code>ca-certificates</code>, <code>curl</code>, <code>wget</code>, <code>git</code>, <code>gpg</code>, <code>openssh-client</code>, <code>sudo</code>, <code>vim</code>, <code>less</code>,
 <code>tree</code>, <code>jq</code>, <code>sqlite3</code>, <code>dnsutils</code>, <code>unzip</code>, <code>xz-utils</code>, <code>build-essential</code>, <code>locales</code>,
-your chosen shell, <strong>ripgrep</strong> (<code>rg</code>), <strong>fd</strong>, and <strong>fzf</strong>. See
+your chosen shell, <strong>ripgrep</strong> (<code>rg</code>), <strong>fd</strong>, <strong>fzf</strong>, and the <strong><code>docker</code> client</strong>
+(<code>docker-ce-cli</code> plus a sudo wrapper at <code>/usr/local/bin/docker</code>). See
 <a href="../../lifecycle/build/#stage-1-base">Stage 1</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">docker is always present</p>
+<p>The <code>docker</code> client binary ships in the base image of every variant and profile. It is
+not a feature, so there's no <code>--with</code>/<code>--no</code> toggle for it. The
+<a href="../../guides/docker-in-docker/"><code>--dind</code></a> flag is a run-time-only decision that
+bind-mounts the host's Docker socket so the client has a daemon to talk to.</p>
+</div>
 <h2 id="related-pages">Related pages<a class="headerlink" href="#related-pages" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../profiles/">Profiles</a> — which features each profile bundles.</li>

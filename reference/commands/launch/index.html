@@ -741,8 +741,6 @@
       
         
       
-        
-      
     
     
     
@@ -1049,34 +1047,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../guides/migrating/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Migrating from bash
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1261,8 +1231,6 @@
       
         
           
-        
-      
         
       
         
@@ -1761,34 +1729,6 @@
     
   
     runtime
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../migrate-pin/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    migrate-pin
   
 
     
@@ -2502,12 +2442,22 @@ forwarding — is identical. Useful for:</p>
 <tr>
 <td><code>--dind</code></td>
 <td><code>false</code></td>
-<td>Mount the host's Docker socket so <code>docker</code> inside the container drives the host daemon. Auto-installs the <a href="../../features/"><code>docker-cli</code></a> feature. See <a href="../../../guides/docker-in-docker/">Docker-in-Docker</a>.</td>
+<td>Mount the host's Docker socket so <code>docker</code> inside the container drives the host daemon. The <code>docker</code> client is always in the image, so toggling this never rebuilds — it just recreates the container with (or without) the socket mounted. See <a href="../../../guides/docker-in-docker/">Docker-in-Docker</a>.</td>
+</tr>
+<tr>
+<td><code>--mount=PATH[:rw]</code></td>
+<td><em>(none)</em></td>
+<td>Mount an extra host folder at the same absolute path inside the container. Read-only unless <code>:rw</code> is appended. Repeatable. Saved to <code>.vb</code> as <code>mounts = [...]</code> and re-applied on later runs; for claude-code the folders are also passed to the agent via <code>--add-dir</code>.</td>
 </tr>
 <tr>
 <td><code>--login</code></td>
 <td><code>false</code></td>
 <td>Run <code>claude auth login</code> in the container before launching the harness; opens the auth URL in your host browser and writes auth state back to the host. See <a href="../../../guides/authentication/#vibrate-login">Authentication</a>.</td>
+</tr>
+<tr>
+<td><code>--no-yolo</code></td>
+<td><code>false</code></td>
+<td>Run the harness with its normal permission prompts instead of the default skip-approvals ("YOLO") mode. Applies both to the launched agent and its in-container shell alias. Persisted to <code>.vb</code> as <code>no_yolo</code>; toggling it is a runtime change (no image rebuild).</td>
 </tr>
 </tbody>
 </table>
